@@ -1043,7 +1043,13 @@ connectionRuntime.install(mod,connections,{
   end end
   local native = {
   animations = {},
-  assets = {},
+  assets = {
+    ["data/generated/gba/title/rayquaza.png"] = {
+      file = "assets/gen3/title/rayquaza.png",
+      height = 256,
+      width = 256,
+    },
+  },
   audio = {
     cries = {},
     mapSongs = {},
@@ -1166,10 +1172,9 @@ connectionRuntime.install(mod,connections,{
       end
       return images[path] or proceed(path)
     end)
-    -- The title screen and intro draw palette-index maps (gba_ppu), also
-    -- straight from disk: a layer's <name>_idx.png, a sprite's sheet PNG.
-    -- An imported colour PNG carries its index map (indexFile); an imported
-    -- _idx.png is one already.
+    -- The title screen and intro ask the PPU for palette-index art. A
+    -- replacement is a normal PNG: hand it over as colour and the PPU draws
+    -- those pixels (a recomp, not a 16-colour GBA).
     local Ppu=require("src.core.game3.gba_ppu")
     if not Ppu._editorIndexBridge then
       Ppu._editorIndexBridge=true
@@ -1177,28 +1182,26 @@ connectionRuntime.install(mod,connections,{
       Ppu.indexLayer=function(...) return Runtime.call("editor.gen3.rse.indexLayer",layer,...) end
       Ppu.indexSheet=function(...) return Runtime.call("editor.gen3.rse.indexSheet",sheet,...) end
     end
-    local indexImages={}
-    local function indexImage(path,colourPath)
-      local asset=native.assets[colourPath]
-      local file=asset and asset.indexFile
-      if not file and colourPath~=path then file=native.assets[path] and native.assets[path].file end
-      if not file then return nil end
-      if indexImages[file]==nil then
-        local ok,img=pcall(function() return love.graphics.newImage(love.filesystem.newFileData(assert(mod:read(file)),"index.png")) end)
+    local colourImages={}
+    local function colourImage(path)
+      local asset=path and native.assets[path:gsub("_idx%.png$",".png")]
+      if not asset or not asset.file then return nil end
+      if colourImages[asset.file]==nil then
+        local ok,img=pcall(function() return love.graphics.newImage(love.filesystem.newFileData(assert(mod:read(asset.file)),"asset.png")) end)
         if ok then img:setFilter("nearest","nearest") end
-        indexImages[file]=ok and img or false
+        colourImages[asset.file]=ok and img or false
       end
-      return indexImages[file] or nil
+      return colourImages[asset.file] or nil
     end
     mod.hooks:wrap("editor.gen3.rse.indexLayer",function(proceed,path,w,h,bpp)
-      local img=path and indexImage(path,(path:gsub("_idx%.png$",".png")))
+      local img=colourImage(path)
       if not img then return proceed(path,w,h,bpp) end
-      return {image=img,w=w or img:getWidth(),h=h or img:getHeight(),bpp=bpp or 4}
+      return {image=img,w=w or img:getWidth(),h=h or img:getHeight(),bpp=bpp or 4,trueColor=true}
     end)
     mod.hooks:wrap("editor.gen3.rse.indexSheet",function(proceed,path,frameW,frameH,rects)
-      local img=path and indexImage(path,path)
+      local img=colourImage(path)
       if not img then return proceed(path,frameW,frameH,rects) end
-      return {image=img,w=img:getWidth(),h=img:getHeight(),frameW=frameW,frameH=frameH,rects=rects}
+      return {image=img,w=img:getWidth(),h=img:getHeight(),frameW=frameW,frameH=frameH,rects=rects,trueColor=true}
     end)
     Ppu.clearCache()
   end

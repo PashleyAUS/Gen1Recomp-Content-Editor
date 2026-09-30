@@ -688,6 +688,15 @@ return (function()
   trainers = {},
 }
   end)()
+  p.gen3Assets = (function() return 
+{
+  ["data/generated/gba/title/rayquaza.png"] = {
+    file = "assets/gen3/title/rayquaza.png",
+    height = 256,
+    width = 256,
+  },
+}
+  end)()
   p.gen3Audio = (function() return 
 {
   cries = {},

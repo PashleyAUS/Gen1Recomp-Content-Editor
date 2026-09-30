@@ -242,9 +242,11 @@ function Project.draw(S, x, y, w, h, App)
   local prefs = S.dataPrefs or persistedPrefs
   local mountedRoot = DataSource.mountedRecompRoot
     and DataSource.mountedRecompRoot() or nil
-  local recompRoot = mountedRoot
-    or (prefs and prefs.recompRoot)
+  -- The linked folder, not the mounted cache (Gen 3 data can come from the
+  -- shared save-directory cache while the game runs from the linked folder).
+  local recompRoot = (prefs and prefs.recompRoot)
     or (persistedPrefs and persistedPrefs.recompRoot)
+    or mountedRoot
   if recompRoot == "" then recompRoot = nil end
   local validRecompRoot = recompRoot ~= nil
     and DataSource.isValidRecompRoot(recompRoot)

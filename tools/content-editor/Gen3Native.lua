@@ -180,21 +180,146 @@ M.source=[=[
       return images[path] or proceed(path)
     end)
     -- The title screen and intro ask the PPU for palette-index art. A
-    -- replacement is a normal PNG: hand it over as colour and the PPU draws
-    -- those pixels (a recomp, not a 16-colour GBA).
+    -- replacement is a normal PNG, drawn in its own colours. The runtime is
+    -- not changed: while a layer or sprite pass uses one, the PPU gets a copy
+    -- of its own shader where a pixel with alpha 254 is colour, not an index
+    -- (index art is always 255).
     local Ppu=require("src.core.game3.gba_ppu")
     if not Ppu._editorIndexBridge then
       Ppu._editorIndexBridge=true
       local layer,sheet=Ppu.indexLayer,Ppu.indexSheet
       Ppu.indexLayer=function(...) return Runtime.call("editor.gen3.rse.indexLayer",layer,...) end
       Ppu.indexSheet=function(...) return Runtime.call("editor.gen3.rse.indexSheet",sheet,...) end
+      local renderBg,renderObjs=Ppu._renderBg,Ppu._renderObjs
+      Ppu._renderBg=function(...) return Runtime.call("editor.gen3.rse.renderBg",renderBg,...) end
+      Ppu._renderObjs=function(...) return Runtime.call("editor.gen3.rse.renderObjs",renderObjs,...) end
     end
+    -- Copies of gba_ppu's BG_SHADER / OBJ_SHADER plus the colour branch.
+    local BG_SHADER=[[
+extern Image idxTex;
+extern vec2 texSize;
+extern Image palTex;
+extern Image lineTex;
+extern float lineMode;
+extern vec2 ofs;
+extern float affine;
+extern vec4 mat;
+extern vec2 ref;
+extern float wrap;
+extern float bpp8;
+vec4 effect(vec4 color, Image t, vec2 tc, vec2 sc) {
+  float x = floor(sc.x);
+  float y = floor(sc.y);
+  vec2 p;
+  if (affine > 0.5) {
+    float tx = floor((ref.x + mat.x * x + mat.y * y) / 256.0);
+    float ty = floor((ref.y + mat.z * x + mat.w * y) / 256.0);
+    if (wrap > 0.5) {
+      tx = mod(tx, texSize.x);
+      ty = mod(ty, texSize.y);
+    } else if (tx < 0.0 || ty < 0.0 || tx >= texSize.x || ty >= texSize.y) {
+      return vec4(0.0);
+    }
+    p = vec2(tx, ty);
+  } else {
+    float h = ofs.x;
+    float v = ofs.y;
+    if (lineMode > 0.5) {
+      vec4 lv = Texel(lineTex, vec2((y + 0.5) / 160.0, 0.5));
+      float val = floor(lv.r * 255.0 + 0.5) + floor(lv.g * 255.0 + 0.5) * 256.0;
+      if (lineMode < 1.5) h = val; else v = val;
+    }
+    p = vec2(mod(x + h, texSize.x), mod(y + v, texSize.y));
+  }
+  vec4 src = Texel(idxTex, (p + 0.5) / texSize);
+  if (src.a < 0.998) {
+    if (src.a < 0.5) return vec4(0.0);
+    return vec4(src.rgb, 1.0);
+  }
+  float idx = floor(src.r * 255.0 + 0.5);
+  if (bpp8 > 0.5) {
+    if (idx < 0.5) return vec4(0.0);
+  } else if (mod(idx, 16.0) < 0.5) {
+    return vec4(0.0);
+  }
+  return vec4(Texel(palTex, vec2((idx + 0.5) / 256.0, 0.25)).rgb, 1.0);
+}
+]]
+    local OBJ_SHADER=[[
+extern Image sheet;
+extern vec2 sheetSize;
+extern vec2 frameOrigin;
+extern vec2 sprSize;
+extern vec2 boxPos;
+extern vec2 boxSize;
+extern float affine;
+extern vec4 mat;
+extern vec2 flip;
+extern float palBase;
+extern float bpp8;
+extern Image palTex;
+extern float tag;
+vec4 effect(vec4 color, Image t, vec2 tc, vec2 sc) {
+  vec2 l = floor(sc) - boxPos;
+  vec2 s;
+  if (affine > 0.5) {
+    vec2 d = l - floor(boxSize * 0.5);
+    s.x = floor((mat.x * d.x + mat.y * d.y) / 256.0) + floor(sprSize.x * 0.5);
+    s.y = floor((mat.z * d.x + mat.w * d.y) / 256.0) + floor(sprSize.y * 0.5);
+    if (s.x < 0.0 || s.y < 0.0 || s.x >= sprSize.x || s.y >= sprSize.y) discard;
+  } else {
+    s = l;
+    if (flip.x > 0.5) s.x = sprSize.x - 1.0 - s.x;
+    if (flip.y > 0.5) s.y = sprSize.y - 1.0 - s.y;
+  }
+  vec4 src = Texel(sheet, (frameOrigin + s + 0.5) / sheetSize);
+  if (src.a < 0.998) {
+    if (src.a < 0.5) discard;
+    return vec4(src.rgb, tag);
+  }
+  float idx = floor(src.r * 255.0 + 0.5);
+  if (idx < 0.5) discard;
+  float pi = bpp8 > 0.5 ? idx : palBase + idx;
+  return vec4(Texel(palTex, vec2((pi + 0.5) / 256.0, 0.75)).rgb, tag);
+}
+]]
+    local shaders={}
+    local function colourShader(kind)
+      if not shaders[kind] then shaders[kind]=love.graphics.newShader(kind=="bg" and BG_SHADER or OBJ_SHADER) end
+      return shaders[kind]
+    end
+    mod.hooks:wrap("editor.gen3.rse.renderBg",function(proceed,self,g,i,...)
+      local L=self.bg[i] and self.bg[i].layer
+      if not (L and L.trueColor) then return proceed(self,g,i,...) end
+      local stock=g.bgShader
+      g.bgShader=colourShader("bg")
+      local ok,err=pcall(proceed,self,g,i,...)
+      g.bgShader=stock
+      if not ok then error(err,0) end
+    end)
+    mod.hooks:wrap("editor.gen3.rse.renderObjs",function(proceed,self,g,list,...)
+      local any=false
+      for _,e in ipairs(list or {}) do if e.sheet and e.sheet.trueColor then any=true;break end end
+      if not any then return proceed(self,g,list,...) end
+      local stock=g.objShader
+      g.objShader=colourShader("obj")
+      local ok,err=pcall(proceed,self,g,list,...)
+      g.objShader=stock
+      if not ok then error(err,0) end
+    end)
     local colourImages={}
     local function colourImage(path)
       local asset=path and native.assets[path:gsub("_idx%.png$",".png")]
       if not asset or not asset.file then return nil end
       if colourImages[asset.file]==nil then
-        local ok,img=pcall(function() return love.graphics.newImage(love.filesystem.newFileData(assert(mod:read(asset.file)),"asset.png")) end)
+        local ok,img=pcall(function()
+          local data=love.image.newImageData(love.filesystem.newFileData(assert(mod:read(asset.file)),"asset.png"))
+          data:mapPixel(function(_,_,r,g,b,a)
+            if a<0.5 then return 0,0,0,0 end
+            return r,g,b,254/255
+          end)
+          return love.graphics.newImage(data)
+        end)
         if ok then img:setFilter("nearest","nearest") end
         colourImages[asset.file]=ok and img or false
       end

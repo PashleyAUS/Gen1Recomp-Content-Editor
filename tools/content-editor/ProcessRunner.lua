@@ -32,27 +32,24 @@ local function getWindowsFfi()
   windowsFfiInitialized = true
   local okFfi, ffi = pcall(require, "ffi")
   if not okFfi then return nil end
+  -- Own names, bound with asm(). Another module (the updater) also declares
+  -- CreateProcessA, and LuaJIT keeps whichever declaration came first, so a
+  -- later call with the other struct crashes instead of starting the process.
   local okCdef = pcall(ffi.cdef, [[
-    typedef int BOOL;
-    typedef unsigned long DWORD;
-    typedef void *HANDLE;
-    typedef const char *LPCSTR;
-    typedef char *LPSTR;
-    typedef void *LPVOID;
     typedef struct {
-      DWORD cb; LPSTR lpReserved; LPSTR lpDesktop; LPSTR lpTitle;
-      DWORD dwX; DWORD dwY; DWORD dwXSize; DWORD dwYSize;
-      DWORD dwXCountChars; DWORD dwYCountChars; DWORD dwFillAttribute;
-      DWORD dwFlags; unsigned short wShowWindow; unsigned short cbReserved2;
-      unsigned char *lpReserved2; HANDLE hStdInput; HANDLE hStdOutput; HANDLE hStdError;
-    } STARTUPINFOA;
-    typedef struct { HANDLE hProcess; HANDLE hThread; DWORD dwProcessId; DWORD dwThreadId; }
-      PROCESS_INFORMATION;
-    BOOL CreateProcessA(LPCSTR, LPSTR, LPVOID, LPVOID, BOOL, DWORD, LPVOID,
-      LPCSTR, STARTUPINFOA *, PROCESS_INFORMATION *);
-    DWORD WaitForSingleObject(HANDLE, DWORD);
-    BOOL GetExitCodeProcess(HANDLE, DWORD *);
-    BOOL CloseHandle(HANDLE);
+      unsigned long cb; char *lpReserved; char *lpDesktop; char *lpTitle;
+      unsigned long dwX; unsigned long dwY; unsigned long dwXSize; unsigned long dwYSize;
+      unsigned long dwXCountChars; unsigned long dwYCountChars; unsigned long dwFillAttribute;
+      unsigned long dwFlags; unsigned short wShowWindow; unsigned short cbReserved2;
+      unsigned char *lpReserved2; void *hStdInput; void *hStdOutput; void *hStdError;
+    } CE_STARTUPINFOA;
+    typedef struct { void *hProcess; void *hThread; unsigned long dwProcessId; unsigned long dwThreadId; }
+      CE_PROCESS_INFORMATION;
+    int CE_CreateProcessA(const char *, char *, void *, void *, int, unsigned long, void *,
+      const char *, CE_STARTUPINFOA *, CE_PROCESS_INFORMATION *) asm("CreateProcessA");
+    unsigned long CE_WaitForSingleObject(void *, unsigned long) asm("WaitForSingleObject");
+    int CE_GetExitCodeProcess(void *, unsigned long *) asm("GetExitCodeProcess");
+    int CE_CloseHandle(void *) asm("CloseHandle");
   ]])
   if not okCdef then return nil end
   windowsFfi = ffi
@@ -87,21 +84,21 @@ local function windowsRun(command)
   local commandLine = string.format(
     'cmd.exe /d /s /c "call ""%s"" > ""%s"" 2>&1"', batchPath, outputPath)
   local buffer = ffi.new("char[?]", #commandLine + 1, commandLine)
-  local startup = ffi.new("STARTUPINFOA")
+  local startup = ffi.new("CE_STARTUPINFOA")
   startup.cb = ffi.sizeof(startup)
-  local process = ffi.new("PROCESS_INFORMATION")
-  local created = ffi.C.CreateProcessA(nil, buffer, nil, nil, 0, 0x08000000,
+  local process = ffi.new("CE_PROCESS_INFORMATION")
+  local created = ffi.C.CE_CreateProcessA(nil, buffer, nil, nil, 0, 0x08000000,
     nil, nil, startup, process)
   if created == 0 then
     os.remove(batchPath)
     return false, "could not start hidden Windows command"
   end
 
-  ffi.C.CloseHandle(process.hThread)
-  ffi.C.WaitForSingleObject(process.hProcess, 0xFFFFFFFF)
-  local exitCode = ffi.new("DWORD[1]")
-  ffi.C.GetExitCodeProcess(process.hProcess, exitCode)
-  ffi.C.CloseHandle(process.hProcess)
+  ffi.C.CE_CloseHandle(process.hThread)
+  ffi.C.CE_WaitForSingleObject(process.hProcess, 0xFFFFFFFF)
+  local exitCode = ffi.new("unsigned long[1]")
+  ffi.C.CE_GetExitCodeProcess(process.hProcess, exitCode)
+  ffi.C.CE_CloseHandle(process.hProcess)
 
   local output = readFile(outputPath)
   os.remove(batchPath)
