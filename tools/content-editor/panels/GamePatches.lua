@@ -2,8 +2,8 @@
 -- (nothing in the engine is changed; each one is generated into main.lua).
 -- FireRed / LeafGreen / Emerald: the real time clock (day and night,
 -- Gen3DayNight); on FireRed / LeafGreen with its encounter tables as a
--- setting of it. Emerald: the Physical/Special split (Gen3Split) and the
--- System Clock (Gen3SystemClock).
+-- setting of it. Emerald: FireRed Maps (Gen3FrLink), the Physical/Special
+-- split (Gen3Split) and the System Clock (Gen3SystemClock).
 --
 -- Each patch is a title, one line under it and an Off / On switch; what it
 -- does in detail opens in a pop-up (Description).
@@ -146,10 +146,43 @@ local function systemClockText(S)
   }
 end
 
+local function fireRedText(S)
+  local FrLink = require("Gen3FrLink")
+  local link = FrLink.editor()
+  return "FireRed Maps", {
+    "Use FireRed's maps and tilesets in this Emerald mod. They're read from a FireRed or LeafGreen import -- yours in the editor, the player's in the game. The mod itself holds no FireRed graphics.",
+    "On: every FireRed tileset can be painted with (map builder, Create / resize, Around the map), and MAPS > Import template map lists FireRed's maps (type FireRed in its search).",
+    "Import region brings in every FireRed map at once as EM_KANTO_<name>, joined by FireRed's own connections and warps, with its wild Pokemon. People, signs and scripts don't come across (FireRed's scripts don't run in Emerald) -- add them in the editor, and a warp from Hoenn to reach Kanto. Music is Emerald's.",
+    "Players need FireRed or LeafGreen imported: without one the mod doesn't turn on and says so.",
+    link and ("Found your " .. (link.game == "leafgreen" and "LeafGreen" or "FireRed") .. " import.")
+      or "No FireRed or LeafGreen import found: import one in PROJECT first.",
+  }
+end
+
 M.describe = { clock = clockText, encounters = encounterText, clean = cleanText, split = splitText,
-  systemClock = systemClockText }
+  systemClock = systemClockText, firered = fireRedText }
 
 M.confirms = {
+  region = {
+    title = "Import region -- add every FireRed map?",
+    button = "Import the FireRed region",
+    lines = function(S)
+      local n = #(require("Gen3FrLink").maps())
+      return {
+        ("Adds %d FireRed maps to this mod as EM_KANTO_<name> maps (Kanto and the Sevii Islands). Maps it already has are left alone."):format(n),
+        "They keep FireRed's blocks, borders, connections, warps and wild Pokemon, read from the FireRed or LeafGreen import. People, signs and scripts aren't copied.",
+        "Add a warp from a Hoenn map to reach them. Undo removes them again.",
+      }
+    end,
+    run = function(S, App)
+      local ok, added, skipped = pcall(require("Gen3FrLink").importRegion, S)
+      if not ok then S.status = "Import region failed: " .. tostring(added); return end
+      if not added then S.status = tostring(skipped); return end
+      App.markDirty()
+      S.status = ("Imported %d FireRed maps (EM_KANTO_...)%s"):format(added,
+        skipped > 0 and (", " .. skipped .. " already there") or "")
+    end,
+  },
   clean = {
     title = "Clean Project -- wipe this project?",
     button = "Wipe and start clean",
@@ -230,6 +263,28 @@ M.PATCHES = {
     },
   },
   {
+    id = "firered", emerald = true, title = "FireRed Maps", subtitle = "FireRed's maps and tilesets, from a FireRed or LeafGreen import",
+    isOn = function(S) return require("Gen3FrLink").enabled(S.project) end,
+    setOn = function(S, on)
+      local changed = require("Gen3FrLink").setEnabled(S.project, on)
+      -- the tileset lists are rebuilt with (or without) FireRed's
+      if changed then require("Gen3FrLink").refresh(S) end
+      return changed
+    end,
+    status = { on = "FireRed Maps on: FireRed's tilesets and maps are in the pickers",
+      off = "FireRed Maps off (maps already using FireRed keep it)" },
+    note = function(S)
+      local FrLink = require("Gen3FrLink")
+      if not FrLink.enabled(S.project) then return nil end
+      if not FrLink.editor() then return "No FireRed or LeafGreen import found" end
+      if S.project.gen3FrRegion then return "Region imported (EM_KANTO_ maps)" end
+      return nil
+    end,
+    settings = { label = "Import region", tooltip = "Add every FireRed map at once, connected, as EM_KANTO_ maps",
+      enabled = function(S) local FrLink = require("Gen3FrLink") return FrLink.enabled(S.project) and FrLink.editor() ~= nil end,
+      open = function(S) S._gamePatchConfirm = "region" end },
+  },
+  {
     id = "split", emerald = true, title = "Physical/Special Split", subtitle = "Moves are Physical or Special by themselves, as in Gen 4",
     isOn = function(S) return require("Gen3Split").enabled(S.project) end,
     setOn = function(S, on) return require("Gen3Split").setEnabled(S.project, on) end,
@@ -285,8 +340,8 @@ local function patchCard(S, App, patch, x, y, w)
       tooltip = "What " .. patch.title .. " does" }) then
     S._gamePatchPopup = patch.id
   end
-  if patch.settings and Kit.button(rx, cy + 78 * s, colW, 28 * s, "Settings", { kind = "ghost", font = "micro",
-      tooltip = patch.settings.tooltip }) then
+  if patch.settings and Kit.button(rx, cy + 78 * s, colW, 28 * s, patch.settings.label or "Settings", { kind = "ghost", font = "micro",
+      tooltip = patch.settings.tooltip, enabled = not patch.settings.enabled or patch.settings.enabled(S) }) then
     patch.settings.open(S)
   end
 

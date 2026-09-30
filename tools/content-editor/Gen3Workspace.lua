@@ -38,6 +38,13 @@ function M.prepare(S)
       data._editorMaps[id]=map
       if native.pair then data._editorTilesets[native.pair]={id=native.pair,_gen3Pair=native.pair,image="@gen3/"..native.pair,blocks={},trueColor=true} end
     end
+    -- GAME PATCHES > FireRed Maps (Emerald): every FireRed tileset too.
+    local FrLink=require("Gen3FrLink")
+    if FrLink.enabled(S.project) and FrLink.editor() then
+      for _,pair in ipairs((FrLink.pairs())) do
+        data._editorTilesets[pair]={id=pair,_gen3Pair=pair,image="@gen3/"..pair,blocks={},trueColor=true}
+      end
+    end
   end
   if S.project then S.project.gen3Workspace=1 end
   -- Older editor projects may contain an untouched copy of the lossy cache.
@@ -136,7 +143,7 @@ function M.descriptor(S,pair)
     S.project.runtimeTileAnims=S.project.runtimeTileAnims or {}
     S.project.runtimeTileAnims[pair]=S.project.runtimeTileAnims[pair] or {}
   end
-  return {id=require("LayeredMap").runtimeSourceId(pair),name=pair.." (Gen 3 metatiles)",nativePair=pair,
+  return {id=require("LayeredMap").runtimeSourceId(pair),name=require("Gen3FrLink").label(pair).." (Gen 3 metatiles)",nativePair=pair,
     image="@gen3/"..pair,colorMode="true_color",columns=8,count=count,
     animations=S.project and S.project.runtimeTileAnims and S.project.runtimeTileAnims[pair] or {}}
 end
