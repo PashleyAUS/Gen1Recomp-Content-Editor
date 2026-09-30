@@ -212,6 +212,11 @@ function Generation.listedMapIds(S)
   if S and S.project then
     for id in pairs(S.project.maps or {}) do add(id) end
     for id in pairs(S.project.layeredMaps or {}) do add(id) end
+    -- Maps the project made from a layout (Create / resize, GAME PATCHES >
+    -- FireRed Maps > Import region) are its own maps too.
+    for id in pairs(S.project.gen3MapLayouts or {}) do
+      if ((S.project.gen3 or {}).maps or {})[id] or Generation.dataMaps(S)[id] then add(id) end
+    end
   end
   if not clean then
     for id, rec in pairs(Generation.dataMaps(S)) do

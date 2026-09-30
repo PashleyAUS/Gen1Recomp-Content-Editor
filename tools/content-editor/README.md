@@ -490,6 +490,34 @@ Painted tiles win over the fill and are only for looks; nobody can
 walk outside a map. The game uses them from `main.lua` (the engine isn't
 changed), and they replace the player's VOID FILL option on those cells.
 
+## FireRed maps and tilesets in Emerald
+
+**GAME PATCHES → FireRed Maps** (Emerald) gives the mod FireRed's maps and
+tilesets, read from a FireRed or LeafGreen import (the editor's or the linked
+Gen1Recomp folder's). With it on:
+
+- Every FireRed tileset (`FireRed: …`) can be painted with: the map builder's
+  tileset list and **Create new map**, **Create / resize → Tileset**, and
+  **Border → Around the map → Paint tileset**.
+- **Maps → Import template map** lists FireRed's maps too (type "FireRed" in
+  its search): one comes in as a new map builder map with that map's blocks,
+  collision, heights, border and map type.
+- **Import region** (on the patch) brings in every FireRed map at once, Kanto
+  and the Sevii Islands, as `EM_KANTO_<name>`: FireRed's blocks, borders,
+  connections, warps, name signs and wild Pokemon (edit them in Encounters
+  like any other list). Add a warp from a Hoenn map to reach them. **Edit this
+  map** turns one into a map builder map like any other.
+
+People, signs and scripts don't come across (FireRed's scripts don't run in
+Emerald), and the music is Emerald's (by map type). FireRed's door animations
+don't play on FireRed tiles; the doors still work.
+
+The mod carries names only (`frlg__pallet_outdoor`, `frlg:FR_PALLET_TOWN`,
+`EM_KANTO_…`), never FireRed's graphics or lists. In game `main.lua` reads
+them from the player's own FireRed or LeafGreen import; without one the mod
+doesn't turn on and says to import FireRed or LeafGreen first. Turning the
+patch off hides FireRed from the pickers; maps already using it keep it.
+
 ## Combine duplicate tiles
 
 In **Maps**, open the tile palette's **More options → Combine tiles**. Select

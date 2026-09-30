@@ -54,25 +54,39 @@ function M.templateMaps(S)
   local Labels = require("Gen3Labels")
   local prefix = "^" .. require("Generation").gen3MapPrefix(S)
   for id in pairs(((S.data or {})._editorMaps) or ((S.data or {}).maps) or {}) do
-    if type(id) == "string" and id:match(prefix) and not ((S.project or {}).maps or {})[id] then
+    -- the game's own maps only: not the project's (made, resized or
+    -- brought in by Import region)
+    local own = ((S.project or {}).maps or {})[id] or ((S.project or {}).gen3MapLayouts or {})[id]
+      or (((S.project or {}).gen3 or {}).maps or {})[id]
+    if type(id) == "string" and id:match(prefix) and not own then
       ids[#ids + 1] = id
       labels[id] = Labels.map(id) .. "  (" .. id .. ")"
     end
   end
   table.sort(ids, function(a, b) return Labels.natural(labels[a], labels[b]) end)
+  -- Emerald with GAME PATCHES > FireRed Maps on: FireRed's maps too.
+  if require("Generation").id(S) == "emerald" then
+    local frIds, frLabels = require("Gen3FrLink").templateMaps(S.project)
+    for _, id in ipairs(frIds) do ids[#ids + 1] = id; labels[id] = frLabels[id] end
+  end
   return ids, labels
 end
 
---- Bring a FireRed map in as a template: its layout, collision, heights and
--- border under a new name, with no events, scripts, warps or connections.
+--- Bring a game map in as a template (in Emerald also a FireRed one,
+-- "frlg:FR_…", Gen3FrLink): its layout, collision, heights and border under a
+-- new name, with no events, scripts, warps or connections.
 -- Returns the new map id, or nil and why.
 function M.importTemplate(S, baseId)
   local W = require("Gen3Workspace")
   local L = require("LayeredMap")
   local copy = require("src.mods.Merge").deepCopy
-  local base, err = W.source(S, baseId)
+  local FrLink = require("Gen3FrLink")
+  local fireRed = FrLink.isMap(baseId)
+  local base, err
+  if fireRed then base, err = FrLink.templateSource(S, baseId) else base, err = W.source(S, baseId) end
   if not base then return nil, err end
-  local wanted = baseId:gsub("^" .. require("Generation").gen3MapPrefix(S), "") .. "_TEMPLATE"
+  local wanted = (fireRed and baseId:sub(#FrLink.MAP + 1):gsub("^FR_", "")
+    or baseId:gsub("^" .. require("Generation").gen3MapPrefix(S), "")) .. "_TEMPLATE"
   local source, map = L.createMap(S, wanted, base.cellWidth, base.cellHeight, base.baseTileset)
   if not source then return nil, map end
   local id = source.id
@@ -85,7 +99,9 @@ function M.importTemplate(S, baseId)
   map.label = id
   map.warps, map.objects, map.signs, map.connections = {}, {}, {}, {}
   local props = require("Gen3MapProperties")
-  local kind = props.resolve(S, { id = baseId }).mapType
+  local kind
+  if fireRed then kind = (FrLink.header(baseId:sub(#FrLink.MAP + 1)) or {}).mapType
+  else kind = props.resolve(S, { id = baseId }).mapType end
   if kind then props.apply(map, kind) end
   return id
 end

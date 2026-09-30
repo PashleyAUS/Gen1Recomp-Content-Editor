@@ -15,6 +15,8 @@ function M.prepare(S)
       if name=="moves" and require("Generation").id(S)=="emerald" then require("Gen3Split").applyDefaults(base) end
       S.data._gen3EditorContent[name]=base
     end
+    -- GAME PATCHES > FireRed Maps > Import region: Kanto's wild Pokemon.
+    if name=="encounters" then require("Gen3FrLink").addWild(S,base) end
     S.data[name]=base
     p[name]=p[name] or {}
     if not p.gen3ContentWorkspaces[name] then

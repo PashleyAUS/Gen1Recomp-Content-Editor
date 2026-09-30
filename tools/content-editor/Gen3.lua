@@ -185,6 +185,9 @@ function Gen3.emit(project, encode)
       out[#out+1]="  end; applyRecord() end"
     end
   end
+  -- FireRed tilesets / map layouts in Emerald (Gen3FrLink): before Gen3Map,
+  -- whose layouts may come from FireRed.
+  require("Gen3FrLink").emit(project, encode, out)
   require("Gen3Map").emit(project, encode, out)
   require("Gen3Starters").emit(project, encode, out)
   require("Gen3Native").emit(project, encode, out)
