@@ -28,7 +28,7 @@ function M.draw(S,x,y,w,h,App)
     local mode=S.g3UiMode
     if mode=="all" then return true end
     if mode=="overworld" then return path:match("/ow/%d+%.rgba$") end
-    if mode=="intro" then return path:find("/intro/",1,true) end
+    if mode=="intro" then return path:find("/intro/",1,true) or path:find("/gba/title/",1,true) end
     if mode=="menus" then return path:find("/chrome/",1,true) and not path:find("/fonts/",1,true) end
     if mode=="bag" then return (path:find("/items/bag/",1,true) or path:find("/rse/bag/",1,true)) and not path:find("/icons/",1,true) end
     if mode=="party" then return path:find("/pokemon/party/",1,true) end

@@ -35,6 +35,7 @@ function M.emit(p,encode,out)
   for path,asset in pairs(p.gen3Assets or {}) do
     assert(path:match("^data/generated/gba/") and not path:find("..",1,true),"Invalid native asset path")
     assert(type(asset.file)=="string" and asset.file:match("^assets/") and not asset.file:find("..",1,true),"Invalid mod asset path")
+    assert(asset.indexFile==nil or (type(asset.indexFile)=="string" and asset.indexFile:match("^assets/") and not asset.indexFile:find("..",1,true)),"Invalid mod index map path")
     if asset.ow then
       local id=tonumber(path:match("^data/generated/gba/ow/(%d+)%.rgba$"))
       assert(id and id<240,"Custom overworld sprites must use an ID below 240")
@@ -178,6 +179,41 @@ M.source=[=[
       end
       return images[path] or proceed(path)
     end)
+    -- The title screen and intro draw palette-index maps (gba_ppu), also
+    -- straight from disk: a layer's <name>_idx.png, a sprite's sheet PNG.
+    -- An imported colour PNG carries its index map (indexFile); an imported
+    -- _idx.png is one already.
+    local Ppu=require("src.core.game3.gba_ppu")
+    if not Ppu._editorIndexBridge then
+      Ppu._editorIndexBridge=true
+      local layer,sheet=Ppu.indexLayer,Ppu.indexSheet
+      Ppu.indexLayer=function(...) return Runtime.call("editor.gen3.rse.indexLayer",layer,...) end
+      Ppu.indexSheet=function(...) return Runtime.call("editor.gen3.rse.indexSheet",sheet,...) end
+    end
+    local indexImages={}
+    local function indexImage(path,colourPath)
+      local asset=native.assets[colourPath]
+      local file=asset and asset.indexFile
+      if not file and colourPath~=path then file=native.assets[path] and native.assets[path].file end
+      if not file then return nil end
+      if indexImages[file]==nil then
+        local ok,img=pcall(function() return love.graphics.newImage(love.filesystem.newFileData(assert(mod:read(file)),"index.png")) end)
+        if ok then img:setFilter("nearest","nearest") end
+        indexImages[file]=ok and img or false
+      end
+      return indexImages[file] or nil
+    end
+    mod.hooks:wrap("editor.gen3.rse.indexLayer",function(proceed,path,w,h,bpp)
+      local img=path and indexImage(path,(path:gsub("_idx%.png$",".png")))
+      if not img then return proceed(path,w,h,bpp) end
+      return {image=img,w=w or img:getWidth(),h=h or img:getHeight(),bpp=bpp or 4}
+    end)
+    mod.hooks:wrap("editor.gen3.rse.indexSheet",function(proceed,path,frameW,frameH,rects)
+      local img=path and indexImage(path,path)
+      if not img then return proceed(path,frameW,frameH,rects) end
+      return {image=img,w=img:getWidth(),h=img:getHeight(),frameW=frameW,frameH=frameH,rects=rects}
+    end)
+    Ppu.clearCache()
   end
   mod.hooks:wrap("editor.gen3.cache",function(proceed,path)
     local key=path:gsub("^firered/",""):gsub("^leafgreen/",""):gsub("^emerald/","")

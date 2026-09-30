@@ -91,12 +91,20 @@ function Panel.draw(S,x,y,w,h,App,filter)
         local bytes=IO.readText(picked)
         local ok,img=pcall(function() return love.image.newImageData(love.filesystem.newFileData(bytes,"replacement.png")) end)
         if not ok or img:getWidth()~=iw or img:getHeight()~=ih then S.status="Replacement must be "..iw.." x "..ih;return end
+        local indexMap,why=false
+        if require("Generation").id(S)=="emerald" then indexMap,why=R.rseIndexMap(S.data,path,img) end
+        if indexMap==nil then S.status=why;return end
         local rel="assets/gen3/"..path:gsub("^data/generated/gba/","")
         local output=path:match("%.rgba$") and img:getString() or img:encode("png"):getString()
         IO.ensureDirectory((S.path.."/"..rel):match("^(.*)/"))
         local saved,err=IO.writeText(S.path.."/"..rel,output)
         if not saved then S.status=tostring(err);return end
         local record={file=rel,width=iw,height=ih}
+        if indexMap then
+          record.indexFile=rel:gsub("%.png$",".index.png")
+          saved,err=IO.writeText(S.path.."/"..record.indexFile,indexMap:encode("png"):getString())
+          if not saved then S.status=tostring(err);return end
+        end
         if override and override.ow then record.ow=override.ow;record.metaFile=override.metaFile end
         S.project.gen3Assets=S.project.gen3Assets or {};S.project.gen3Assets[path]=record
         App.markDirty();S.status="Imported native asset; Save to apply"
