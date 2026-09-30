@@ -21,8 +21,32 @@ local function tilesetChoices(S, current)
     if info.pair then pairsById[info.pair]=true end
   end
   if current then pairsById[current]=true end
-  for pair in pairs(pairsById) do labels[pair]=pair:gsub("_rom_"," / ") end
+  -- GAME PATCHES > FireRed Maps (Emerald): FireRed's tilesets too.
+  local FrLink=require("Gen3FrLink")
+  if FrLink.enabled(S.project) and FrLink.editor() then
+    for _,pair in ipairs((FrLink.pairs())) do pairsById[pair]=true end
+  end
+  for pair in pairs(pairsById) do labels[pair]=FrLink.label(pair) end
   return RegList.sortedKeys(pairsById),labels
+end
+
+-- Emerald, GAME PATCHES > FireRed Maps on: MAPS > Create / resize > Tileset.
+-- A tileset for the new layout, Emerald's or FireRed's (read from the
+-- player's FireRed or LeafGreen import, Gen3FrLink). FireRed maps come in
+-- with Import template map, or all at once with Import region.
+local function fireRedRow(S,App,fx,y,fw,layout)
+  local s=Kit.scale
+  local FrLink=require("Gen3FrLink")
+  if not FrLink.editor() then
+    Kit.caption(fx,y,"GAME PATCHES > FireRed Maps is on, but no FireRed or LeafGreen import was found.")
+    return
+  end
+  local ids,labels=tilesetChoices(S,layout.pair)
+  S.g3LayoutPair=S.g3LayoutPair or layout.pair
+  Kit.caption(fx,y+6*s,"Tileset")
+  require("ChoicePicker").field(S,{x=fx+110*s,y=y,w=math.min(fw-110*s,360*s),h=28*s,current=S.g3LayoutPair,ids=ids,labels=labels,
+    title="Tileset for this layout",onPick=function(id) S.g3LayoutPair=id end})
+  Kit.caption(fx,y+40*s,"FireRed tilesets and maps (Import template map) need FireRed or LeafGreen imported to play the mod.")
 end
 
 local function drawMid(S,pair,mid,px,py,tile)
@@ -277,7 +301,7 @@ function Panel.draw(S,x,y,w,h,App)
     local prefix=require("Generation").gen3MapPrefix(S)
     Kit.caption(fx,y,"Source: "..S.g3MapId..". Use a new "..prefix.." ID to duplicate or create a blank map.")
     if S._g3LayoutFor~=S.g3MapId then
-      S._g3LayoutFor=S.g3MapId;S.g3LayoutId=S.g3MapId;S.g3LayoutW=tostring(layout.width);S.g3LayoutH=tostring(layout.height)
+      S._g3LayoutFor=S.g3MapId;S.g3LayoutId=S.g3MapId;S.g3LayoutPair=nil;S.g3LayoutW=tostring(layout.width);S.g3LayoutH=tostring(layout.height)
     end
     S.g3LayoutId=Kit.textfield("g3LayoutId",fx,y+36*s,fw,28*s,S.g3LayoutId,prefix.."MY_MAP")
     S.g3LayoutW=Kit.textfield("g3LayoutW",fx,y+80*s,130*s,28*s,S.g3LayoutW,"Width")
@@ -291,6 +315,9 @@ function Panel.draw(S,x,y,w,h,App)
       else
         local original=(S.project.gen3MapLayouts or {})[S.g3MapId]
         local spec={source=original and original.source or S.g3MapId,width=width,height=height,blank=S.g3BlankMap or false}
+        -- another tileset (MAPS > Create / resize > Tileset, Emerald)
+        local pair=S.g3LayoutPair or (original and original.pair)
+        if pair and pair~=layout.pair then spec.pair=pair elseif original and original.pair then spec.pair=original.pair end
         S.project.gen3MapLayouts=S.project.gen3MapLayouts or {};S.project.gen3MapLayouts[id]=spec
         S.project.gen3=S.project.gen3 or {};S.project.gen3.maps=S.project.gen3.maps or {}
         if id~=S.g3MapId then
@@ -310,9 +337,10 @@ function Panel.draw(S,x,y,w,h,App)
         if id~=S.g3MapId and Void.record(S.project,S.g3MapId) then
           S.project.gen3VoidMaps[id]=require("src.mods.Merge").deepCopy(Void.record(S.project,S.g3MapId))
         end
-        S.g3MapId=id;S.gen3Id=id;S.g3MapMode="terrain";S._g3Identity=nil;App.markDirty();S.status="Map layout applied; Save to export"
+        S.g3MapId=id;S.gen3Id=id;S.g3MapMode="terrain";S._g3Identity=nil;S.g3LayoutPair=nil;App.markDirty();S.status="Map layout applied; Save to export"
       end
     end
+    if require("Gen3FrLink").enabled(S.project) then fireRedRow(S,App,fx,y+256*s,fw,layout) end
     return
   end
   local borderMode=S.g3MapMode=="border"

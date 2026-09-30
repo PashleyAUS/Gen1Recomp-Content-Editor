@@ -8,7 +8,10 @@ function M.layout(data, id, project)
     data._gen3DerivedLayouts=data._gen3DerivedLayouts or {}
     local entry=data._gen3DerivedLayouts[id]
     if entry and entry.spec==spec then return entry.layout end
-    local base,err=M.layout(data,spec.source or id)
+    local FrLink=require("Gen3FrLink")
+    local base,err
+    if FrLink.isMap(spec.source) then base,err=FrLink.layout(spec.source)
+    else base,err=M.layout(data,spec.source or id) end
     if not base then return nil,err end
     local layout=M.resize(base,spec,id)
     data._gen3DerivedLayouts[id]={spec=spec,layout=layout};return layout
@@ -58,6 +61,8 @@ function M.resize(base,spec,id)
   copy.mapId=id;copy.width=spec.width;copy.height=spec.height
   copy.trueWidth=spec.width;copy.trueHeight=spec.height;copy.pair=spec.pair or base.pair
   copy.cells={};copy.overrides={}
+  -- Another tileset: the old border's blocks mean nothing there.
+  if spec.pair and spec.pair~=base.pair then copy.borderWidth,copy.borderHeight,copy.borderMids=1,1,{0} end
   for y=0,spec.height-1 do for x=0,spec.width-1 do
     copy.cells[y*spec.width+x+1]=(not spec.blank and x<base.width and y<base.height) and base:cellAt(x,y) or spec.fill or {mid=0,coll=255,elev=0}
   end end
@@ -78,9 +83,16 @@ function M.tileset(data, pair)
   local T = require("src.core.game3.tileset_native")
   if M._data ~= data then
     M._data = data
+    -- FireRed tilesets (frlg__…, Emerald projects) come from the FireRed
+    -- or LeafGreen import (Gen3FrLink).
+    local FrLink=require("Gen3FrLink")
+    local function read(p)
+      if FrLink.redirect(p) then return FrLink.read(p) end
+      return data._gen3Read and data._gen3Read(M.alias(p))
+    end
     T.install({
-      read=function(_,p) return data._gen3Read and data._gen3Read(M.alias(p)) end,
-      exists=function(_,p) return data._gen3Read and data._gen3Read(M.alias(p)) ~= nil end,
+      read=function(_,p) return read(p) end,
+      exists=function(_,p) return read(p) ~= nil end,
       write=function() return false end,
     })
   end
@@ -216,14 +228,18 @@ function M.emit(project, encode, out)
     for id,spec in pairs(mapLayouts) do
       local def=maps[id]
       local base=sourceLayouts[spec.source or id]
+      -- FireRed layouts ("frlg:FR_…"), from the player's FireRed import.
+      if not base and Layout._editorFrLink then base=Layout._editorFrLink.layout(spec.source) end
       if def and base then
         setmetatable(base,Layout)
         local cells={}
         for y=0,spec.height-1 do for x=0,spec.width-1 do
           cells[y*spec.width+x+1]=(not spec.blank and x<base.width and y<base.height) and base:cellAt(x,y) or spec.fill or {mid=0,coll=255,elev=0}
         end end
+        local other=spec.pair and spec.pair~=base.pair
         def.midLayout=Layout.fromDecoded({width=spec.width,height=spec.height,cells=cells,
-          borderWidth=base.borderWidth,borderHeight=base.borderHeight,borderMids=base.borderMids},id,spec.pair or base.pair)
+          borderWidth=other and 1 or base.borderWidth,borderHeight=other and 1 or base.borderHeight,
+          borderMids=other and {0} or base.borderMids},id,spec.pair or base.pair)
         def.width=spec.width;def.height=spec.height;def.pair=spec.pair or base.pair
       end
     end
@@ -245,10 +261,20 @@ function M.emit(project, encode, out)
             layout.borderWidth=border.borderWidth;layout.borderHeight=border.borderHeight
             layout.borderMids=border.borderMids
           end
+          -- Into the map's own cells: overrides are the game's setmetatile
+          -- changes, which it clears whenever a map loads.
           layout.overrides = layout.overrides or {}
+          layout.cells = layout.cells or {}
           for key, cell in pairs(edits) do
-            layout:applyOverride(key % 1024, math.floor(key / 1024), cell.mid, cell.coll, cell.elev)
+            local x, y = key % 1024, math.floor(key / 1024)
+            if x < layout.width and y < layout.height then
+              layout.cells[y * layout.width + x + 1] = {mid=cell.mid, coll=cell.coll, elev=cell.elev}
+            else
+              layout:applyOverride(x, y, cell.mid, cell.coll, cell.elev)
+            end
           end
+          local FieldView = package.loaded["src.core.game3.field_view"]
+          if FieldView then FieldView._nativeDirty = true end
         end
       end
     end
