@@ -340,8 +340,11 @@ function M.addWild(S, base)
       if type(slot.species) == "number" then slot.species = names[slot.species] or slot.species end
     end
   end
+  -- the import also keys routes as FR_ROUTE1 next to FR_ROUTE_1; only real maps
+  local known = {}
+  for _, id in ipairs(M.maps()) do known[id] = true end
   for key, t in pairs(M._wild) do
-    if type(key) == "string" and (key:sub(1, 3) == "FR_" or key:sub(1, 6) == "SEVII_") and type(t) == "table" then
+    if known[key] and type(t) == "table" then
       local id = M.regionId(key)
       if base[id] == nil then
         local rec = copy(t)
