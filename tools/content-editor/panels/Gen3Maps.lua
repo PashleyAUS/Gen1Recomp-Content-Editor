@@ -71,13 +71,8 @@ local function mapCell(S,id,layout,layered,resolve)
   end
 end
 
--- The open map and the maps connected to it, placed as the game places them
--- (same offsets as Gen3ConnectionsRuntime). Map aware: space outside every map
--- belongs to the nearest one (Gen3Void.owner).
-local function regions(S,id,layout)
-  local p=S.project
-  local list={{id=id,ox=0,oy=0,w=layout.width,h=layout.height,layout=layout}}
-  local patch=((p.gen3 or {}).maps or {})[id]
+local function connectionsOf(S,id)
+  local patch=((S.project.gen3 or {}).maps or {})[id]
   local conns=patch and patch.connections
   if conns==nil then
     local okM,Maps=pcall(require,"Maps")
@@ -85,21 +80,35 @@ local function regions(S,id,layout)
     conns=def and def.connections
   end
   if conns==nil then conns=(((S.data or {}).maps or {})[id] or {}).connections end
+  return conns
+end
+
+-- The open map and the maps up to 2 connections away, placed as the game
+-- places them (Map.computeWorld, WORLD_HOPS = 2). Space outside every map
+-- belongs to one of them (Gen3Void.owner).
+local function regions(S,id,layout)
+  local p=S.project
+  local list={{id=id,ox=0,oy=0,w=layout.width,h=layout.height,layout=layout,hops=0}}
   local seen={[id]=true}
-  for _,row in ipairs(require("Gen3Connections").each(conns)) do
-    local dir,c=row[1],row[2]
-    local nid=c.map or c.mapId
-    if nid and not seen[nid] then
-      local okL,nl=pcall(Map.layout,S.data,nid,p)
-      if okL and nl and nl.width then
-        seen[nid]=true
-        local off=tonumber(c.offset) or 0
-        local ox,oy
-        if dir=="north" then ox,oy=off,-nl.height
-        elseif dir=="south" then ox,oy=off,layout.height
-        elseif dir=="west" then ox,oy=-nl.width,off
-        else ox,oy=layout.width,off end
-        list[#list+1]={id=nid,dir=dir,ox=ox,oy=oy,w=nl.width,h=nl.height,layout=nl}
+  local qi=1
+  while list[qi] do
+    local cur=list[qi];qi=qi+1
+    for _,row in ipairs(cur.hops<2 and require("Gen3Connections").each(connectionsOf(S,cur.id)) or {}) do
+      local dir,c=row[1],row[2]
+      local nid=c.map or c.mapId
+      if nid and not seen[nid] then
+        local okL,nl=pcall(Map.layout,S.data,nid,p)
+        if okL and nl and nl.width then
+          seen[nid]=true
+          local off=tonumber(c.offset) or 0
+          local ox,oy
+          if dir=="north" then ox,oy=off,-nl.height
+          elseif dir=="south" then ox,oy=off,cur.h
+          elseif dir=="west" then ox,oy=-nl.width,off
+          else ox,oy=cur.w,off end
+          list[#list+1]={id=nid,dir=cur.hops==0 and dir or nil,ox=cur.ox+ox,oy=cur.oy+oy,
+            w=nl.width,h=nl.height,layout=nl,hops=cur.hops+1}
+        end
       end
     end
   end
@@ -152,11 +161,9 @@ local function drawAround(S,App,fx,viewY,mapW,viewH,tile,layout)
       local mid,pair,painted,paintedIn,owner
       if on then mid,pair=on.cell(x-on.ox,y-on.oy,px,py,tile)
       else
-        for _,r in ipairs(list) do
-          local c=Void.cell(S.project,r.id,x-r.ox,y-r.oy)
-          if c then painted,paintedIn=c,r;break end
-        end
-        owner=list[Void.owner(list,x,y)]
+        local o=Void.owner(list,x,y)
+        owner=list[o]
+        painted,paintedIn=Void.paintedAt(S.project,list,o,x,y)
         local lx,ly=x-owner.ox,y-owner.oy
         if painted then mid,pair=painted.m,painted.p;drawMid(S,pair,mid,px,py,tile)
         elseif owner.fill=="extrude" then mid,pair=owner.cell(Void.edge(lx,owner.w),Void.edge(ly,owner.h),px,py,tile)
@@ -193,7 +200,7 @@ local function drawAround(S,App,fx,viewY,mapW,viewH,tile,layout)
         if on then
           if hit then
             S.status=on.id==id and "That's the map itself (edit it in Terrain). Paint around it."
-              or ("That's "..on.id.." (connected "..on.dir.."). Paint the space around the maps, or open it to edit its tiles.")
+              or ("That's "..on.id..(on.dir and " (connected "..on.dir..")" or "")..". Paint the space around the maps, or open it to edit its tiles.")
           end
         elseif tool=="Revert" then
           if painted and Void.paint(S.project,paintedIn.id,paintedIn.w,paintedIn.h,x-paintedIn.ox,y-paintedIn.oy,nil) then App.markDirty() end
@@ -214,7 +221,7 @@ local function drawAround(S,App,fx,viewY,mapW,viewH,tile,layout)
     if i==1 then love.graphics.setColor(1,0.85,0.25,0.95) else love.graphics.setColor(0.35,0.75,1,0.9) end
     love.graphics.rectangle("line",bx,by,r.w*tile,r.h*tile)
     if i>1 then
-      local label=r.id.."  ("..r.dir..")"
+      local label=r.dir and (r.id.."  ("..r.dir..")") or r.id
       local tw=Kit.textWidth("micro",label)+10*Kit.scale
       local lx=math.max(fx+4*Kit.scale,math.min(bx+4*Kit.scale,fx+mapW-tw-4*Kit.scale))
       local ly=math.max(viewY+4*Kit.scale,math.min(by+4*Kit.scale,viewY+viewH-22*Kit.scale))

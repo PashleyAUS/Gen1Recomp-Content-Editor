@@ -3246,7 +3246,7 @@ function LayeredMap.drawSourceTile(S, source, tile, x, y, size, alpha, mapId)
       end
     end
   end
-  if source.colorMode ~= "true_color" and not gbc then
+  if source.colorMode ~= "true_color" and not gbc and not Generation.isGen3(S) then
     mapId = mapId or S.builderMapId or S.mapId
     local map = S.project and S.project.maps and S.project.maps[mapId]
       or require("Generation").dataMaps(S)[mapId]

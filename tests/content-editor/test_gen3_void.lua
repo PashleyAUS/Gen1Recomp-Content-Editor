@@ -83,14 +83,35 @@ run("the editor preview matches what the game draws", function()
   assert(kind == "painted" and mid == 42 and pair == "x")
 end)
 
-run("space outside every map belongs to the nearest map", function()
-  local rects = { { ox = 0, oy = 0, w = 10, h = 10 }, { ox = -5, oy = -20, w = 30, h = 20 } }
-  assert(Void.owner(rects, 3, -1) == 2)      -- right under the northern map
+run("space outside every map belongs to one map, split in straight lines", function()
+  local rects = { { id = "A", ox = 0, oy = 0, w = 10, h = 10 }, { id = "B", ox = -5, oy = -20, w = 30, h = 20 } }
+  assert(Void.owner(rects, 3, -1) == 2)      -- inside the northern map
   assert(Void.owner(rects, -1, 5) == 1)      -- beside the open map
-  assert(Void.owner(rects, -8, -2) == 2)     -- nearer the wide northern map
-  assert(Void.owner(rects, 12, 12) == 1)
-  -- ties go to the open map (listed first)
-  assert(Void.owner({ { ox = 0, oy = 0, w = 4, h = 4 }, { ox = 7, oy = 0, w = 4, h = 4 } }, 5, 2) == 1)
+  assert(Void.owner(rects, -8, -2) == 2)     -- beside the wide northern map
+  assert(Void.owner(rects, 12, 5) == 1)      -- level with A's rows: A's side
+  assert(Void.owner(rects, 12, 12) == 2)     -- below B's edge, past A's corner: B
+  -- the old diagonal: A's corner vs B's edge now splits on A's bottom row
+  for y = 10, 20 do assert(Void.owner(rects, 11, y) == 2) end
+  for y = 0, 9 do assert(Void.owner(rects, 30, y) == 1) end
+  -- corners past every map: the smaller vertical gap, then horizontal
+  local two = { { id = "A", ox = 0, oy = 0, w = 4, h = 4 }, { id = "C", ox = 6, oy = 2, w = 4, h = 4 } }
+  assert(Void.owner(two, 20, -3) == 1 and Void.owner(two, -9, 8) == 2)
+  -- ties go to the smaller map id, whichever map is listed (opened) first
+  local l, r = { id = "L", ox = 0, oy = 0, w = 4, h = 4 }, { id = "R", ox = 7, oy = 0, w = 4, h = 4 }
+  assert(Void.owner({ l, r }, 5, 2) == 1 and Void.owner({ r, l }, 5, 2) == 2)
+end)
+
+run("a painted tile shows from every map, owner's first", function()
+  local p = {}
+  local rects = { { id = "B", ox = 0, oy = 0, w = 4, h = 4 }, { id = "A", ox = 6, oy = 0, w = 4, h = 4 } }
+  local o = Void.owner(rects, 5, 1)           -- 1 from A, 2 from B
+  assert(rects[o].id == "A")
+  Void.paint(p, "B", 4, 4, 5, 1, 9, "x")     -- saved under B (older project)
+  local c, r = Void.paintedAt(p, rects, o, 5, 1)
+  assert(c.m == 9 and r.id == "B")
+  Void.paint(p, "A", 4, 4, -1, 1, 7, "x")    -- A's own coords: world (5, 1)
+  c, r = Void.paintedAt(p, rects, o, 5, 1)
+  assert(c.m == 7 and r.id == "A")
 end)
 
 run("validate rejects bad data", function()

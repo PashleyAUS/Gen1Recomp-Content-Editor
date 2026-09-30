@@ -67,6 +67,40 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
     local okAnim,NativeAnim=pcall(require,"src.core.game3.tileset_anim")
     local renderNative
     local frameClock=0
+    -- FireRed banks are keyed by kind with .mids; Emerald ("rse") banks are a
+    -- list whose tile ids live in .row and whose current frame is bank.frame.
+    local function nativeFrame(anim,kind)
+      if not anim then return nil end
+      if anim.rse then return anim.banks[kind] and anim.banks[kind].frame end
+      return anim.frames[kind]
+    end
+    -- mids.idx: 12-byte header, 2 bytes per mid id, then 256 pixel bytes per
+    -- atlas slot whose high nibble is the palette (same layout scan_slot reads).
+    local function slotUsesPalette(blob,slot,palette,skipZero)
+      if type(blob)~="string" or #blob<12 then return false end
+      local base=13+(blob:byte(7)+blob:byte(8)*256)*2+slot*256
+      for i=base,base+255 do
+        local b=blob:byte(i)
+        if b and math.floor(b/16)==palette and not (skipZero and b==0) then return true end
+      end
+      return false
+    end
+    local function bankHasMid(anim,bank,mid)
+      if not bank then return false end
+      if anim.rse and bank.row.kind=="palette" then
+        local ts=anim.atlas
+        local slot=ts and ts.midToSlot[mid]
+        if not slot then return false end
+        local palette=bank.row.paletteSlot or 0
+        return slotUsesPalette(ts.idxBlob,slot,palette,false)
+          or slotUsesPalette(ts.overBlob,slot,palette,true)
+      end
+      local lists=anim.rse and {bank.row.mids,bank.row.overMids} or {bank.mids}
+      for _,list in ipairs(lists) do
+        for _,m in ipairs(list or {}) do if m==mid then return true end end
+      end
+      return false
+    end
     local function frameFor(ref)
       if not ref.schedule then return ref.tile end
       local clock=frameClock*1000%ref.duration
@@ -147,8 +181,8 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
           local anim=pair and okAnim and NativeAnim._pairs and NativeAnim._pairs[pair]
           if anim then
             for kind,bank in pairs(anim.banks or {}) do
-              for _,mid in ipairs(bank.mids or {}) do
-                if mid==ref.tile then ref.kind=kind;ref.nativeFrame=anim.frames[kind];break end
+              if bankHasMid(anim,bank,ref.tile) then
+                ref.kind=kind;ref.nativeFrame=nativeFrame(anim,kind);break
               end
             end
           end
@@ -210,10 +244,10 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
       for _,state in ipairs(entry.frameRefs) do
         local ref=state.ref;local frame=frameFor(ref)
         local anim=ref.pair and NativeAnim._pairs and NativeAnim._pairs[ref.pair]
-        local nativeFrame=ref.kind and anim and anim.frames[ref.kind]
-        if frame~=ref.frame or nativeFrame~=ref.nativeFrame then
+        local current=ref.kind and nativeFrame(anim,ref.kind)
+        if frame~=ref.frame or current~=ref.nativeFrame then
           dirty=dirty or {};dirty[state.slot]=true
-          ref.frame,ref.nativeFrame=frame,nativeFrame
+          ref.frame,ref.nativeFrame=frame,current
           if ref.pair then entry.resolved[ref.pair]=T._pairs[ref.pair] or entry.resolved[ref.pair] end
         end
       end
@@ -313,9 +347,13 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
         activate(built[Map.current])
         for _,n in ipairs(Map.neighborList or {}) do activate(built[n.map or n.mapId]) end
         for _,n in ipairs(Map.world or {}) do activate(built[n.id]) end
-        local before=NativeAnim.counter
+        -- Emerald steps its own _rse counters and leaves .counter untouched.
+        local rse=NativeAnim._rse
+        local before,rseBefore=NativeAnim.counter,rse and rse.primary
         local result=step(...)
-        if NativeAnim.counter==before then return result end
+        if NativeAnim.counter==before and (not rse or rse.primary==rseBefore) then
+          return result
+        end
         frameClock=frameClock+1/60
         local current=built[Map.current]
         if current then animate(current) end

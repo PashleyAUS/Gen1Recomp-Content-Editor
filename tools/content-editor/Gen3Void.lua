@@ -7,9 +7,10 @@
 -- painted cells win over the fill. They are only for looks: nobody can walk
 -- outside a map. The mod default covers outdoor maps (Town, City, Route,
 -- Ocean route); any map can choose its own.
--- Map aware: a cell outside every map belongs to the NEAREST map (this one or
--- a connected one), which decides its fill and holds its painted tile, so the
--- space around connected maps joins up the same from either side.
+-- Map aware: a cell outside every map belongs to ONE map (M.owner: the map it
+-- sits straight past, split along straight lines), which decides its fill and
+-- holds its painted tile, so the space around connected maps is the same
+-- from whichever map is open.
 -- In the game this is drawn from main.lua by wrapping Map.worldMidAt, which
 -- the field view asks for every cell (the engine isn't changed).
 --
@@ -166,18 +167,37 @@ function M.edge(c, n)
   return n - 2 + (c - n + 2) % 2
 end
 
---- The map a cell outside every map belongs to: the nearest (Chebyshev
--- distance to its rectangle, then the smaller dx + dy, then list order, so
--- the open map wins ties). rects: { {ox=,oy=,w=,h=}, ... } in one space.
+--- The map a cell outside every map belongs to. Space straight past a map's
+-- edge (level with its rows or columns) goes to that map before any corner.
+-- Then the smaller vertical gap, horizontal gap and map id win, so every
+-- split is a straight line and the owner is the same whichever map is open.
+-- rects: { {id=,ox=,oy=,w=,h=}, ... } in one space.
 function M.owner(rects, x, y)
-  local best, bd, bs
+  local best, bc, bdy, bdx, bid
   for i, r in ipairs(rects) do
     local dx = x < r.ox and r.ox - x or (x >= r.ox + r.w and x - (r.ox + r.w - 1) or 0)
     local dy = y < r.oy and r.oy - y or (y >= r.oy + r.h and y - (r.oy + r.h - 1) or 0)
-    local d, sum = math.max(dx, dy), dx + dy
-    if not best or d < bd or (d == bd and sum < bs) then best, bd, bs = i, d, sum end
+    local c, id = (dx == 0 or dy == 0) and 0 or 1, tostring(r.id or "")
+    if not best or c < bc or (c == bc and (dy < bdy or (dy == bdy
+        and (dx < bdx or (dx == bdx and id < bid))))) then
+      best, bc, bdy, bdx, bid = i, c, dy, dx, id
+    end
   end
   return best
+end
+
+--- The painted tile at (x, y) and the rect it is saved in: the owner's first,
+-- then (tiles saved before owners were fixed) the smallest map id's.
+function M.paintedAt(project, rects, owner, x, y)
+  local o = rects[owner]
+  local c = o and M.cell(project, o.id, x - o.ox, y - o.oy)
+  if c then return c, o end
+  local best, bestRect
+  for _, r in ipairs(rects) do
+    local rc = M.cell(project, r.id, x - r.ox, y - r.oy)
+    if rc and (not bestRect or tostring(r.id) < tostring(bestRect.id)) then best, bestRect = rc, r end
+  end
+  return best, bestRect
 end
 
 --- Editor preview of a cell outside the map: mid, pair, kind
@@ -290,22 +310,33 @@ function M.emit(project, encode, out)
       if not void then return mid,pair,void end
       local list=around(def)
       if #list==0 then return mid,pair,void end
-      -- a painted tile of any of these maps
-      for i=1,#list do
-        local r=list[i]
-        local rec=r.id and outsideMaps.maps[r.id]
-        local cell=rec and rec.cells and rec.cells[(y-r.oy+128)*1024+x-r.ox+128]
-        if cell then return cell.m,cell.p end
-      end
-      -- otherwise the nearest map's fill
-      local best,bd,bs
+      -- the owning map (Gen3Void.owner): straight past an edge first, then
+      -- vertical gap, horizontal gap, map id
+      local best,bc,bdy,bdx,bid
       for i=1,#list do
         local r=list[i]
         local dx=x<r.ox and r.ox-x or (x>=r.ox+r.w and x-(r.ox+r.w-1) or 0)
         local dy=y<r.oy and r.oy-y or (y>=r.oy+r.h and y-(r.oy+r.h-1) or 0)
-        local d,sum=math.max(dx,dy),dx+dy
-        if not best or d<bd or (d==bd and sum<bs) then best,bd,bs=r,d,sum end
+        local c,id=(dx==0 or dy==0) and 0 or 1,tostring(r.id or "")
+        if not best or c<bc or (c==bc and (dy<bdy or (dy==bdy
+            and (dx<bdx or (dx==bdx and id<bid))))) then
+          best,bc,bdy,bdx,bid=r,c,dy,dx,id
+        end
       end
+      -- its painted tile, else (saved before owners were fixed) the smallest id's
+      local function paintedIn(r)
+        local rec=r.id and outsideMaps.maps[r.id]
+        return rec and rec.cells and rec.cells[(y-r.oy+128)*1024+x-r.ox+128]
+      end
+      local cell=paintedIn(best)
+      if not cell then
+        local cid
+        for i=1,#list do
+          local rc=paintedIn(list[i])
+          if rc and (not cid or tostring(list[i].id)<cid) then cell,cid=rc,tostring(list[i].id) end
+        end
+      end
+      if cell then return cell.m,cell.p end
       local lx,ly=x-best.ox,y-best.oy
       if fillOf(best)=="extrude" then
         return best.l:midAt(edge(lx,best.w),edge(ly,best.h)),best.l.pair or best.def.pair
