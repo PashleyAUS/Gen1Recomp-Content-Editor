@@ -6400,6 +6400,43 @@ return (function()
   trainers = {},
 }
   end)()
+  p.gen3Starters = (function() return 
+{
+  {
+      level = 5,
+      map = "EM_ROUTE101",
+      matchSpecies = {
+        "TREECKO",
+      },
+      nickname = "",
+      onlyFirst = true,
+      species = "ABRA",
+      starterSlot = 0,
+    },
+  {
+      level = 5,
+      map = "EM_ROUTE101",
+      matchSpecies = {
+        "TORCHIC",
+      },
+      nickname = "",
+      onlyFirst = true,
+      species = "ABSOL",
+      starterSlot = 1,
+    },
+  {
+      level = 5,
+      map = "EM_ROUTE101",
+      matchSpecies = {
+        "MUDKIP",
+      },
+      nickname = "",
+      onlyFirst = true,
+      species = "AERODACTYL",
+      starterSlot = 2,
+    },
+}
+  end)()
   p.gen3TileAnimations = (function() return 
 {
   building__generic_building = {},

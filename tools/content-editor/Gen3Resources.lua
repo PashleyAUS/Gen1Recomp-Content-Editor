@@ -175,49 +175,6 @@ function M.importTrainerPic(S,picked)
   S.project.gen3Assets[path]={file=rel,width=64,height=64}
   return id,path
 end
--- Emerald's title / intro draw palette indexes (gba_ppu), not the colour
--- PNG. Returns the replacement as an index map (red = palette index) using
--- the original's palette banks, false when the original is not an indexed
--- PNG (import it as is), or nil and why when a colour is not in the palette.
-function M.rseIndexMap(data,path,img)
-  if not path:match("^data/generated/gba/intro/.*%.png$") and not path:match("^data/generated/gba/title/.*%.png$") then return false end
-  if path:match("_idx%.png$") then return false end
-  local IndexedPng=require("src.core.game3.indexed_png")
-  local bytes=data._gen3Read(path)
-  local ok,orig=pcall(IndexedPng.decode,bytes or "",IndexedPng.loveInflate)
-  if not ok or not orig.plte then return false end
-  local banks={}
-  for _,i in ipairs(orig.index) do banks[math.floor(i/16)]=true end
-  -- Colour 0 of a bank is transparent on the GBA: match it only when no
-  -- other index has that colour. Lowest index wins among the rest.
-  local byColour={}
-  for pass=1,2 do
-    for i=#orig.plte/3-1,0,-1 do
-      if banks[math.floor(i/16)] and ((i%16==0)==(pass==1)) then
-        local r,g,b=orig.plte:byte(i*3+1,i*3+3)
-        byColour[(r*256+g)*256+b]=i
-      end
-    end
-  end
-  local w,h=img:getDimensions()
-  local out=love.image.newImageData(w,h)
-  local bad,bx,by=0
-  for y=0,h-1 do
-    for x=0,w-1 do
-      local r,g,b,a=img:getPixel(x,y)
-      local i=0
-      if a>=0.5 then
-        i=byColour[(math.floor(r*255+0.5)*256+math.floor(g*255+0.5))*256+math.floor(b*255+0.5)]
-        if not i then bad=bad+1;bx,by=bx or x,by or y;i=0 end
-      end
-      out:setPixel(x,y,i/255,i/255,i/255,1)
-    end
-  end
-  if bad>0 then
-    return nil,string.format("%d pixel%s use colours not in the original palette (first at %d, %d); export the original PNG and paint with its colours",bad,bad==1 and "" or "s",bx,by)
-  end
-  return out
-end
 function M.checkAnimation(id,value)
   if type(id)~="string" then return false,"Animation ID must be text" end
   local section,key=id:match("^([%w_]+)/(.+)$")

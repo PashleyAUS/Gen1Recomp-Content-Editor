@@ -908,6 +908,139 @@ connectionRuntime.install(mod,connections,{
       end
     end
   end)
+  local starterRules = {
+  {
+      level = 5,
+      map = "EM_ROUTE101",
+      matchSpecies = {
+        "TREECKO",
+      },
+      nickname = "",
+      onlyFirst = true,
+      species = "ABRA",
+      starterSlot = 0,
+    },
+  {
+      level = 5,
+      map = "EM_ROUTE101",
+      matchSpecies = {
+        "TORCHIC",
+      },
+      nickname = "",
+      onlyFirst = true,
+      species = "ABSOL",
+      starterSlot = 1,
+    },
+  {
+      level = 5,
+      map = "EM_ROUTE101",
+      matchSpecies = {
+        "MUDKIP",
+      },
+      nickname = "",
+      onlyFirst = true,
+      species = "AERODACTYL",
+      starterSlot = 2,
+    },
+}
+  local function starterContext(ctx, rule)
+    local world = ctx and ctx.overworld
+    local map = world and world.map
+    local id = map and (map.gen3Id or map.id)
+    local save = ctx and ctx.save
+    if not (id and save) or id:gsub("^FR_", "") ~= rule.map:gsub("^FR_", "") then return false end
+    return not rule.onlyFirst or (not (save.flags or {}).EVENT_GOT_STARTER and #(save.party or {}) == 0)
+  end
+  local function matches(rule, species)
+    for _, name in ipairs(rule.matchSpecies) do if name == species then return true end end
+    return false
+  end
+  local originalGifts = setmetatable({}, {__mode="k"})
+  local selectedStarters = setmetatable({}, {__mode="k"})
+  -- Emerald picks from Birch's bag, which reads one species table and gives at a fixed level.
+  local rseSlots, rseSpecies = {}, {}
+  for _, rule in ipairs(starterRules) do
+    if rule.starterSlot then
+      local target = assert(mod.content.pokemon:get(rule.species), "Unknown starter species: " .. rule.species)
+      local source = assert(mod.content.pokemon:get(rule.matchSpecies[1]), "Unknown starter source: " .. rule.matchSpecies[1])
+      rseSlots[rule.starterSlot] = {index = target.index, level = rule.level, nickname = rule.nickname ~= "" and rule.nickname or nil}
+      rseSpecies[source.index] = target.index
+    end
+  end
+  if next(rseSlots) then
+    local StarterChoose = require("src.ui.game3.rse.starter_choose")
+    local FieldRse = require("src.core.game3.scripting.natives_field_rse")
+    local Runtime = require("src.mods.Runtime")
+    if not StarterChoose._editorStarterBridge then
+      StarterChoose._editorStarterBridge = true
+      local species, give = StarterChoose.species, FieldRse.giveStarter
+      StarterChoose.species = function(...) return Runtime.call("editor.gen3.rse.starterSpecies", species, ...) end
+      FieldRse.giveStarter = function(...) return Runtime.call("editor.gen3.rse.giveStarter", give, ...) end
+    end
+    mod.hooks:wrap("editor.gen3.rse.starterSpecies", function(proceed, ...)
+      local original = proceed(...)
+      return rseSpecies[original] or original
+    end)
+    mod.hooks:wrap("editor.gen3.rse.giveStarter", function(proceed, ctx, selection, sess)
+      local slot = rseSlots[tonumber(selection)]
+      if not slot then return proceed(ctx, selection, sess) end
+      local Rse = require("src.core.game3.rse.init")
+      sess = sess or Rse.session()
+      Rse.setVar("VAR_STARTER_MON", selection, sess)
+      local code = require("src.core.game3.party").giveMonToPlayer(sess, slot.index, slot.level, slot.nickname)
+      return slot.index, code
+    end)
+  end
+  for _, rule in ipairs(starterRules) do if not rule.starterSlot then
+    local target = assert(mod.content.pokemon:get(rule.species), "Unknown starter species: " .. rule.species)
+    local sourceIndices = {}
+    for _, name in ipairs(rule.matchSpecies) do
+      local rec = assert(mod.content.pokemon:get(name), "Unknown starter source: " .. name)
+      sourceIndices[rec.index] = true
+    end
+
+    mod.hooks:wrap("script.command", function(next, ctx, op, row)
+      if rule.onlyFirst and not row._editorStarterChanged and op == "setvar" and (row.var or row[1]) == (rule.variable or 0x4002)
+          and sourceIndices[row.value or row[2]] and starterContext(ctx, rule) then
+        local copy = {}; for k,v in pairs(row) do copy[k]=v end
+        copy.value,copy[2]=target.index,target.index
+        copy._editorStarterChanged=true
+        if rule.onlyFirst and ctx and ctx.save then selectedStarters[ctx.save]=rule end
+        return next(ctx,op,copy)
+      end
+      if rule.egg and op=="giveegg" and sourceIndices[row.species or row[1]] and starterContext(ctx,rule) then
+        local Party=require("src.core.game3.party")
+        local Pokemon=require("src.core.game3.pokemon")
+        local session=ctx.save
+        local ok=false
+        if #(session.party or {})<6 then
+          -- Construct separately so an unhatched Egg is not registered in the Pokedex.
+          local temp={party={},name=session.name,playerName=session.playerName,trainerId=session.trainerId}
+          ok=Party.giveMon(temp,target.index,rule.level,rule.nickname)
+          if ok then
+            local egg=temp.party[1];egg.isEgg=true;egg.egg=true
+            egg.friendship=(Pokemon.speciesMeta(target.index) or {}).eggCycles or 20;egg.eggCycles=egg.friendship
+            session.party=session.party or {};table.insert(session.party,egg)
+          end
+        end
+        local vm=ctx.vm or ctx.runner
+        if vm and vm.store then require("src.core.game3.scripting.flags").setVar(vm.store,vm.ctx,0x800D,ok and 0 or 2) end
+        return true
+      end
+      return next(ctx,op,row)
+    end)
+    -- Run after handwritten gift listeners, preserving all unrelated gifts.
+    mod.events:on("pokemon.before_give", function(gift)
+      originalGifts[gift] = originalGifts[gift] or gift.species
+      local selected = gift.ctx and gift.ctx.save and selectedStarters[gift.ctx.save]
+      local match = rule.onlyFirst and selected and selected==rule and (matches(rule,originalGifts[gift]) or originalGifts[gift]==rule.species)
+        or (not (rule.onlyFirst and selected) and matches(rule,originalGifts[gift]))
+      if match and starterContext(gift.ctx,rule) then
+        gift.species,gift.level=rule.species,rule.level
+        if rule.nickname and rule.nickname~="" then gift.nickname=rule.nickname end
+      end
+    end,-1000)
+  end end
   local native = {
   animations = {},
   assets = {},
@@ -1033,6 +1166,41 @@ connectionRuntime.install(mod,connections,{
       end
       return images[path] or proceed(path)
     end)
+    -- The title screen and intro draw palette-index maps (gba_ppu), also
+    -- straight from disk: a layer's <name>_idx.png, a sprite's sheet PNG.
+    -- An imported colour PNG carries its index map (indexFile); an imported
+    -- _idx.png is one already.
+    local Ppu=require("src.core.game3.gba_ppu")
+    if not Ppu._editorIndexBridge then
+      Ppu._editorIndexBridge=true
+      local layer,sheet=Ppu.indexLayer,Ppu.indexSheet
+      Ppu.indexLayer=function(...) return Runtime.call("editor.gen3.rse.indexLayer",layer,...) end
+      Ppu.indexSheet=function(...) return Runtime.call("editor.gen3.rse.indexSheet",sheet,...) end
+    end
+    local indexImages={}
+    local function indexImage(path,colourPath)
+      local asset=native.assets[colourPath]
+      local file=asset and asset.indexFile
+      if not file and colourPath~=path then file=native.assets[path] and native.assets[path].file end
+      if not file then return nil end
+      if indexImages[file]==nil then
+        local ok,img=pcall(function() return love.graphics.newImage(love.filesystem.newFileData(assert(mod:read(file)),"index.png")) end)
+        if ok then img:setFilter("nearest","nearest") end
+        indexImages[file]=ok and img or false
+      end
+      return indexImages[file] or nil
+    end
+    mod.hooks:wrap("editor.gen3.rse.indexLayer",function(proceed,path,w,h,bpp)
+      local img=path and indexImage(path,(path:gsub("_idx%.png$",".png")))
+      if not img then return proceed(path,w,h,bpp) end
+      return {image=img,w=w or img:getWidth(),h=h or img:getHeight(),bpp=bpp or 4}
+    end)
+    mod.hooks:wrap("editor.gen3.rse.indexSheet",function(proceed,path,frameW,frameH,rects)
+      local img=path and indexImage(path,path)
+      if not img then return proceed(path,frameW,frameH,rects) end
+      return {image=img,w=img:getWidth(),h=img:getHeight(),frameW=frameW,frameH=frameH,rects=rects}
+    end)
+    Ppu.clearCache()
   end
   mod.hooks:wrap("editor.gen3.cache",function(proceed,path)
     local key=path:gsub("^firered/",""):gsub("^leafgreen/",""):gsub("^emerald/","")
