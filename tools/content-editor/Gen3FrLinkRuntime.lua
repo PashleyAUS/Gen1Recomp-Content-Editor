@@ -8,7 +8,8 @@
 -- with a message, so nothing FireRed-made ever shows up half there.
 --
 -- Nothing in the engine is changed. The tileset caches get a proxy that sends
--- native/frlg__<pair>/ reads to that import, the behaviour and wild
+-- native/frlg__<pair>/ reads to that import, FireRed's tile animations are
+-- stepped on FireRed's clock next to Emerald's, the behaviour and wild
 -- encounter tables get the import's rows for those tilesets (Emerald and
 -- FireRed behaviours share the engine's numbering), and Gen3Map asks
 -- `LayoutNative._editorFrLink.layout(source)` for FireRed layouts.
@@ -94,6 +95,130 @@ function M.install(mod,cfg)
   end)
   proxyAll()
 
+  -- Tile animations (water, sand edges, flowers). Emerald runs its own
+  -- animation clock and only steps Emerald's tilesets, so FireRed's are
+  -- stepped here on FireRed's clock (pokefirered tileset_anims.c:223) --
+  -- the same frames and timing as in FireRed.
+  if okA and Anim and Anim.step and Anim._applyKind then
+    if not Anim._editorFrLinkAnim then
+      Anim._editorFrLinkAnim=true
+      local step=Anim.step
+      Anim.step=function(...) return Runtime.call("editor.gen3.frlink.anim",step,...) end
+    end
+    local okV,Versions=pcall(require,"src.import.gba.versions")
+    local counter=0
+    mod.hooks:wrap("editor.gen3.frlink.anim",function(proceed,...)
+      local a,b=proceed(...)
+      -- without Emerald's clock the stock step already animates them
+      if not Anim._rse or Anim._enabled==false or (okV and Versions and Versions.TILESET_ANIM==false) then return a,b end
+      -- FireRed's frame numbers live where the stock code keeps them (it
+      -- leaves them alone while Emerald's clock runs), so re-binding a
+      -- tileset shows the current frame, not frame 0
+      counter=(counter+1)%640
+      if counter%8==0 then Anim._sandFrame=math.floor(counter/8)%8 end
+      if counter%16==1 then Anim._waterFrame=math.floor(counter/16)%8 end
+      if counter%16==2 then Anim._flowerFrame=math.floor(counter/16)%5 end
+      for pair in pairs(Anim._visible or {}) do
+        local entry=type(pair)=="string" and pair:sub(1,#M.PAIR)==M.PAIR and Anim._pairs[pair]
+        if entry and not entry.rse then
+          Anim._applyKind(entry,"sand",Anim._sandFrame)
+          Anim._applyKind(entry,"water",Anim._waterFrame)
+          Anim._applyKind(entry,"flower",Anim._flowerFrame)
+        end
+      end
+      return a,b
+    end)
+  end
+
+  -- Doors. Emerald looks its door animations up by Emerald tileset, so a
+  -- door on a FireRed tileset had none: FireRed's own door table and door
+  -- pictures (from the import) are used for those, the way FireRed does it
+  -- (pokefirered field_door.c): the block's door entry, on a warp-door tile.
+  local okDoors,Doors=pcall(require,"src.core.game3.doors")
+  if okDoors and type(Doors)=="table" and Doors.getDoorEntryAt then
+    local frDoors
+    local function doorTable()
+      if frDoors==nil then frDoors=lua("data/generated/gba/doors/manifest.lua") or false end
+      return frDoors or nil
+    end
+    local function isFr(pair) return type(pair)=="string" and pair:sub(1,#M.PAIR)==M.PAIR end
+    -- (package.loaded isn't a mod's to read; these are loaded by now anyway)
+    local function engine(name) local ok,m=pcall(require,name) return ok and m or nil end
+    local function layoutFor(mapId)
+      if mapId==nil then return nil end
+      local key=tostring(mapId):gsub("^FR_",""):gsub("^MAP_","")
+      local cached=Doors._layoutCache and Doors._layoutCache[key]
+      if cached then return cached,cached.pair end
+      local Map=engine("src.core.game3.map")
+      local Collision=engine("src.core.game3.collision")
+      local cur=Collision and Collision._mapDef
+      if cur and cur.midLayout and Map and Map.current==mapId then return cur.midLayout,cur.pair end
+      if Map and Map._def and Map._def.midLayout and Map.current==mapId then return Map._def.midLayout,Map._def.pair end
+      for _,n in ipairs(Map and Map.neighborList or {}) do
+        if (n.map or n.mapId)==mapId and n.def and n.def.midLayout then return n.def.midLayout,n.def.pair end
+      end
+      local R=engine("src.core.game3.runtime")
+      local maps=R and R._game and R._game.data and R._game.data.maps
+      local def=maps and maps[mapId]
+      if def and def.midLayout then return def.midLayout,def.pair end
+    end
+    -- the door's picture, ready for Doors.draw (it keeps pictures by file)
+    local function sheet(file,info)
+      Doors._sheets=Doors._sheets or {}
+      if Doors._sheets[file]~=nil then return end
+      local bytes=read("data/generated/gba/doors/"..info.file)
+      local ok,img=false,nil
+      if bytes and #bytes>=info.width*info.height*4 and love and love.image and love.graphics then
+        ok,img=pcall(function()
+          local data=love.image.newImageData(info.width,info.height,"rgba8",bytes:sub(1,info.width*info.height*4))
+          local image=love.graphics.newImage(data);image:setFilter("nearest","nearest");return image
+        end)
+      end
+      if not ok or not img then Doors._sheets[file]=false;return end
+      local quads={}
+      for f=0,info.frames-1 do
+        quads[f]=love.graphics.newQuad(0,f*info.frame_height,info.frame_width,info.frame_height,info.width,info.height)
+      end
+      Doors._sheets[file]={image=img,quads=quads,width=info.width,height=info.height,
+        frame_width=info.frame_width,frame_height=info.frame_height,frames=info.frames}
+    end
+    local function doorAt(mapId,x,y)
+      local layout,pair=layoutFor(mapId)
+      pair=pair or (layout and layout.pair)
+      if not (layout and layout.midAt and isFr(pair) and x and y) then return nil end
+      local man=doorTable()
+      local mid=layout:midAt(x,y)
+      local row=man and man.by_mid and mid and man.by_mid[mid]
+      local info=row and man.doors and man.doors[row.tile]
+      if not info then return nil end
+      local okC,Collision=pcall(require,"src.core.game3.collision")
+      local beh=okC and Collision and Collision.behaviorOn and Collision.behaviorOn({midLayout=layout,pair=pair},x,y)
+      if beh~=nil and beh~=0x69 then return nil end -- MB_WARP_DOOR
+      local file="frlg_doors/"..info.file
+      sheet(file,info)
+      local entry={}
+      for k,v in pairs(row) do entry[k]=v end
+      entry.tile,entry.file=M.PAIR..row.tile,file
+      return entry,info
+    end
+    if not Doors._editorFrLinkDispatch then
+      Doors._editorFrLinkDispatch=true
+      local lookup=Doors.getDoorEntryAt
+      Doors.getDoorEntryAt=function(...) return Runtime.call("editor.gen3.frlink.doors",lookup,...) end
+    end
+    mod.hooks:wrap("editor.gen3.frlink.doors",function(proceed,mapId,x,y)
+      local R=engine("src.core.game3.runtime")
+      local session=R and R.getSession and R.getSession()
+      local Map=engine("src.core.game3.map")
+      local live=(session and session.map) or (Map and Map.current)
+      local e,i
+      if live then e,i=doorAt(live,x,y) end
+      if not e and live~=mapId then e,i=doorAt(mapId,x,y) end
+      if e then return e,i end
+      return proceed(mapId,x,y)
+    end)
+  end
+
   -- Behaviours and wild encounter types of the import's tilesets.
   local pack
   local function objects()
@@ -126,7 +251,7 @@ function M.install(mod,cfg)
 
   -- Import region: FireRed's wild Pokemon on the EM_KANTO_ maps (the
   -- species numbers are the same in both games). The mod's own lists win.
-  if cfg.region then
+  if cfg.wild then
     local wild
     local function fillWild()
       local all=Encounters._tables
@@ -148,6 +273,176 @@ function M.install(mod,cfg)
       local a,b=proceed(...);fillWild();return a,b
     end)
     fillWild()
+  end
+
+  -- Signs (Import region): each is rebuilt from its steps (Gen3FrLink
+  -- signSteps) as an Emerald script "frlg:g3:…", made the first time it's
+  -- read; its words come from the import's texts, loaded on first use.
+  local people=cfg.people and next(cfg.people) and cfg.people or nil
+  if (cfg.signs and next(cfg.signs)) or people then
+    local signs=cfg.signs or {}
+    local frText
+    local function texts()
+      if frText==nil then frText=lua("data/generated/gba/scripts/text.lua") or false end
+      return frText or nil
+    end
+    local function build(steps)
+      local ops={{op="lockall",opcode=105}}
+      for _,st in ipairs(steps) do
+        local key=st[2] and (M.MAP..st[2])
+        if st[1]=="text" then
+          ops[#ops+1]={op="loadword",opcode=15,[1]=0,[2]=key,dest=0,value=key}
+          ops[#ops+1]={op="callstd",opcode=9,[1]=4,std=4}
+        elseif st[1]=="braille" then
+          ops[#ops+1]={op="braillemessage",opcode=120,[1]=key,ptr=key}
+          ops[#ops+1]={op="waitbuttonpress",opcode=109}
+          ops[#ops+1]={op="closebraillemessage",opcode=218}
+        elseif st[1]=="pic" then
+          ops[#ops+1]={op="showmonpic",opcode=117,[1]=st[2],[2]=st[3],[3]=st[4]}
+        elseif st[1]=="unpic" then
+          ops[#ops+1]={op="hidemonpic",opcode=118}
+        end
+      end
+      ops[#ops+1]={op="releaseall",opcode=107}
+      ops[#ops+1]={op="end",opcode=2}
+      return ops
+    end
+    -- Emerald's nurse script, the one its own Pokemon Center nurses call
+    -- (found from Oldale's, so it follows the player's Emerald).
+    local nurseKey
+    local function emeraldNurse(Space)
+      if nurseKey==nil then
+        nurseKey=false
+        local R=package.loaded["src.core.game3.runtime"] or select(2,pcall(require,"src.core.game3.runtime"))
+        local game=type(R)=="table" and R._game
+        local maps=type(game)=="table" and game.data and game.data.maps or {}
+        local def=maps.EM_OLDALE_TOWN_POKEMON_CENTER_1F
+        for _,o in ipairs(def and def.objects or {}) do
+          for _,op in ipairs(Space.bundle.scripts[o.scriptKey] or {}) do
+            if op.op=="call" and op.target and not nurseKey then nurseKey=op.target end
+          end
+        end
+      end
+      return nurseKey or nil
+    end
+    local function person(steps,Space)
+      if steps[1] and steps[1][1]=="nurse" then
+        local target=emeraldNurse(Space)
+        if not target then return nil end
+        -- pokeemerald data/maps/OldaleTown_PokemonCenter_1F/scripts.inc
+        return {{op="setvar",opcode=22,[1]=0x800B,[2]=steps[1][2] or 1,var=0x800B,value=steps[1][2] or 1},
+          {op="call",opcode=4,[1]=target,target=target},{op="waitmessage",opcode=102},
+          {op="waitbuttonpress",opcode=109},{op="release",opcode=108},{op="end",opcode=2}}
+      end
+      local ops={{op="lock",opcode=106},{op="faceplayer",opcode=90}}
+      for _,st in ipairs(steps) do
+        local key=st[2] and (M.MAP..st[2])
+        if st[1]=="text" then
+          ops[#ops+1]={op="loadword",opcode=15,[1]=0,[2]=key,dest=0,value=key}
+          ops[#ops+1]={op="callstd",opcode=9,[1]=4,std=4}
+        elseif st[1]=="say" then
+          ops[#ops+1]={op="message",opcode=103,[1]=key,ptr=key}
+          ops[#ops+1]={op="waitmessage",opcode=102}
+        elseif st[1]=="mart" then
+          ops[#ops+1]={op="pokemart",opcode=134,[1]=key,items=key,ptr=key}
+        end
+      end
+      if ops[#ops].op=="waitmessage" then ops[#ops+1]={op="waitbuttonpress",opcode=109} end
+      ops[#ops+1]={op="release",opcode=108}
+      ops[#ops+1]={op="end",opcode=2}
+      return ops
+    end
+    local function chain(t,look)
+      local mt=getmetatable(t) or {}
+      local before=mt.__index
+      mt.__index=function(tbl,k)
+        if type(k)=="string" and k:sub(1,#M.MAP)==M.MAP then
+          local v=look(k:sub(#M.MAP+1),k)
+          if v~=nil then rawset(tbl,k,v);return v end
+        end
+        if type(before)=="function" then return before(tbl,k) end
+        if type(before)=="table" then return before[k] end
+      end
+      setmetatable(t,mt)
+    end
+    mod.events:on("game.ready",function()
+      local okS,Space=pcall(require,"src.core.game3.scripting.space")
+      local bundle=okS and Space and (Space.bundle or Space.ensureBundle(nil))
+      if not (bundle and type(bundle.scripts)=="table" and type(bundle.text)=="table") or bundle._editorFrSigns then return end
+      bundle._editorFrSigns=true
+      chain(bundle.scripts,function(_,full)
+        local steps=signs[full]
+        if steps then return build(steps) end
+        steps=people and people[full]
+        return steps and person(steps,Space)
+      end)
+      chain(bundle.text,function(key) local t=texts() return t and t[key] end)
+    end)
+  end
+
+  -- People: FireRed's own sprites from the import, as graphics ids
+  -- FRGFX+<FireRed id> (objects carry frlgGfx; their graphicsId is an
+  -- Emerald look-alike the editor shows), and FireRed's shop lists.
+  if people then
+    local FRGFX=1000
+    local Space=require("src.core.game3.scripting.space")
+    local OwSprites=require("src.core.game3.ow_sprites")
+    local Objects=require("src.core.game3.objects")
+    local Marts=require("src.core.game3.marts")
+    if not Space._editorFrLink then
+      Space._editorFrLink=true
+      local resolve=Space.resolveObjectGraphicsId
+      Space.resolveObjectGraphicsId=function(...) return Runtime.call("editor.gen3.frlink.gfx",resolve,...) end
+      local get=OwSprites.get
+      OwSprites.get=function(...) return Runtime.call("editor.gen3.frlink.sprite",get,...) end
+      local spawn=Objects.spawnFromDefs
+      Objects.spawnFromDefs=function(...) return Runtime.call("editor.gen3.frlink.spawn",spawn,...) end
+      local items=Marts.itemsFor
+      Marts.itemsFor=function(...) return Runtime.call("editor.gen3.frlink.mart",items,...) end
+    end
+    mod.hooks:wrap("editor.gen3.frlink.gfx",function(proceed,obj,...)
+      local fr=type(obj)=="table" and tonumber(obj.frlgGfx)
+      if fr then return FRGFX+fr end
+      return proceed(obj,...)
+    end)
+    local frCache={read=function(_,path)
+      local n=type(path)=="string" and tonumber(path:match("/ow/(%d+)%.")) or nil
+      if not (n and n>=FRGFX) then return nil end
+      return read(path:gsub("/ow/%d+%.","/ow/"..(n-FRGFX)..".",1))
+    end}
+    mod.hooks:wrap("editor.gen3.frlink.sprite",function(proceed,gid,...)
+      local n=tonumber(gid)
+      if not (n and n>=FRGFX) or OwSprites._loaded[n] or not OwSprites._manifest then return proceed(gid,...) end
+      local cache=OwSprites._cache
+      OwSprites._cache=frCache
+      local ok,spr=pcall(proceed,gid,...)
+      OwSprites._cache=cache
+      return ok and spr or nil
+    end)
+    -- people on a neighbouring map: ids past Emerald's are hidden there as
+    -- "variable" sprites; FireRed's aren't
+    mod.hooks:wrap("editor.gen3.frlink.spawn",function(proceed,...)
+      local pool=proceed(...)
+      for _,eo in pairs(type(pool)=="table" and pool.byId or {}) do
+        if type(eo)=="table" and eo.def and eo.def.frlgGfx then eo.invisible=false end
+      end
+      return pool
+    end)
+    local marts
+    mod.hooks:wrap("editor.gen3.frlink.mart",function(proceed,key,...)
+      if type(key)=="string" and key:sub(1,#M.MAP)==M.MAP then
+        if marts==nil then
+          marts={}
+          for _,e in pairs(((lua("data/generated/gba/scripts/marts.lua") or {}).marts) or {}) do
+            if type(e)=="table" and e.key and type(e.items)=="table" then marts[e.key]=e end
+          end
+        end
+        local e=marts[key:sub(#M.MAP+1)]
+        if e then return e.items,e end
+        return nil
+      end
+      return proceed(key,...)
+    end)
   end
 
   -- FireRed map layouts, for Gen3Map's map layouts ("frlg:FR_…" sources).

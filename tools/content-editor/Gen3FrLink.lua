@@ -12,8 +12,9 @@
 --     by FireRed's own connections and warps, with its wild Pokemon. They are
 --     map layouts naming the FireRed map (gen3MapLayouts[id].source =
 --     "frlg:<map>"), so the project holds no FireRed blocks.
--- People, signs and scripts stay in FireRed (the two games' scripts differ);
--- they are made in the editor.
+-- Signs and everyday people (talkers, Poke Mart clerks, Pokemon Center
+-- nurses) come along as the steps they show; other people and scripts stay
+-- in FireRed (the two games' scripts differ) and are made in the editor.
 --
 -- The mod carries names only, never tiles, layouts or lists. The game side
 -- is Gen3FrLinkRuntime; a player without a FireRed or LeafGreen import can't
@@ -31,6 +32,27 @@ function M.refresh(S)
   if not (S and S.data) then return end
   S.data._editorMaps, S.data._editorTilesets = nil, nil
   pcall(function() require("Gen3Workspace").prepare(S) end)
+end
+
+--- GAME PATCHES > FireRed Maps > Wild Pokemon: Kanto's own encounter tables
+-- on the Import region maps. On unless turned off (off: they have none
+-- until you make some).
+function M.wildEnabled(project) return (project or {}).gen3FrWild ~= false end
+function M.setWild(S, on)
+  local p = S.project
+  if M.wildEnabled(p) == (on == true) then return false end
+  if on then p.gen3FrWild = nil else p.gen3FrWild = false end
+  local base = S.data and S.data._gen3EditorContent and S.data._gen3EditorContent.encounters
+  if base then
+    if on then M.addWild(S, base)
+    else
+      -- take FireRed's lists back out of the editor (lists you edited stay yours)
+      for id, rec in pairs(base) do
+        if type(rec) == "table" and rec._editorFrWild then base[id] = nil end
+      end
+    end
+  end
+  return true
 end
 
 --- GAME PATCHES > FireRed Maps (Emerald).
@@ -101,7 +123,10 @@ function M.editor()
   end
   return link or nil
 end
-function M.reset() link = nil; M._manifest, M._layouts, M._headers, M._wild, M._pack = nil, nil, nil, nil, nil end
+function M.reset()
+  link = nil; M._manifest, M._layouts, M._headers, M._wild, M._pack = nil, nil, nil, nil, nil
+  M._scripts, M._texts, M._events = nil, nil, nil
+end
 
 --- FireRed bytes for a cache path, or nil. `path` may name a frlg__ tileset
 -- folder (native/frlg__X/…) or be a plain FireRed cache path.
@@ -268,6 +293,275 @@ local function musicFor(S, mapType)
   return def and def.music
 end
 
+-- Signs ----------------------------------------------------------------------
+-- FireRed's sign scripts can't run in Emerald as they are (FireRed's specials,
+-- flags and variables mean other things there), so each sign is read the
+-- way the player sees it -- its messages, Pokemon pictures and braille, on
+-- the path where no story flag is set -- and rebuilt from those as steps:
+--   { "text", "g3:<text>" } | { "braille", "g3:<text>" }
+--   | { "pic", species, x, y } | { "unpic" }
+-- Only FireRed's names for the texts are kept; the game reads the words
+-- from the player's import (Gen3FrLinkRuntime). Machines that are signs in
+-- FireRed (slot machines, vending machines, menus) aren't signs here.
+local SIGN_QUIET = { lockall = 1, releaseall = 1, lock = 1, release = 1, faceplayer = 1, special = 1,
+  specialvar = 1, setvar = 1, copyvar = 1, checkflag = 1, compare_var_to_value = 1, compare_var_to_var = 1,
+  compare = 1, playse = 1, waitse = 1, textcolor = 1, delay = 1, waitstate = 1, waitmessage = 1,
+  waitbuttonpress = 1, closemessage = 1, goto_if = 1, call_if = 1, setflag = 1, clearflag = 1,
+  addvar = 1, subvar = 1, checkitem = 1 }
+local MSGBOX = { [2] = true, [3] = true, [4] = true, [6] = true } -- NPC, sign, default, auto-close
+
+local function scriptsAndText()
+  if M._scripts == nil then
+    local function lua(rel)
+      local bytes = M.read(rel)
+      local chunk = bytes and load(bytes, "=" .. rel, "t", {})
+      local ok, value = pcall(chunk or error)
+      return ok and type(value) == "table" and value or nil
+    end
+    M._scripts = lua("data/generated/gba/scripts/scripts.lua") or false
+    M._texts = lua("data/generated/gba/scripts/text.lua") or false
+    M._events = lua("data/generated/gba/scripts/events.lua") or false
+  end
+  return M._scripts or nil, M._texts or nil, M._events or nil
+end
+
+-- People (Import region > People, marts & nurses) read their scripts the
+-- same way, with a few more steps: { "say", "g3:<text>" } (a message the
+-- next step follows, like a clerk's before the shop), { "mart", "g3:<list>" }
+-- (FireRed's shop list, read from the import in the game) and
+-- { "nurse", localId } (Emerald's own Pokemon Center nurse).
+local PERSON_QUIET = { playmoncry = 1, waitmoncry = 1, checkplayergender = 1, textcolor = 1 }
+for k in pairs(SIGN_QUIET) do PERSON_QUIET[k] = 1 end
+
+-- FireRed's nurse script: the one every nurse calls.
+local function nurseScript()
+  if M._nurse == nil then
+    local scripts, _, events = scriptsAndText()
+    local count = {}
+    for _, map in pairs(events or {}) do
+      for _, o in ipairs(map.objects or {}) do
+        if o.sprite == "SPRITE_NURSE" then
+          for _, op in ipairs((scripts or {})[o.scriptKey] or {}) do
+            if op.op == "call" and op.target then count[op.target] = (count[op.target] or 0) + 1; break end
+          end
+        end
+      end
+    end
+    local best, n = false, 0
+    for k, c in pairs(count) do if c > n then best, n = k, c end end
+    M._nurse = best
+  end
+  return M._nurse or nil
+end
+
+local function walk(key, person)
+  local scripts, texts = scriptsAndText()
+  if not (scripts and texts) then return nil, "no scripts" end
+  local quiet, nurse = person and PERSON_QUIET or SIGN_QUIET, person and nurseScript()
+  local steps, stack, seen = {}, {}, {}
+  local list, i, word, guard = scripts[key], 1, nil, 0
+  if not list then return nil, "missing" end
+  while list do
+    guard = guard + 1
+    if guard > 500 then return nil, "loop" end
+    local op = list[i]; i = i + 1
+    local name = op and op.op
+    if not op or name == "return" then
+      if #stack == 0 then break end
+      local back = table.remove(stack); list, i = back[1], back[2]
+    elseif name == "end" then break
+    elseif name == "call" and nurse and op.target == nurse then
+      steps[#steps + 1] = { "nurse" }
+    elseif person and name == "pokemart" then
+      local list = op.items or op.ptr or op[1]
+      if type(list) ~= "string" then return nil, "mart" end
+      steps[#steps + 1] = { "mart", list }
+    elseif person and name == "waitbuttonpress" then
+      local last = steps[#steps]
+      if last and last[1] == "say" then last[1] = "text" end
+    elseif name == "goto" or name == "call" then
+      if name == "goto" then
+        if seen[op.target] then return nil, "loop" end
+        seen[op.target] = true
+      else stack[#stack + 1] = { list, i } end
+      list, i = scripts[op.target], 1
+      if not list then return nil, "missing" end
+    elseif name == "loadword" then
+      if (op.dest or op[1]) == 0 then word = op.value or op[2] end
+    elseif name == "callstd" or name == "message" then
+      local t = name == "message" and (op.text or op.ptr or op[1]) or word
+      if name == "callstd" and not MSGBOX[op.std or op[1]] then return nil, "menu" end
+      if not (t and texts[t]) then return nil, "no text" end
+      steps[#steps + 1] = { (person and name == "message") and "say" or "text", t }; word = nil
+    elseif name == "braillemessage" then
+      local t = op.ptr or op[1]
+      if not (t and texts[t]) then return nil, "no text" end
+      steps[#steps + 1] = { "braille", t }
+    elseif name == "showmonpic" then
+      steps[#steps + 1] = { "pic", op[1], op[2], op[3] }
+    elseif name == "hidemonpic" then
+      steps[#steps + 1] = { "unpic" }
+    elseif not quiet[name] then return nil, tostring(name)
+    end
+  end
+  local shown = false
+  for _, step in ipairs(steps) do if step[1] ~= "unpic" and step[1] ~= "pic" then shown = true end end
+  if not shown then return nil, "nothing to read" end
+  if person then
+    for _, step in ipairs(steps) do
+      if step[1] == "nurse" then return { { "nurse" } } end -- the nurse's own script does the talking
+    end
+  end
+  return steps
+end
+
+--- A FireRed sign as steps (see above), or nil and why not.
+function M.signSteps(key) return walk(key, false) end
+--- A FireRed person's script as steps, or nil and why not.
+function M.personSteps(key) return walk(key, true) end
+
+--- A FireRed map's signs as Emerald bgEvents, recording their steps in
+-- project.gen3FrSigns. Returns the bgEvents and how many were left out.
+function M.signsFor(project, fid)
+  local _, _, events = scriptsAndText()
+  local out, left = {}, 0
+  for _, bg in ipairs(((events or {})[fid] or {}).bgEvents or {}) do
+    if bg.type == "sign" and bg.scriptKey then
+      local key = M.MAP .. bg.scriptKey
+      project.gen3FrSigns = project.gen3FrSigns or {}
+      local steps = project.gen3FrSigns[key]
+      if not steps then
+        steps = M.signSteps(bg.scriptKey)
+        if steps then project.gen3FrSigns[key] = steps end
+      end
+      if steps then
+        out[#out + 1] = { x = bg.x, y = bg.y, elevation = bg.elevation or 0, kind = bg.kind or 0, type = "sign", scriptKey = key }
+      else left = left + 1 end
+    end
+  end
+  return out, left
+end
+
+-- People, marts & nurses ------------------------------------------------------
+--- GAME PATCHES > FireRed Maps > People, marts & nurses: FireRed's everyday
+-- people on the Import region maps -- the ones that talk, Poke Mart clerks
+-- and Pokemon Center nurses. On unless turned off. Trainers, item balls and
+-- story people (anyone FireRed hides or shows with a flag) stay out.
+function M.peopleEnabled(project) return (project or {}).gen3FrPeople ~= false end
+
+-- Emerald's look-alike of a FireRed sprite, for the editor's map view (the
+-- game draws FireRed's own sprite from the import) and Emerald movement
+-- numbers for FireRed's.
+local LOOKS = { CLERK = "MART_EMPLOYEE", FISHER = "FISHERMAN", OLD_MAN_1 = "OLD_MAN", OLD_MAN_2 = "OLD_MAN",
+  BOY = "BOY_1", MAN = "MAN_1", BALDING_MAN = "MAN_2", COOLTRAINER_M = "MAN_3", COOLTRAINER_F = "WOMAN_2",
+  POKE_MANIAC = "MANIAC", ROCKER = "MAN_4", SCIENTIST = "SCIENTIST_1", POLICEMAN = "POLICEMAN", CHEF = "COOK",
+  CABLE_CLUB_RECEPTIONIST = "LINK_RECEPTIONIST", UNION_ROOM_RECEPTIONIST = "LINK_RECEPTIONIST",
+  WORKER_M = "HIKER", GBA_KID = "GAMEBOY_KID", CAPTAIN = "SAILOR" }
+local function constants()
+  if M._const == nil then
+    local ok, C = pcall(require, "src.core.game3.constants")
+    local okF, fr = pcall(function() return C.of("firered") end)
+    local okE, em = pcall(function() return C.of("emerald") end)
+    M._const = ok and okF and okE and { fr = fr, em = em } or false
+  end
+  return M._const or nil
+end
+local function emeraldLook(sprite)
+  local c = constants()
+  local E = c and c.em.event_objects and c.em.event_objects.byName or {}
+  local name = tostring(sprite or ""):gsub("^SPRITE_", "")
+  return E["OBJ_EVENT_GFX_" .. name] or E["OBJ_EVENT_GFX_" .. (LOOKS[name] or "")] or E.OBJ_EVENT_GFX_MAN_1 or 19
+end
+local function emeraldMovement(mt)
+  local c = constants()
+  local name = c and ((c.fr.movement.byId or {}).MOVEMENT_TYPE_ or {})[mt]
+  return name and c.em.movement.byName[name] or mt
+end
+
+--- A FireRed map's people as Emerald objects, recording their steps in
+-- project.gen3FrTalk. Returns the objects and how many were left out.
+function M.peopleFor(project, fid)
+  local _, _, events = scriptsAndText()
+  local out, left = {}, 0
+  for _, o in ipairs(((events or {})[fid] or {}).objects or {}) do
+    local gid = tonumber(o.graphicsId or o.graphics)
+    local story = (tonumber(o.flag) or 0) ~= 0 or (tonumber(o.trainerType) or 0) ~= 0
+    local steps
+    if not story and o.scriptKey and gid and gid < 240 then
+      local key = M.MAP .. o.scriptKey
+      project.gen3FrTalk = project.gen3FrTalk or {}
+      steps = project.gen3FrTalk[key]
+      if not steps then
+        steps = M.personSteps(o.scriptKey)
+        if steps then
+          if steps[1][1] == "nurse" then steps = { { "nurse", o.localId } } end
+          project.gen3FrTalk[key] = steps
+        end
+      end
+      if steps then
+        local look = emeraldLook(o.sprite)
+        out[#out + 1] = { x = o.x, y = o.y, elevation = o.elevation or 0, localId = o.localId, index = o.localId,
+          graphicsId = look, graphics = look, frlgGfx = gid, kind = 0, flag = 0, trainerType = 0, trainerRange = 0,
+          sight = 0, movementType = emeraldMovement(o.movementType), movement = o.movement, range = o.range,
+          rangeX = o.rangeX or 0, rangeY = o.rangeY or 0, scriptKey = key }
+      end
+    end
+    if not steps then left = left + 1 end
+  end
+  return out, left
+end
+
+local function ownRegionMaps(p)
+  local out = {}
+  for _, fid in ipairs(M.maps()) do
+    local id = M.regionId(fid)
+    if p.gen3 and p.gen3.maps and p.gen3.maps[id] and ((p.gen3MapLayouts or {})[id] or {}).source == M.mapSource(fid) then
+      out[#out + 1] = { fid, p.gen3.maps[id] }
+    end
+  end
+  return out
+end
+local function hasPeople(def)
+  for _, o in ipairs(def.objects or {}) do if o.frlgGfx then return true end end
+  return false
+end
+-- Adds FireRed's people to Import region maps that have none yet.
+local function addPeople(p)
+  local n = 0
+  for _, row in ipairs(ownRegionMaps(p)) do
+    local def = row[2]
+    if not hasPeople(def) then
+      local list = M.peopleFor(p, row[1])
+      def.objects = def.objects or {}
+      local used = {}
+      for _, o in ipairs(def.objects) do used[tonumber(o.localId) or -1] = true end
+      for _, o in ipairs(list) do
+        if not used[o.localId] then def.objects[#def.objects + 1] = o; n = n + 1 end
+      end
+    end
+  end
+  return n
+end
+function M.setPeople(S, on)
+  local p = S.project
+  if M.peopleEnabled(p) == (on == true) then return false end
+  if on then p.gen3FrPeople = nil else p.gen3FrPeople = false end
+  if p.gen3FrRegion then
+    if on then addPeople(p)
+    else
+      -- take FireRed's people back out (people you made stay)
+      for _, row in ipairs(ownRegionMaps(p)) do
+        local keep = {}
+        for _, o in ipairs(row[2].objects or {}) do if not o.frlgGfx then keep[#keep + 1] = o end end
+        row[2].objects = keep
+      end
+      p.gen3FrTalk = nil
+    end
+    M.refresh(S)
+  end
+  return true
+end
+
 --- GAME PATCHES > FireRed Maps > Import region: every FireRed map as
 -- EM_KANTO_<name>, joined by FireRed's connections and warps. Maps the
 -- project already has are left alone. Returns added, skipped (or nil, why).
@@ -287,11 +581,18 @@ function M.importRegion(S)
   local exists = function(id)
     return ((S.data or {}).maps or {})[id] or p.gen3.maps[id] or (p.maps or {})[id] or (p.layeredMaps or {})[id]
   end
-  local added, skipped = 0, 0
+  local added, skipped, signs, signsLeft = 0, 0, 0, 0
   for _, fid in ipairs(ids) do
     local id = known[fid]
     local info = (((M.manifest() or {}).layouts) or {})[fid]
-    if exists(id) or not info then skipped = skipped + 1
+    local ours = p.gen3.maps[id] and (p.gen3MapLayouts[id] or {}).source == M.mapSource(fid)
+    if ours and not next(p.gen3.maps[id].bgEvents or {}) then
+      -- brought in before signs were: give it its signs now
+      local rows, left = M.signsFor(p, fid)
+      p.gen3.maps[id].bgEvents = rows
+      signs, signsLeft = signs + #rows, signsLeft + left
+      skipped = skipped + 1
+    elseif exists(id) or not info then skipped = skipped + 1
     else
       local header = M.header(fid) or {}
       local def = { id = id, name = id, width = info.width, height = info.height, pair = M.pairName(info.pair),
@@ -309,6 +610,9 @@ function M.importRegion(S)
         if known[c.map] then rows[#rows + 1] = { dir = c.dir, map = known[c.map], offset = c.offset } end
       end
       def.connections = require("Gen3Connections").normalize(rows)
+      local signRows, left = M.signsFor(p, fid)
+      def.bgEvents = signRows
+      signs, signsLeft = signs + #signRows, signsLeft + left
       p.gen3MapLayouts[id] = { source = M.mapSource(fid), width = info.width, height = info.height, blank = false }
       p.gen3.maps[id] = def
       p.gen3Modes.maps[id] = "register"
@@ -316,9 +620,10 @@ function M.importRegion(S)
     end
   end
   p.gen3FrRegion = true
+  local people = M.peopleEnabled(p) and addPeople(p) or 0
   M.refresh(S)
   if S.data and S.data.encounters then M.addWild(S, S.data.encounters) end
-  return added, skipped
+  return added, skipped, signs, signsLeft, people
 end
 
 --- Import region's wild Pokemon in the editor: FireRed's lists as the
@@ -326,7 +631,7 @@ end
 -- saved as the mod's own lists (new records); the rest come from the
 -- player's import in the game. `base` is the editor's encounter catalog.
 function M.addWild(S, base)
-  if not (S.project and S.project.gen3FrRegion and M.editor()) then return end
+  if not (S.project and S.project.gen3FrRegion and M.wildEnabled(S.project) and M.editor()) then return end
   M._wild = M._wild or decode(M.read("data/generated/gba/encounters.lua")) or {}
   local copy = require("src.mods.Merge").deepCopy
   -- the editor names species (PIDGEY); the import numbers them (16, the same
@@ -349,7 +654,7 @@ function M.addWild(S, base)
       if base[id] == nil then
         local rec = copy(t)
         rec.mapGroup, rec.mapNum, rec.variants = nil, nil, nil
-        rec.id, rec._isNew = id, true
+        rec.id, rec._isNew, rec._editorFrWild = id, true, true
         for _, k in ipairs({ "land", "grass", "water", "rocks", "fishing" }) do named(rec[k]) end
         base[id] = rec
       end
@@ -386,7 +691,8 @@ function M.emit(project, encode, out)
   if not M.used(project) then return end
   assert((project.game or project.version) == "emerald", "FireRed maps and tilesets can only be used in Emerald projects")
   out[#out + 1] = "local frLink=(function()\n" .. assert(love.filesystem.read("tools/content-editor/Gen3FrLinkRuntime.lua"),
-    "Gen3FrLinkRuntime.lua missing") .. "\nend)()\nfrLink.install(mod," .. encode({ message = M.MESSAGE, region = project.gen3FrRegion == true }) .. ")"
+    "Gen3FrLinkRuntime.lua missing") .. "\nend)()\nfrLink.install(mod," .. encode({ message = M.MESSAGE, wild = project.gen3FrRegion == true and M.wildEnabled(project),
+    signs = project.gen3FrSigns, people = M.peopleEnabled(project) and project.gen3FrTalk or nil }) .. ")"
 end
 
 return M

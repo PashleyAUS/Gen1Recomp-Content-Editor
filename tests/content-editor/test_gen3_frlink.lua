@@ -78,6 +78,53 @@ run("the GAME PATCHES switch is Emerald's; Import region names", function()
   assert(not L.templateMaps({ game = "emerald" })[1])
 end)
 
+run("Wild Pokemon is on unless turned off", function()
+  assert(L.wildEnabled({}) and L.wildEnabled({ gen3FrWild = true }) and not L.wildEnabled({ gen3FrWild = false }))
+  local S = { project = {} }
+  assert(not L.setWild(S, true) and L.setWild(S, false) and S.project.gen3FrWild == false)
+  assert(L.setWild(S, true) and S.project.gen3FrWild == nil)
+end)
+
+run("people: talkers, mart clerks and nurses as steps; story people stay out", function()
+  local function msg(t) return { { op = "loadword", dest = 0, value = t }, { op = "callstd", std = 2 }, { op = "end" } } end
+  L._scripts = {
+    ["g3:talk"] = msg("g3:t1"),
+    ["g3:clerk"] = { { op = "lock" }, { op = "faceplayer" }, { op = "compare_var_to_value" }, { op = "goto_if", target = "g3:x" },
+      { op = "message", ptr = "g3:hi" }, { op = "waitmessage" }, { op = "pokemart", items = "g3:list" },
+      { op = "loadword", dest = 0, value = "g3:bye" }, { op = "callstd", std = 4 }, { op = "release" }, { op = "end" } },
+    ["g3:nurse"] = { { op = "lock" }, { op = "faceplayer" }, { op = "call", target = "g3:heal" }, { op = "release" }, { op = "end" } },
+    ["g3:heal"] = { { op = "special" }, { op = "return" } },
+    ["g3:gift"] = { { op = "giveitem" }, { op = "end" } },
+    ["g3:trainer"] = msg("g3:t1"),
+  }
+  L._texts = { ["g3:t1"] = "Hi", ["g3:hi"] = "May I help you?", ["g3:bye"] = "Please come again!" }
+  L._events = { FR_TEST = { objects = {
+    { localId = 1, x = 1, y = 2, graphicsId = 5, sprite = "SPRITE_BOY", flag = 0, trainerType = 0, movementType = 8, scriptKey = "g3:talk" },
+    { localId = 2, x = 3, y = 4, graphicsId = 68, sprite = "SPRITE_CLERK", flag = 0, trainerType = 0, movementType = 10, scriptKey = "g3:clerk" },
+    { localId = 3, x = 5, y = 6, graphicsId = 64, sprite = "SPRITE_NURSE", flag = 0, trainerType = 0, movementType = 8, scriptKey = "g3:nurse" },
+    { localId = 4, x = 7, y = 8, graphicsId = 5, sprite = "SPRITE_BOY", flag = 0, trainerType = 0, scriptKey = "g3:gift" },
+    { localId = 5, x = 9, y = 9, graphicsId = 5, sprite = "SPRITE_BOY", flag = 0, trainerType = 1, scriptKey = "g3:trainer" },
+    { localId = 6, x = 9, y = 1, graphicsId = 5, sprite = "SPRITE_BOY", flag = 120, trainerType = 0, scriptKey = "g3:talk" },
+  } } }
+  L._nurse = nil
+  local p = {}
+  local objects, left = L.peopleFor(p, "FR_TEST")
+  for _, k in ipairs({ "g3:talk", "g3:clerk", "g3:nurse" }) do local st, why = L.personSteps(k); assert(st, k .. ": " .. tostring(why)) end
+  assert(#objects == 3 and left == 3, #objects .. " " .. left)
+  assert(objects[1].scriptKey == "frlg:g3:talk" and objects[1].frlgGfx == 5 and objects[1].flag == 0)
+  local clerk = p.gen3FrTalk["frlg:g3:clerk"]
+  assert(clerk[1][1] == "say" and clerk[2][1] == "mart" and clerk[2][2] == "g3:list" and clerk[3][1] == "text")
+  local nurse = p.gen3FrTalk["frlg:g3:nurse"]
+  assert(#nurse == 1 and nurse[1][1] == "nurse" and nurse[1][2] == 3)
+  -- signs don't take shops or nurses
+  assert(L.signSteps("g3:clerk") == nil and L.signSteps("g3:talk"))
+  L._scripts, L._texts, L._events, L._nurse = nil, nil, nil, nil
+  assert(L.peopleEnabled({}) and not L.peopleEnabled({ gen3FrPeople = false }))
+  local S = { project = {} }
+  assert(not L.setPeople(S, true) and L.setPeople(S, false) and S.project.gen3FrPeople == false)
+  assert(L.setPeople(S, true) and S.project.gen3FrPeople == nil)
+end)
+
 run("only Emerald mods can carry it", function()
   local p = { game = "firered", gen3MapLayouts = { EM_A = { source = "frlg:FR_ROUTE_1" } } }
   local ok, err = pcall(L.emit, p, tostring, {})

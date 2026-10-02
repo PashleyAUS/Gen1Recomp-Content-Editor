@@ -504,13 +504,31 @@ Gen1Recomp folder's). With it on:
   collision, heights, border and map type.
 - **Import region** (on the patch) brings in every FireRed map at once, Kanto
   and the Sevii Islands, as `EM_KANTO_<name>`: FireRed's blocks, borders,
-  connections, warps, name signs and wild Pokemon (edit them in Encounters
-  like any other list). Add a warp from a Hoenn map to reach them. **Edit this
-  map** turns one into a map builder map like any other.
+  connections, warps, name signs, signs and wild Pokemon (edit them in
+  Encounters like any other list). Add a warp from a Hoenn map to reach them.
+  **Edit this map** turns one into a map builder map like any other. Running
+  it again on a project imported before signs came across gives those maps
+  their signs.
+- **Wild Pokemon** (a setting on the patch, on to start with): FireRed's wild
+  Pokemon on the Kanto maps. Off: they have none until you make some. Wild
+  Pokemon only appear once the player has a Pokemon.
+- **People, marts & nurses** (a setting on the patch, on to start with):
+  FireRed's everyday people -- the ones that just talk, Poke Mart clerks
+  with FireRed's shop lists, and Pokemon Center nurses (Emerald's healing).
+  In game they use FireRed's own sprites from the import; the editor shows
+  Emerald look-alikes. Trainers, item balls and story people (anyone FireRed
+  shows or hides with a flag) stay out. Off takes them back out; Import
+  region again adds them to maps brought in earlier.
 
-People, signs and scripts don't come across (FireRed's scripts don't run in
-Emerald), and the music is Emerald's (by map type). FireRed's door animations
-don't play on FireRed tiles; the doors still work.
+Signs read what they say in FireRed -- messages, braille and Pokemon
+pictures -- rebuilt as Emerald scripts; their words come from the player's
+import, so they aren't editable here (replace a sign with your own to change
+it). Signs that are machines or menus in FireRed (slot machines, vending
+machines) are left out. People are rebuilt the same way (what they say,
+their shop, their healing). Story people, trainers and other scripts don't
+come across (FireRed's scripts don't run in Emerald), a whiteout still
+sends the player back to their last Hoenn Pokemon Center, and the music is
+Emerald's (by map type). FireRed's tiles animate and its doors open as in FireRed.
 
 The mod carries names only (`frlg__pallet_outdoor`, `frlg:FR_PALLET_TOWN`,
 `EM_KANTO_…`), never FireRed's graphics or lists. In game `main.lua` reads
