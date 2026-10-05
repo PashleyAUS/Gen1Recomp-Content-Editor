@@ -9,6 +9,16 @@ function M.emit(p,encode,out)
   require("Gen3TeachyTv").emit(p,encode,out)
   require("Gen3Banners").emit(p,encode,out)
   if not M.used(p) then return end
+  local frameAssets={}
+  for path,asset in pairs(p.gen3Assets or {}) do
+    if path:match("^data/generated/gba/pokemon/front_anim[_%w]*/%d+%.rgba$") then
+      assert(asset.width==64 and type(asset.height)=="number" and asset.height>=64 and asset.height<=2048 and asset.height%64==0,"Invalid entrance frame sheet layout")
+      frameAssets[path]=asset
+    end
+  end
+  if next(frameAssets) then
+    out[#out+1]="local pokemonFrames=(function()\n"..assert(love.filesystem.read("tools/content-editor/Gen3PokemonFramesRuntime.lua")).."\nend)()\npokemonFrames.install(mod,"..encode(frameAssets)..")"
+  end
   for path in pairs(p.gen3Assets or {}) do
     if path:match("^data/generated/gba/intro/.*%.png$") then
       out[#out+1]="local introAssets=(function()\n"..assert(love.filesystem.read("tools/content-editor/Gen3IntroAssetsRuntime.lua")).."\nend)()\nintroAssets.install(mod,"..encode(p.gen3Assets)..")"

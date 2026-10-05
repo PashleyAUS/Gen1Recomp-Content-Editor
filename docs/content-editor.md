@@ -51,6 +51,20 @@ The shareable pack from `scripts/pack_content_editor.ps1` never includes
 
 ## Workflow
 
+Pokémon entrance frames are editable under **Pokémon → Basics**. Emerald and
+FireRed also expose them under **GFX → Pokémon**, with separate normal/shiny
+sheet controls. Export the sheet, edit its PNG, import it, then Save. Gen 3
+sheets contain 1–32 full 64 × 64 pictures in one vertical column; the first
+picture becomes the resting front sprite. Emerald replacements matching its
+original one/two-frame animation preserve native movement and timing. Added
+FireRed frames and longer sheets play once at 8 fps. FireRed's Export starts
+from its static front sprite when there is no animation sheet.
+
+Crystal's **Anim sheet** accepts 1–32 square pictures stacked vertically,
+with an 8–56-pixel width in multiples of eight. Import detects the picture
+size and frame count. **Export PNG** saves its sheet for editing, and
+**Revert animation** restores the original sheet.
+
 1. **Project** — Create a mod id or Open an existing folder.
 2. Author content on the other tabs.
 3. **Save** — writes:

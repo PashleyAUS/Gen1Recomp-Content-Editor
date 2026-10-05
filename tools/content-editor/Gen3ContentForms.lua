@@ -102,7 +102,9 @@ function M.pokemon(S,mon,mutate,App,x,y,w,fh,s)
   F.row("Icon PNG size",function(xx,yy)
     Kit.text("micro","32 × 32, or 32 × 64 (two stacked frames)",xx,yy+6*s,PAL.faint)
   end)
-  return F.finish()
+  local bottom,record=F.finish()
+  bottom=require("Gen3PokemonFrames").draw(S,mon.index,App,x,bottom,w,s,S.pokemonShinyPreview)
+  return bottom,record
 end
 function M.dex(S,mon,mutate,App,x,y,w,fh,s)
   local function own() mon=mutate();mon.dexEntry=mon.dexEntry or {};return mon.dexEntry end

@@ -669,7 +669,7 @@ local function drawBasics(S, mon, mutate, App, formX, fy, formW, labelW, fh, s)
     if anim then
       local aw = Kit.textWidth("micro", "Anim") + 12 * s
       if Kit.chip(cx, chipY, aw, 16 * s, "Anim", playAnim, PAL.green, PAL.steel,
-          "Crystal battle front animation") then
+          "Battle front animation") then
         S.pokemonAnimPreview = not playAnim
       end
       cx = cx + aw + 4 * s
@@ -1464,12 +1464,49 @@ local function drawBasics(S, mon, mutate, App, formX, fy, formW, labelW, fh, s)
         local L = formId
         App.pickFile("Anim sheet PNG", "PNG (*.png)|*.png|All (*.*)|*.*",
           function(picked)
+            if not picked then return end
+            local ok,pixels=pcall(function()
+              local bytes=assert(require("ModIO").readText(picked))
+              assert(#bytes<=8*1024*1024,"Image exceeds 8 MiB")
+              return love.image.newImageData(love.filesystem.newFileData(bytes,"frames.png"))
+            end)
+            local size=ok and pixels:getWidth() or 0
+            if not ok or size<8 or size>56 or size%8~=0 or pixels:getHeight()%size~=0
+                or pixels:getHeight()<size or pixels:getHeight()>size*32 then
+              S.status="Use 1–32 full front pictures stacked vertically; each picture must be 8–56 pixels square (multiples of 8)"
+              return
+            end
             local m = S.project.pokemon[id]
             if not m then return end
             App.importToMod(picked, nil, function(rel)
               assignFormAnimSheet(m, L, rel)
+              local rec=L and formRecord(m,L) or m
+              rec.anim.tiles=size/8
+              rec.anim.count=pixels:getHeight()/size
             end)
           end)
+      end
+    end)
+    row("Animation file",function(fx,fy_,fw,fh_)
+      local current=formAnim(S,mon,formId)
+      if Kit.button(fx,fy_,math.max(80*s,(fw-8*s)/2),fh_,"Export PNG",{enabled=current~=nil}) then
+        local source,kind
+        if current then source,kind=Preview.resolve(S,current.sheet) end
+        local IO=require("ModIO")
+        local bytes=source and (kind=="love" and love.filesystem.read(source) or IO.readText(source))
+        if bytes and S.path then
+          local dest=S.path.."/assets/animation-export/"..mon.id:lower()..(formId and ("_"..formId:lower()) or "")..".png"
+          IO.ensureDirectory(dest:match("^(.*)/"))
+          local ok,err=IO.writeText(dest,bytes)
+          S.status=ok and ("Exported "..dest) or tostring(err)
+        else S.status="Save the project first and select an available animation sheet" end
+      end
+      local own=formId and formRecord(mon,formId) or mon
+      if Kit.button(fx+(fw+8*s)/2,fy_,math.max(80*s,(fw-8*s)/2),fh_,"Revert animation",{enabled=own and own.anim~=nil}) then
+        mon=mutate()
+        local rec=formId and formRecord(mon,formId) or mon
+        if rec then rec.anim=nil end
+        Preview.invalidate();App.markDirty();S.status="Restored original animation sheet"
       end
     end)
   end

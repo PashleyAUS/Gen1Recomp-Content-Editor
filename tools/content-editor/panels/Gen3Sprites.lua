@@ -70,6 +70,11 @@ function Panel.draw(S,x,y,w,h,App)
   Kit.caption(fx,y+350*s,"Party icon — 32 x 32, or two frames stacked in a 32 x 64 PNG")
   Preview.drawPokemonIcon(S,rec,fx,y+385*s,64*s,64*s,id,false)
   require("Gen3PokemonIcons").drawControls(S,rec.index,App,fx+80*s,y+400*s,fw-80*s,30*s,s)
+  local shiny=S.g3FramesShiny or false
+  if Kit.button(fx,y+450*s,200*s,28*s,shiny and "Shiny entrance frames" or "Normal entrance frames",{}) then
+    S.g3FramesShiny=not shiny;shiny=not shiny
+  end
+  require("Gen3PokemonFrames").draw(S,rec.index,App,fx,y+488*s,fw,s,shiny)
 end
 
 return Panel
