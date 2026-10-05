@@ -11,7 +11,7 @@ function M.townArts(S)
   local function sevii(source,editable)
     for _,k in ipairs(M.townMapKeys) do add(k,M.townMapNames[k],"data/generated/gba/region_map/"..k.."_map.png",source,editable) end
   end
-  if require("Generation").id(S)=="emerald" then
+  if require("src.core.GameVersion").layout(require("Generation").id(S))=="rse" then
     add("hoenn","Hoenn","data/generated/gba/rse/region_map/map.png",nil,false)
     local fr=require("Gen3FrLink")
     if fr.editor() then sevii(setmetatable({NAME=fr.NAME or "FireRed",read=function(p) return fr.editor().read(p) end},{}),false) end
@@ -156,7 +156,7 @@ function M.drawRegions(S,x,y,w,h,App)
     fy=fy+18*s+26*s*math.min(4,#region.include)+8*s
   end
   -- Emerald: PokeNav wording on this region's maps
-  if require("Generation").id(S)=="emerald" then
+  if require("src.core.GameVersion").layout(require("Generation").id(S))=="rse" then
     K.text("small","PokeNav on this region's maps (empty = Hoenn's own wording)",fx,fy,PAL.heading)
     for _,f in ipairs({{"navLabel","Entry, up to 10 letters","REGION MAP"},{"navDesc","Description under it, up to 40 letters","Check the map of the region."}}) do
       fy=fy+22*s
@@ -213,7 +213,7 @@ function M.draw(S,x,y,w,h,App,mode)
     if K.button(x,y+h-32*s,150*s,28*s,"Revert topic",{}) then if S.project.gen3Help then S.project.gen3Help[S.g3HelpId]=nil;App.markDirty() end end
   elseif mode=="dex" then
     require("Gen3ContentAdapter").prepare(S);S.g3DexSpecies=S.g3DexSpecies or "BULBASAUR"
-    local rse=require("Generation").id(S)=="emerald"
+    local rse=require("src.core.GameVersion").layout(require("Generation").id(S))=="rse"
     require("SpeciesPicker").field(S,{x=x,y=y,w=w*.6,h=30*s,current=S.g3DexSpecies,onPick=function(id) S.g3DexSpecies=id end})
     C.field(S,{x=x+w*.62,y=y,w=w*.38,h=30*s,current=rse and "data" or S.g3DexScreen or "data",ids=rse and {"data"} or {"data","area","size"},labels={data="Entry card",area="Habitat map",size="Size comparison"},onPick=function(id) S.g3DexScreen=id end})
     local mon=S.project.pokemon[S.g3DexSpecies] or S.data.pokemon[S.g3DexSpecies]
@@ -236,7 +236,7 @@ function M.draw(S,x,y,w,h,App,mode)
     end)
     if K.button(x,y+h-35*s,220*s,30*s,"Edit Pokemon / Dex data",{}) then S.pokemonId=S.g3DexSpecies;S.tab="pokemon" end
   else
-    local emerald=require("Generation").id(S)=="emerald"
+    local emerald=require("src.core.GameVersion").layout(require("Generation").id(S))=="rse"
     if K.button(x,y,150*s,28*s,"Town Map artwork",{}) then S.g3TownView="art" end
     if K.button(x+160*s,y,150*s,28*s,"Fly destinations",{}) then S.g3TownView="fly" end
     local rx=x+320*s

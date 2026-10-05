@@ -1,15 +1,15 @@
 local M={}
 local K,C=require("Kit"),require("ChoicePicker")
 function M.starterKeys(game)
-  return game=="emerald" and {"treecko","torchic","mudkip"} or {"bulbasaur","charmander","squirtle"}
+  return require("src.core.GameVersion").layout(game)=="rse" and {"treecko","torchic","mudkip"} or {"bulbasaur","charmander","squirtle"}
 end
 -- Emerald values match its own Latias roamer (pokeemerald/src/roamer.c).
 function M.defaults(game)
-  if game=="emerald" then
-    local maps={};for i=101,134 do maps[#maps+1]="EM_ROUTE"..i end
+  if require("src.core.GameVersion").layout(game)=="rse" then
+    local maps={};for i=101,134 do maps[#maps+1]=require("Generation").gen3MapPrefix({version=game}).."ROUTE"..i end
     return {id="hoenn_lati",name="Hoenn roaming legendary",enabled=true,selection="fixed",species="LATIAS",
       starters={treecko="LATIAS",torchic="LATIAS",mudkip="LATIAS"},level=40,chance=25,
-      unlock="postgame",flag=0x864,flee="attempt",defeat="stop",maps=maps}
+      unlock="postgame",flag=require("src.core.game3.constants").of(game):flag("FLAG_SYS_GAME_CLEAR"),flee="attempt",defeat="stop",maps=maps}
   end
   local maps={};for i=1,25 do maps[#maps+1]="FR_ROUTE_"..i..(i==21 and "_NORTH" or "") end
   return {id="kanto_beast",name="Kanto roaming legendary",enabled=true,selection="starter",species="ENTEI",
@@ -43,7 +43,7 @@ function M.validate(rows,game)
 end
 function M.draw(S,x,y,w,h,App)
   local s=K.scale;local fh=30*s;local rows=S.project.gen3Roamers
-  local game=require("Generation").id(S);local emerald=game=="emerald"
+  local game=require("Generation").id(S);local emerald=require("src.core.GameVersion").layout(game)=="rse"
   if not rows then
     K.caption(x,y,"Roaming Pokemon travel between maps and remember their remaining HP and status.")
     if K.button(x,y+42*s,300*s,fh,"Set up roaming legendary",{kind="good"}) then S.project.gen3Roamers={M.defaults(game)};App.markDirty() end

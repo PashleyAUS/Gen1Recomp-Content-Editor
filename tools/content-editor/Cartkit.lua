@@ -6,7 +6,7 @@ local DataSource = require("DataSource")
 
 local Cartkit = {}
 
-Cartkit.BASES = { "red", "blue", "yellow", "gold", "silver", "crystal", "firered", "leafgreen", "emerald" }
+Cartkit.BASES = { "red", "blue", "yellow", "gold", "silver", "crystal", "firered", "leafgreen", "ruby", "sapphire", "emerald" }
 Cartkit.SEALS = { "sealed", "sealed+", "open" }
 Cartkit.FINISHES = { "", "sparkle", "holo", "sparkle+holo" }
 

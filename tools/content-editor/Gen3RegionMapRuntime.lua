@@ -69,8 +69,9 @@ function M.install(mod, cfg)
   if cross then
     for _, id in ipairs(ORIGIN_ID[origin]) do
       local prefix = GV.cachePrefix(id)
+      local format = require("src.import.CacheContract").VERSION_FORMAT[id]
       local okM, marker = pcall(CacheFs.readAt, prefix .. "rom-cache.complete")
-      if okM and type(marker) == "string" and marker:find("^rom%-cache%-v%d+%-" .. id .. ":") then
+      if okM and type(marker) == "string" and format and marker:sub(1, #format) == format then
         region.game, region.prefixDir = id, prefix
         break
       end

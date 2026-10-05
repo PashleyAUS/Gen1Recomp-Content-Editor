@@ -22,10 +22,11 @@ M.REGION="EM_KANTO_"
 -- nil. Only a finished import of a known dump counts.
 function M.find(readAt)
   local GV=require("src.core.GameVersion")
+  local formats=require("src.import.CacheContract").VERSION_FORMAT
   for _,game in ipairs({"firered","leafgreen"}) do
     local prefix=GV.cachePrefix(game)
     local okR,marker=pcall(readAt,prefix.."rom-cache.complete")
-    local sha=okR and type(marker)=="string" and marker:match("^rom%-cache%-v%d+%-"..game..":(%x+)")
+    local sha=okR and type(marker)=="string" and formats[game] and marker:sub(1,#formats[game])==formats[game] and marker:sub(#formats[game]+1):match("^(%x+)")
     if sha then
       for _,rev in ipairs(GV.revisions(game)) do
         if rev.sha1==sha:lower() then return prefix,game end

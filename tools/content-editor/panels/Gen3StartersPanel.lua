@@ -24,7 +24,7 @@ Panel.emeraldGifts={
   {"BELDUM","Steven's House - Beldum","EM_MOSSDEEP_CITY_STEVENS_HOUSE",5},
   {"WYNAUT","Lavaridge Town - Wynaut Egg","EM_LAVARIDGE_TOWN",5,true},
 }
-local function emerald(S) return require("Generation").id(S)=="emerald" end
+local function emerald(S) return require("src.core.GameVersion").layout(require("Generation").id(S))=="rse" end
 local function giftList(S) return emerald(S) and Panel.emeraldGifts or Panel.gifts end
 local function isStarter(r) return r.onlyFirst and (r.map=="FR_OAKS_LAB" or r.starterSlot~=nil) end
 function Panel.addGift(S,id)

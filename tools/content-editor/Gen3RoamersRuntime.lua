@@ -5,7 +5,16 @@ local IDS={
   firered={postgame=0x844,starterVar=0x4031,repelVar=0x4020,starters={[0]="bulbasaur","squirtle","charmander"}},
   emerald={postgame=0x864,starterVar=0x4023,repelVar=0x4021,starters={[0]="treecko","torchic","mudkip"}},
 }
-local function ids() return IDS[require("src.core.GameVersion").get()] or IDS.firered end
+local function ids()
+  local GV=require("src.core.GameVersion")
+  local game=GV.get()
+  if GV.layout(game)=="rse" then
+    local C=require("src.core.game3.constants").of(game)
+    return {postgame=C:flag("FLAG_SYS_GAME_CLEAR"),starterVar=C:var("VAR_STARTER_MON"),
+      repelVar=C:var("VAR_REPEL_STEP_COUNT"),starters=IDS.emerald.starters}
+  end
+  return IDS[game] or IDS.firered
+end
 function M.available(row,session)
   if row.enabled==false then return false end
   local F=require("src.core.game3.scripting.flags")

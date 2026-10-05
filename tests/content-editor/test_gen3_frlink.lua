@@ -1,3 +1,4 @@
+package.loaded["src.import.CacheContract"] = {VERSION_FORMAT={firered="rom-cache-v25-firered:",leafgreen="rom-cache-v10-leafgreen:",emerald="rom-cache-v5-emerald:"}}
 -- FireRed link (Gen3FrLink / Gen3FrLinkRuntime): FireRed tilesets and map
 -- layouts in Emerald mods, read from the player's FireRed / LeafGreen import.
 -- Plain LuaJIT, no LOVE. Run from the repository root:
@@ -32,15 +33,15 @@ run("only a finished FireRed or LeafGreen import of a known dump counts", functi
   local files = {}
   local function readAt(p) return files[p] end
   assert(R.find(readAt) == nil)
-  files["firered/rom-cache.complete"] = "rom-cache-v21-firered:0000"
+  files["firered/rom-cache.complete"] = "rom-cache-v25-firered:0000"
   assert(R.find(readAt) == nil)
-  files["leafgreen/rom-cache.complete"] = "rom-cache-v21-leafgreen:574FA542FFEBB14BE69902D1D36F1EC0A4AFD71E"
+  files["leafgreen/rom-cache.complete"] = "rom-cache-v10-leafgreen:574FA542FFEBB14BE69902D1D36F1EC0A4AFD71E"
   local prefix, game = R.find(readAt)
   assert(prefix == "leafgreen/" and game == "leafgreen")
-  files["firered/rom-cache.complete"] = "rom-cache-v21-firered:dd5945db9b930750cb39d00c84da8571feebf417"
+  files["firered/rom-cache.complete"] = "rom-cache-v25-firered:dd5945db9b930750cb39d00c84da8571feebf417"
   prefix, game = R.find(readAt)
   assert(prefix == "firered/" and game == "firered")
-  files = { ["firered/rom-cache.complete"] = "rom-cache-v3-emerald:41cb23d8dccc8ebd7c649cd8fbb58eeace6e2fdc" }
+  files = { ["firered/rom-cache.complete"] = "rom-cache-v5-emerald:41cb23d8dccc8ebd7c649cd8fbb58eeace6e2fdc" }
   assert(R.find(readAt) == nil)
 end)
 

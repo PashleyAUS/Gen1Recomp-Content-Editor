@@ -108,10 +108,10 @@ end
 -- the linked Gen1Recomp folder and the game's save folders.
 local function readAny(rel)
   local fs = love and love.filesystem
-  if fs and fs.getInfo and fs.getInfo(rel, "file") then return fs.read(rel) end
+  if fs and fs.getInfo and fs.getInfo(rel, "file") then return require("Gen3CacheBlob").decode(rel, fs.read(rel)) end
   for _, root in ipairs(M._roots or diskRoots()) do
     local f = io.open(root .. "/" .. rel, "rb")
-    if f then local b = f:read("*a"); f:close(); return b end
+    if f then local b = f:read("*a"); f:close(); return require("Gen3CacheBlob").decode(rel, b) end
   end
 end
 

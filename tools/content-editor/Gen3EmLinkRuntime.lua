@@ -25,9 +25,10 @@ M.SECTION=1000 -- region map section ids from Emerald are carried as 1000+id
 -- a known dump counts.
 function M.find(readAt)
   local GV=require("src.core.GameVersion")
+  local formats=require("src.import.CacheContract").VERSION_FORMAT
   local prefix=GV.cachePrefix("emerald")
   local okR,marker=pcall(readAt,prefix.."rom-cache.complete")
-  local sha=okR and type(marker)=="string" and marker:match("^rom%-cache%-v%d+%-emerald:(%x+)")
+  local sha=okR and type(marker)=="string" and formats.emerald and marker:sub(1,#formats.emerald)==formats.emerald and marker:sub(#formats.emerald+1):match("^(%x+)")
   if sha then
     for _,rev in ipairs(GV.revisions("emerald")) do
       if rev.sha1==sha:lower() then return prefix,"emerald" end

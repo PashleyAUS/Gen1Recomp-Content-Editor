@@ -279,6 +279,10 @@ local function remountVersion(version)
   mountedVersion = version
   local GameVersion = require("src.core.GameVersion")
   pcall(GameVersion.set, version)
+  if GameVersion.generation(version) == 3 then
+    local Versions = require("src.import.gba.versions")
+    if Versions.selectCache then Versions.selectCache(version, require("src.core.game3.dataset").cache()) end
+  end
 end
 
 -- Data:load is Gen 1-shaped (maps/text/pokemon/…). Game2.lua fills the rest
@@ -340,7 +344,8 @@ local function finishLoad(version)
   if not ok then return false, err end
   if require("src.core.GameVersion").generation(version) == 3 then
     local loaded, detail = pcall(require("Gen3").load, Data, function(path)
-      return love.filesystem.read(require("src.core.GameVersion").cachePrefix(version) .. path)
+      local rel = require("src.core.GameVersion").cachePrefix(version) .. path
+      return require("Gen3CacheBlob").decode(rel, love.filesystem.read(rel))
     end, function(path)
       local root=require("src.core.GameVersion").cachePrefix(version)..path
       local result={}

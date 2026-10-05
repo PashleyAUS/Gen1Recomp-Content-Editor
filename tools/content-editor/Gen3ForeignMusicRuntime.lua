@@ -28,8 +28,9 @@ function M.install(mod, cfg)
   -- the player's import of the other game ("emerald/", "firered/" or "leafgreen/")
   for _, id in ipairs(ORIGIN_ID[origin]) do
     local prefix = GV.cachePrefix(id)
+      local format = require("src.import.CacheContract").VERSION_FORMAT[id]
     local okR, marker = pcall(CacheFs.readAt, prefix .. "rom-cache.complete")
-    if okR and type(marker) == "string" and marker:find("^rom%-cache%-v%d+%-" .. id .. ":") then
+    if okR and type(marker) == "string" and format and marker:sub(1, #format) == format then
       St.prefix = prefix
       break
     end

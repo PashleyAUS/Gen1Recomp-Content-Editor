@@ -1,3 +1,4 @@
+package.loaded["src.import.CacheContract"] = {VERSION_FORMAT={firered="rom-cache-v25-firered:",leafgreen="rom-cache-v10-leafgreen:",emerald="rom-cache-v5-emerald:"}}
 -- Emerald link (Gen3EmLink / Gen3EmLinkRuntime / Gen3Link): Emerald tilesets
 -- and map layouts in FireRed / LeafGreen mods, read from the player's Emerald
 -- import. Plain LuaJIT, no LOVE. Run from the repository root:
@@ -33,12 +34,12 @@ run("only a finished Emerald import of a known dump counts", function()
   local files = {}
   local function readAt(p) return files[p] end
   assert(R.find(readAt) == nil)
-  files["emerald/rom-cache.complete"] = "rom-cache-v3-emerald:0000"
+  files["emerald/rom-cache.complete"] = "rom-cache-v5-emerald:0000"
   assert(R.find(readAt) == nil)
-  files["emerald/rom-cache.complete"] = "rom-cache-v3-emerald:F3AE088181BF583E55DAF962A92BB46F4F1D07B7"
+  files["emerald/rom-cache.complete"] = "rom-cache-v5-emerald:F3AE088181BF583E55DAF962A92BB46F4F1D07B7"
   local prefix, game = R.find(readAt)
   assert(prefix == "emerald/" and game == "emerald")
-  files = { ["emerald/rom-cache.complete"] = "rom-cache-v21-firered:f3ae088181bf583e55daf962a92bb46f4f1d07b7" }
+  files = { ["emerald/rom-cache.complete"] = "rom-cache-v25-firered:f3ae088181bf583e55daf962a92bb46f4f1d07b7" }
   assert(R.find(readAt) == nil)
 end)
 

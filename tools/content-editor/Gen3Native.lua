@@ -171,7 +171,7 @@ M.source=[=[
     end)
   end
   -- Emerald screens load PNGs through scene_kit straight from disk, not the cache.
-  if require("src.core.GameVersion").get()=="emerald" and next(native.assets) then
+  if require("src.core.GameVersion").layout()=="rse" and next(native.assets) then
     local SceneKit=require("src.ui.game3.rse.scene_kit")
     if not SceneKit._editorImageBridge then
       SceneKit._editorImageBridge=true
@@ -348,7 +348,7 @@ vec4 effect(vec4 color, Image t, vec2 tc, vec2 sc) {
     Ppu.clearCache()
   end
   mod.hooks:wrap("editor.gen3.cache",function(proceed,path)
-    local key=path:gsub("^firered/",""):gsub("^leafgreen/",""):gsub("^emerald/","")
+    local key=path:gsub("^"..require("src.core.GameVersion").cachePrefix(), "")
     if not key:match("^data/generated/gba/") then key="data/generated/gba/"..key end
     local asset=native.assets[key]
     if asset then

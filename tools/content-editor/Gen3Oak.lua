@@ -46,7 +46,7 @@ function M.scene(S,x,y,w,h,App)
   K.caption(x,y+h-52*scale,"Restart the preview after changing settings or dialogue.")
 end
 function M.draw(S,x,y,w,h,App)
-  if require("Generation").id(S)=="emerald" then return require("Gen3Birch").draw(S,x,y,w,h,App) end
+  if require("src.core.GameVersion").layout(require("Generation").id(S))=="rse" then return require("Gen3Birch").draw(S,x,y,w,h,App) end
   local K,C=require("Kit"),require("ChoicePicker");local scale=K.scale
   local top=require("RegList").modeChips(S,"g3OakMode",{{id="scene",label="Full intro"},{id="dialogue",label="Dialogue"},{id="artwork",label="Artwork"}},x,y,scale)
   h=h-(top-y);y=top

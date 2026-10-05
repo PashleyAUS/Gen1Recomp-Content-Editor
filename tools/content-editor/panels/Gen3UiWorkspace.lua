@@ -9,7 +9,7 @@ function M.draw(S,x,y,w,h,App)
   local kanto=game=="firered" or game=="leafgreen"
   local ids,labels={},{}
   for _,mode in ipairs(modes) do
-    if kanto or not mode.kanto then ids[#ids+1]=mode.id;labels[mode.id]=(game=="emerald" and mode.id=="oak") and "Birch intro" or mode.label end
+    if kanto or not mode.kanto then ids[#ids+1]=mode.id;labels[mode.id]=(require("src.core.GameVersion").layout(game)=="rse" and mode.id=="oak") and "Birch intro" or mode.label end
   end
   if not labels[S.g3UiMode or ""] then S.g3UiMode="intro" end
   require("ChoicePicker").field(S,{x=x,y=y,w=math.min(w,340*scale),h=28*scale,current=S.g3UiMode,ids=ids,labels=labels,title="Choose a game screen",onPick=function(id)

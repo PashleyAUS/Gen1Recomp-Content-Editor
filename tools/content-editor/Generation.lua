@@ -74,7 +74,7 @@ end
 
 -- Gen 3 map IDs: FireRed and LeafGreen share FR_, Emerald uses EM_.
 function Generation.gen3MapPrefix(S)
-  return Generation.id(S) == "emerald" and "EM_" or "FR_"
+  return require("src.core.game3.profile").of(Generation.id(S)).map.enginePrefix
 end
 
 function Generation.isGen2(S)
