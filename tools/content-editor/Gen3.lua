@@ -176,6 +176,7 @@ function Gen3.emit(project, encode)
     "  if mod.generation ~= 3 then return end" }
   out[#out+1]=Gen3.READY_REPLAY
   out[#out+1]=require("Gen3SpeciesCapacity").source
+  require("Gen3CustomMapRuntime").emit(project, encode, out)
   local authoredConnections={}
   for id,record in pairs((project.gen3 or {}).maps or {}) do if record.connections~=nil then
     require("Gen3Connections").validate(record.connections);authoredConnections[id]=true
