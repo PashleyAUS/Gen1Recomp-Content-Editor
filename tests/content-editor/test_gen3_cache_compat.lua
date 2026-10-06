@@ -13,6 +13,20 @@ assert(Blob.decode("ruby/test.idx","deflated")=="decoded")
 local legacy="SVMI"..string.char(1,2,1,0,16,0,1,0,0,0)..string.rep("\0",256)
 assert(Blob.decode("emerald/data/generated/gba/native/general__lilycove/mids.idx",legacy)==legacy)
 assert(Blob.decode("emerald/data/generated/gba/native/general__lilycove/mids_over.idx",legacy)==legacy)
+local animPath="emerald/data/generated/gba/native/general__lilycove/anim_general_flower.idx"
+local anim=string.rep(string.char(32,33,34,35),256)
+assert(Blob.decode(animPath,anim)==anim)
+assert(Blob.decode(animPath:gsub("%.idx$","_over.idx"),anim)==anim)
+assert(not pcall(Blob.decode,animPath,anim:sub(2)),"Truncated raw banks must fail")
+assert(not pcall(Blob.decode,"ruby/test.idx",anim),"Raw fallback is limited to native animation banks")
+assert(not pcall(Blob.decode,animPath,string.char(0x78,0x9c)..string.rep("\0",254)),
+  "Damaged zlib banks must not become raw pixels")
+package.loaded["src.import.CacheBlob"]={decode=function(path,bytes)
+  assert(path==animPath and bytes=="compressed animation")
+  return anim
+end}
+assert(Blob.decode(animPath,"compressed animation")==anim)
+package.loaded["src.import.CacheBlob"]=nil
 assert(not pcall(Blob.decode,"ruby/test.idx","damaged compressed data"))
 assert(Blob.decode("ruby/missing.rgba",nil)==nil)
 package.loaded["src.core.GameVersion"]={cachePrefix=function(id) return id.."/" end,

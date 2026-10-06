@@ -10,7 +10,20 @@ function M.decode(path, bytes)
     return bytes
   end
   local ok, Blob = pcall(require, "src.import.CacheBlob")
-  if ok then return Blob.decode(path, bytes) end
+  if ok then
+    local decoded, result = pcall(Blob.decode, path, bytes)
+    if decoded then return result end
+    -- Legacy animation banks have no SVMI header: each frame/metatile is
+    -- exactly 256 palette indices. Only accept those native bank paths and
+    -- never reinterpret a damaged zlib stream as raw pixels.
+    if type(path) == "string" and path:match("/native/[^/]+/anim_[^/]+%.idx$")
+        and type(bytes) == "string" and #bytes > 0 and #bytes % 256 == 0 then
+      local cmf, flg = bytes:byte(1, 2)
+      local zlibHeader = cmf % 16 == 8 and cmf < 128 and (cmf * 256 + flg) % 31 == 0
+      if not zlibHeader then return bytes end
+    end
+    error(result, 2)
+  end
   return bytes
 end
 return M
