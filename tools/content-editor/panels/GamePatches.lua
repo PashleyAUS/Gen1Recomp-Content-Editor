@@ -597,7 +597,7 @@ function M.draw(S, x, y, w, h, App)
     x, y, PAL.muted)
   y = y + 32 * s
   local cw = math.min(w, 760 * s)
-  if not (kanto(S) or require("Generation").id(S) == "emerald") or not S.project then
+  if not require("Generation").isGen3(S) or not S.project then
     Kit.emptyBox(x, y, cw, 120 * s, "No game patches for " .. require("Generation").label(S) .. " yet.")
     return
   end
@@ -612,7 +612,7 @@ function M.draw(S, x, y, w, h, App)
   local first, view = Pane.begin(S, "gamePatchesScroll", x, y, cw + Kit.scrollbarSize() + 4 * s, top + h - y)
   local cy = first
   for _, patch in ipairs(M.PATCHES) do
-    if (kanto(S) or not patch.kanto) and (emerald(S) or not patch.emerald) then cy = patchCard(S, App, patch, x, cy, cw) end
+    if (patch.id~="clean" or kanto(S) or emerald(S)) and (kanto(S) or not patch.kanto) and (emerald(S) or not patch.emerald) then cy = patchCard(S, App, patch, x, cy, cw) end
   end
   Pane.finish(S, "gamePatchesScroll", first, cy, view)
   Kit.blockClicks = blocked

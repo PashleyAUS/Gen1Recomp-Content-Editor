@@ -39,7 +39,7 @@ function M.rseData(S)
 end
 function M.rseDefaults(S)
   local data=M.rseData(S);local rows={}
-  local visited=require("src.core.game3.constants").of("emerald"):flag("FLAG_VISITED_LITTLEROOT_TOWN")
+  local visited=require("src.core.game3.constants").of(require("Generation").id(S)):flag("FLAG_VISITED_LITTLEROOT_TOWN")
   for _,dest in pairs(data.fly) do
     rows[#rows+1]={name=data.labels[dest.mapsec],section=dest.mapsec,x=dest.x,y=dest.y,unlock="flag",flag=visited+dest.mapsec,enabled=true}
   end
@@ -68,7 +68,7 @@ function M.validate(rows)
 end
 function M.draw(S,x,y,w,h,App)
   local s=K.scale;local fh=30*s
-  local game=require("Generation").id(S);local emerald=game=="emerald"
+  local game=require("Generation").id(S);local emerald=require("src.core.GameVersion").layout(game)=="rse"
   if not S.project.gen3Fly then
     K.caption(x,y,"Set where Fly takes the player, and when each location unlocks.")
     if K.button(x,y+40*s,260*s,fh,"Set up Fly destinations",{kind="good"}) then S.project.gen3Fly=emerald and M.rseDefaults(S) or M.defaults(S);App.markDirty() end

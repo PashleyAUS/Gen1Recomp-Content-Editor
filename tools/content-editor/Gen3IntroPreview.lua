@@ -11,7 +11,7 @@ end
 -- are swapped in only while the preview steps or draws.
 local function birchScoped(S,fn)
   local RomText=require("src.core.game3.rom_text");local Kit=require("src.ui.game3.rse.scene_kit")
-  local keys=require("Gen3Birch").order;local saved,image={},Kit.image
+  local keys=require("Gen3Birch").keys(S);local saved,image={},Kit.image
   for _,key in ipairs(keys) do saved[key]=RomText.overrides[key];RomText.overrides[key]=S.project.text[key] or saved[key] end
   S._g3BirchImages=S._g3BirchImages or {}
   Kit.image=function(path)
@@ -45,15 +45,15 @@ function M.play(S,kind)
   local p={kind=kind,frame=0,project=S.project};S.g3IntroPreview=p
   if kind=="birch" then
     local ok,err=birchScoped(S,function()
-      p.birch=require("src.ui.game3.rse.birch_speech").new({textSpeed=(S.project.gen3BirchScene or {}).textSpeed or 1})
+      p.birch=require(require("src.core.game3.profile").of(require("Generation").id(S)).boot.newGame).new({textSpeed=(S.project.gen3BirchScene or {}).textSpeed or 1})
       p.canvas=love.graphics.newCanvas(240,160);p.canvas:setFilter("nearest","nearest")
     end)
     if not ok then p.error=err end
     return ok,err
   end
-  if require("Generation").id(S)=="emerald" then
+  if require("src.core.GameVersion").layout(require("Generation").id(S))=="rse" then
     local ok,err=scoped(function()
-      local boot=require("src.core.game3.profiles.emerald.boot")
+      local boot=require("src.core.game3.profile").of(require("Generation").id(S)).boot
       local machine=require("src.ui.game3.rse.gba_machine").new()
       if kind=="title" then p.rse=require(boot.title).new(machine,{params=boot.titleParams})
       else p.rse=require(boot.intro).new(machine,{params=boot.introParams}) end

@@ -5,8 +5,8 @@ local Images=require("Gen3MinigameImages")
 -- Emerald's slot machine is the game's own screen with a scripted demo:
 -- R bets three coins and spins, then A stops each reel.
 local DEMO={[60]="r",[180]="a",[220]="a",[260]="a"}
-local function newSlots()
- return require("src.ui.game3.rse.slot_machine").new({coins=99,sound=require("src.ui.game3.rse.gc_kit").sound({muted=true})})
+local function newSlots(S)
+ return require(require("src.core.game3.profile").of(require("Generation").id(S)).ui.screens.slot_machine).new({coins=99,sound=require("src.ui.game3.rse.gc_kit").sound({muted=true})})
 end
 function M.start(S,game)
  if not Images.list(S,game) then return nil,"Unknown mini-game" end
@@ -15,7 +15,7 @@ function M.start(S,game)
  S.g3MinigamePreview=p
  local ok,err=pcall(function()
   p.canvas=love.graphics.newCanvas(240,160);p.canvas:setFilter("nearest","nearest")
-  if game=="slots" and require("Generation").id(S)=="emerald" then p.slots=newSlots();return end
+  if game=="slots" and require("src.core.GameVersion").layout(require("Generation").id(S))=="rse" then p.slots=newSlots(S);return end
   for i in ipairs(Images.list(S,game)) do
    local data,problem=Images.image(S,game,i);assert(data,problem)
    p.textures[i]=love.graphics.newImage(data);p.textures[i]:setFilter("nearest","nearest")
@@ -38,7 +38,7 @@ function M.step(S)
  if type(p)~="table" or p.error then return end
  p.frame=(p.frame+1)%360
  if p.slots then
-  if p.frame==0 then p.slots=newSlots() end
+  if p.frame==0 then p.slots=newSlots(S) end
   p.slots:frame({new={[DEMO[p.frame] or ""]=true}})
  end
 end
@@ -122,7 +122,7 @@ function M.draw(S,game,x,y,w,h)
  if type(p)~="table" or p.game~=game or p.project~=S.project or p.data~=S.data then M.stop(S);M.start(S,game);p=S.g3MinigamePreview end
  if p.error then K.caption(x,y,p.error);return end
  if K.button(x,y,100*s,28*s,p.paused and "Play" or "Pause",{kind="good"}) then p.paused=not p.paused end
- if K.button(x+110*s,y,110*s,28*s,"Restart",{}) then p.frame=0;p.remainder=0;if p.slots then p.slots=newSlots() end end
+ if K.button(x+110*s,y,110*s,28*s,"Restart",{}) then p.frame=0;p.remainder=0;if p.slots then p.slots=newSlots(S) end end
  if K.button(x+230*s,y,130*s,28*s,"Next frame",{}) then p.paused=true;M.step(S) end
  require("ChoicePicker").field(S,{x=x+370*s,y=y,w=130*s,h=28*s,ids={"0.5","1","2"},labels={["0.5"]="Half speed",["1"]="Normal speed",["2"]="Double speed"},current=tostring(p.speed),title="PLAYBACK SPEED",onPick=function(v) p.speed=tonumber(v) end})
  local canvas,err=M.render(S)

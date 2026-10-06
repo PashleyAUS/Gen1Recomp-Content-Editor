@@ -8,6 +8,11 @@ M.labels={gText_Birch_Welcome="Welcome and professor introduction",gText_ThisIsA
   gText_Birch_AndYouAre="Asking who you are",gText_Birch_BoyOrGirl="Choosing boy or girl",gText_BirchBoy="Boy option",gText_BirchGirl="Girl option",
   gText_Birch_WhatsYourName="Asking your name",gText_Birch_SoItsPlayer="Confirming your name",
   gText_Birch_YourePlayer="Moving to Littleroot",gText_Birch_AreYouReady="Starting the adventure"}
+M.rsOrder={"gBirchSpeech_Welcome","gBirchSpeech_ThisIsPokemon","gBirchSpeech_WorldInhabitedByPokemon","gBirchSpeech_AndYouAre","gBirchSpeech_AreYouBoyOrGirl","gBirchSpeech_WhatsYourName","gBirchSpeech_SoItsPlayer","gBirchSpeech_AhOkayYouArePlayer","gBirchSpeech_AreYouReady"}
+function M.keys(S)
+ local game=require("Generation").id(S)
+ return (game=="ruby" or game=="sapphire") and M.rsOrder or M.order
+end
 local function line(S,key) return S.project.text[key] or S.data.text[key] end
 function M.scene(S,x,y,w,h,App)
   local K,C=require("Kit"),require("ChoicePicker");local scale=K.scale
@@ -40,8 +45,10 @@ function M.draw(S,x,y,w,h,App)
     return require("Gen3Assets").draw(S,x,y,w,h,App,function(path) return path:find("/birch/",1,true) end)
   end
   if S.g3OakMode~="dialogue" then return M.scene(S,x,y,w,h,App) end
-  S.g3BirchLine=S.g3BirchLine or M.order[1];local id=S.g3BirchLine
-  C.field(S,{x=x,y=y,w=w,h=30*scale,ids=M.order,labels=M.labels,current=id,onPick=function(v) S.g3BirchLine=v;S.g3OakPage=1 end});y=y+42*scale
+  local order=M.keys(S);local labels={};local found=false
+  for _,key in ipairs(order) do labels[key]=M.labels[key] or key:gsub("^gBirchSpeech_","");if key==S.g3BirchLine then found=true end end
+  if not found then S.g3BirchLine=order[1] end;local id=S.g3BirchLine
+  C.field(S,{x=x,y=y,w=w,h=30*scale,ids=order,labels=labels,current=id,onPick=function(v) S.g3BirchLine=v;S.g3OakPage=1 end});y=y+42*scale
   local original=line(S,id)
   if not original then K.caption(x,y,"Missing Gen 3 cache text: "..id);return end
   K.caption(x,y,"Edit the speech. Keep {PLAYER} where the player's name should appear.");y=y+30*scale
@@ -65,7 +72,7 @@ function M.emit(p,encode,out)
   assert(settings.textSpeed==0 or settings.textSpeed==1 or settings.textSpeed==2,"Invalid intro text speed")
   out[#out+1]="  local birchScene="..encode(settings)
   out[#out+1]=[=[
-  local Birch=require("src.ui.game3.rse.birch_speech")
+  local Birch=require(require("src.core.game3.profile").active().boot.newGame)
   local Runtime=require("src.mods.Runtime")
   if not Birch._editorBirchBridge then
     Birch._editorBirchBridge=true;local original=Birch.new

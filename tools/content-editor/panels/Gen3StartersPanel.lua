@@ -25,7 +25,18 @@ Panel.emeraldGifts={
   {"WYNAUT","Lavaridge Town - Wynaut Egg","EM_LAVARIDGE_TOWN",5,true},
 }
 local function emerald(S) return require("src.core.GameVersion").layout(require("Generation").id(S))=="rse" end
-local function giftList(S) return emerald(S) and Panel.emeraldGifts or Panel.gifts end
+local function giftList(S)
+ local game=require("Generation").id(S)
+ if game~="ruby" and game~="sapphire" then return emerald(S) and Panel.emeraldGifts or Panel.gifts end
+ local rows={};local prefix=require("Generation").gen3MapPrefix(S)
+ for i=4,#Panel.emeraldGifts do
+  local source=Panel.emeraldGifts[i];local row={}
+  for k,v in pairs(source) do row[k]=v end
+  row[3]=prefix..source[3]:gsub("^EM_","")
+  if not S.data or not S.data.maps or S.data.maps[row[3]] then rows[#rows+1]=row end
+ end
+ return rows
+end
 local function isStarter(r) return r.onlyFirst and (r.map=="FR_OAKS_LAB" or r.starterSlot~=nil) end
 function Panel.addGift(S,id)
   for _,g in ipairs(giftList(S)) do if g[1]==id then
@@ -44,7 +55,7 @@ function Panel.add(S,kind)
       local found=false
       for _,r in ipairs(rows) do if isStarter(r) then for _,v in ipairs(r.matchSpecies or {}) do if v==species then found=true end end end end
       if not found then
-        rows[#rows+1]=em and {map="EM_ROUTE101",matchSpecies={species},species=species,level=5,nickname="",onlyFirst=true,starterSlot=slot-1}
+        rows[#rows+1]=em and {map=require("Generation").gen3MapPrefix(S).."ROUTE101",matchSpecies={species},species=species,level=5,nickname="",onlyFirst=true,starterSlot=slot-1}
           or {map="FR_OAKS_LAB",matchSpecies={species},species=species,level=5,nickname="",onlyFirst=true,variable=0x4002}
       end
     end

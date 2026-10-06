@@ -61,6 +61,37 @@ function M.emit(project,encode,out)
       return slot.index, code
     end)
   end
+  -- Ruby/Sapphire give the fixed original species directly from ChooseStarter,
+  -- bypassing Emerald's giveStarter helper. Scope the override to that callback.
+  local game=next(rseSlots) and require("src.core.GameVersion").get()
+  if next(rseSlots) and (game=="ruby" or game=="sapphire") then
+    local Choose=require("src.ui.game3.rse.starter_choose")
+    local Party=require("src.core.game3.party")
+    local Runtime=require("src.mods.Runtime")
+    if not Choose._editorRsStarterBridge then
+      Choose._editorRsStarterBridge=true
+      local open,give=Choose.open,Party.giveMonToPlayer
+      Choose.open=function(...) return Runtime.call("editor.gen3.rs.chooseStarter",open,...) end
+      Party.giveMonToPlayer=function(...) return Runtime.call("editor.gen3.rs.giveStarter",give,...) end
+    end
+    local activeSlot
+    mod.hooks:wrap("editor.gen3.rs.chooseStarter",function(proceed,opts,...)
+      local copy={};for k,v in pairs(opts or {}) do copy[k]=v end
+      local done=copy.onDone
+      if done then copy.onDone=function(selection,...)
+        activeSlot=rseSlots[selection]
+        local ok,result=pcall(done,selection,...)
+        activeSlot=nil
+        if not ok then error(result) end
+        return result
+      end end
+      return proceed(copy,...)
+    end)
+    mod.hooks:wrap("editor.gen3.rs.giveStarter",function(proceed,session,species,level,nickname,...)
+      if activeSlot then species,level,nickname=activeSlot.index,activeSlot.level,activeSlot.nickname end
+      return proceed(session,species,level,nickname,...)
+    end)
+  end
   for _, rule in ipairs(starterRules) do if not rule.starterSlot then
     local target = assert(mod.content.pokemon:get(rule.species), "Unknown starter species: " .. rule.species)
     local sourceIndices = {}

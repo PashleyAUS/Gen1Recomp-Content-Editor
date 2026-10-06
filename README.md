@@ -3,6 +3,11 @@
 Author **mods** for Gen1Recomp: maps, Pokémon, trainers, dialog, items, moves,
 palettes, and talk scripts. Edits live under `mods/<id>/` — never the ROM cache.
 
+Supports Red, Blue, Yellow, Gold, Silver, Crystal, FireRed, LeafGreen, Ruby,
+Sapphire, and Emerald. Ruby and Sapphire use their native game profiles for
+ROM import, map editing, mod export, intro previews, and Playtest. Their credits
+are available as artwork; Emerald-only patches and wireless mini-games are hidden.
+
 Deep reference: [docs/content-editor.md](docs/content-editor.md)
 
 ---

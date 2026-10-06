@@ -22,7 +22,7 @@ function Generation.num(S)
     if gok and type(n) == "number" then return n end
   end
   local id = Generation.id(S)
-  if id == "firered" or id == "leafgreen" then return 3 end
+  if id == "firered" or id == "leafgreen" or id == "ruby" or id == "sapphire" or id == "emerald" then return 3 end
   return (id == "gold" or id == "silver" or id == "crystal") and 2 or 1
 end
 
@@ -33,7 +33,7 @@ function Generation.engine(S)
     if eok and type(engine) == "string" and engine ~= "" then return engine end
   end
   local id = Generation.id(S)
-  if id == "firered" or id == "leafgreen" then return "game3" end
+  if id == "firered" or id == "leafgreen" or id == "ruby" or id == "sapphire" or id == "emerald" then return "game3" end
   if id == "crystal" then return "crystal" end
   if id == "gold" or id == "silver" then return "gs" end
   return "gen1"
@@ -72,7 +72,7 @@ function Generation.isGen3(S)
   return Generation.num(S) == 3
 end
 
--- Gen 3 map IDs: FireRed and LeafGreen share FR_, Emerald uses EM_.
+-- Gen 3 map prefixes come from the selected runtime profile (FR_, EM_, RU_, SA_).
 function Generation.gen3MapPrefix(S)
   return require("src.core.game3.profile").of(Generation.id(S)).map.enginePrefix
 end

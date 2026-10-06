@@ -74,6 +74,10 @@ function M.emit(p,encode,out)
  out[#out+1]="local creditsMovie=(function()\n"..assert(love.filesystem.read("tools/content-editor/Gen3CreditsMovie.lua")).."\nend)()\nlocal screens=(function()\n"..assert(love.filesystem.read("tools/content-editor/Gen3ScreensRuntime.lua")).."\nend)()\nscreens.movie=creditsMovie\nscreens.install(mod,"..encode(payload)..")"
 end
 function M.draw(S,x,y,w,h,App,kind)
+ local game=require("Generation").id(S)
+ if kind=="credits" and (game=="ruby" or game=="sapphire") then
+  return require("Gen3Assets").draw(S,x,y,w,h,App,function(path) return path:find("/credits",1,true) end)
+ end
  if kind=="credits" and require("Generation").id(S)=="emerald" then require("Gen3RseCredits").draw(S,x,y,w,h,App);return end
  local K,C,IO=require("Kit"),require("ChoicePicker"),require("ModIO");local s=K.scale;local fh=28*s
  local defaults,err=M.defaults(S,kind);if not defaults then K.caption(x,y,tostring(err));return end

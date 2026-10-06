@@ -2,12 +2,15 @@ local M={}
 local games={slots="Slot Machine",crush="Berry Crush",jump="Pokemon Jump",dodrio="Dodrio Berry Picking"}
 function M.draw(S,x,y,w,h,App)
  local K=require("Kit");local P=require("ChoicePicker");local s=K.scale
+ local game=require("Generation").id(S);local rs=game=="ruby" or game=="sapphire"
+ if rs then S.g3Minigame="slots" end
  local id=games[S.g3Minigame] and S.g3Minigame or "slots"
- P.field(S,{x=x,y=y,w=w,h=28*s,ids={"slots","crush","jump","dodrio"},labels=games,current=id,title="CHOOSE MINI-GAME",onPick=function(v) S.g3Minigame=v;S.g3MinigameImage="1" end})
+ P.field(S,{x=x,y=y,w=w,h=28*s,ids=rs and {"slots"} or {"slots","crush","jump","dodrio"},labels=games,current=id,title="CHOOSE MINI-GAME",onPick=function(v) S.g3Minigame=v;S.g3MinigameImage="1" end})
  local top=require("RegList").modeChips(S,"g3MinigameView",{{id="playback",label="Animation preview"},{id="images",label="Image library"}},x,y+38*s,s)
  h=h-(top-y);y=top
  if S.g3MinigameView=="playback" then require("Gen3MinigamePreview").draw(S,id,x,y,w,h);return end
  require("Gen3MinigamePreview").stop(S)
+ if rs then return require("Gen3Assets").draw(S,x,y,w,h,App,function(path) return path:find("/slot_machine/",1,true) end) end
  local Images=require("Gen3MinigameImages");local ids,labels={},{}
  for i,rec in ipairs(Images.list(S,id)) do ids[i]=tostring(i);labels[tostring(i)]=rec.name end
  local selected=tostring(S.g3MinigameImage or "1");if not labels[selected] then selected="1" end

@@ -64,7 +64,7 @@ function M.installRse(mod,rows)
   end)
 end
 function M.install(mod,rows)
-  if require("src.core.GameVersion").get()=="emerald" then return M.installRse(mod,rows) end
+  if require("src.core.GameVersion").layout(require("src.core.GameVersion").get())=="rse" then return M.installRse(mod,rows) end
   local Field=require("src.core.game3.field")
   local Region=require("src.ui.game3.region_map")
   bridge(Field,"executeFieldMove","editor.gen3.fly")
