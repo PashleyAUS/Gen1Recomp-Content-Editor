@@ -10,6 +10,10 @@ package.preload["src.import.CacheBlob"]=function()
   end}
 end
 assert(Blob.decode("ruby/test.idx","deflated")=="decoded")
+local legacy="SVMI"..string.char(1,2,1,0,16,0,1,0,0,0)..string.rep("\0",256)
+assert(Blob.decode("emerald/data/generated/gba/native/general__lilycove/mids.idx",legacy)==legacy)
+assert(Blob.decode("emerald/data/generated/gba/native/general__lilycove/mids_over.idx",legacy)==legacy)
+assert(not pcall(Blob.decode,"ruby/test.idx","damaged compressed data"))
 assert(Blob.decode("ruby/missing.rgba",nil)==nil)
 package.loaded["src.core.GameVersion"]={cachePrefix=function(id) return id.."/" end,
   revisions=function() return {{sha1="abcd"}} end}
