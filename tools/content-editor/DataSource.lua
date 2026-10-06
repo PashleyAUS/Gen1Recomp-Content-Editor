@@ -206,6 +206,10 @@ end
 
 function DataSource.unmountLinked()
   if mountedRecomp then
+    if require("RuntimeMount").isRuntimePath(mountedRecomp) then
+      mountedRecomp=nil
+      return
+    end
     if type(CacheFs.unmountExternal) == "function" then
       pcall(CacheFs.unmountExternal, mountedRecomp)
     else

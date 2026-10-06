@@ -28,9 +28,54 @@ local function unchunk(bytes)
   return "return {\n"..table.concat(entries, ",\n").."\n}"
 end
 
+-- New RS manifests use single-quoted Lua strings. The bounded save parser
+-- accepts double quotes only; normalize literals without executing cache code.
+local function normalizeStrings(bytes)
+  if not bytes:find("'",1,true) then return bytes end
+  local out,pos={},1
+  while pos<=#bytes do
+    local c=bytes:sub(pos,pos)
+    if bytes:sub(pos,pos+1)=="--" then
+      local equals=bytes:match("^%-%-%[(=*)%[",pos)
+      local ending
+      if equals then
+        local close="]"..equals.."]"
+        local at=bytes:find(close,pos+4+#equals,true)
+        if not at then return nil,"Unterminated Lua comment" end
+        ending=at+#close-1
+      else ending=bytes:find("\n",pos,true) or #bytes end
+      out[#out+1]=bytes:sub(pos,ending);pos=ending+1
+    elseif c=='"' or c=="'" then
+      local quote=c;local parts={'"'};pos=pos+1;local closed=false
+      while pos<=#bytes do
+        c=bytes:sub(pos,pos)
+        if c==quote then closed=true;pos=pos+1;break end
+        if c=="\\" then
+          local nextChar=bytes:sub(pos+1,pos+1)
+          if nextChar=="'" then parts[#parts+1]="'"
+          else parts[#parts+1]=c..nextChar end
+          pos=pos+2
+        else
+          parts[#parts+1]=(quote=="'" and c=='"') and '\\"' or c
+          pos=pos+1
+        end
+      end
+      if not closed then return nil,"Unterminated Lua string" end
+      parts[#parts+1]='"';out[#out+1]=table.concat(parts)
+    else
+      local ending=bytes:find("[\"'%-]",pos+1) or (#bytes+1)
+      out[#out+1]=bytes:sub(pos,ending-1);pos=ending
+    end
+  end
+  return table.concat(out)
+end
+
 function M.decode(bytes, limits)
   if type(bytes)~="string" then return nil,"Expected Lua data text" end
   if #bytes>((limits or {}).maxBytes or 16*1024*1024) then return nil,"Lua data exceeds size limit" end
+  local normalized,problem=normalizeStrings(bytes)
+  if not normalized then return nil,problem end
+  bytes=normalized
   local value, err = Serializer.decode(bytes, limits)
   if not value and bytes:match("^%s*local T = {}") then
     local plain, problem = unchunk(bytes)

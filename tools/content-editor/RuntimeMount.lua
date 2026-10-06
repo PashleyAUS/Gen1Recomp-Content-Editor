@@ -3,7 +3,20 @@
 -- on desktop, so use the same native PHYSFS_mount entry point as Gen1Recomp's
 -- cache layer. This bootstrap deliberately has no runtime-module dependency.
 
+-- Bootstrap and editor panels require this file under different names.
+-- Share one mount owner so data unlinking cannot discard the code mount.
+local existing=package.loaded["RuntimeMount"] or package.loaded["tools.content-editor.RuntimeMount"]
+if type(existing)=="table" then return existing end
 local RuntimeMount = {}
+local runtimeRoot
+local function normalized(path)
+  local value=tostring(path or ""):gsub("\\","/"):gsub("/+$","")
+  if package.config:sub(1,1)=="\\" then value=value:lower() end
+  return value
+end
+function RuntimeMount.isRuntimePath(path)
+  return runtimeRoot~=nil and normalized(path)==normalized(runtimeRoot)
+end
 
 local function fileExists(path)
   local f = io.open(path, "rb")
@@ -215,13 +228,18 @@ local function tryMount(fs, candidates, fns)
   for i = 1, #candidates do
     for j = 1, #fns do
       pcall(fns[j], candidates[i])
-      if runtimeComplete(fs) then return true end
+      if runtimeComplete(fs) then
+        runtimeRoot=candidates[i]
+        addRequirePath(runtimeRoot)
+        return true
+      end
     end
   end
   if runtimeComplete(fs) then return true end
   for i = 1, #candidates do
     if requirePathComplete(candidates[i]) then
-      addRequirePath(candidates[i])
+      runtimeRoot=candidates[i]
+      addRequirePath(runtimeRoot)
       return true
     end
   end
@@ -236,6 +254,7 @@ function RuntimeMount.mountData(path)
 end
 
 function RuntimeMount.unmountData(path)
+  if RuntimeMount.isRuntimePath(path) then return true end
   if love.filesystem.unmountFullPath then return love.filesystem.unmountFullPath(path) end
   local ok,ffi=pcall(require,"ffi")
   if not ok then return false end
@@ -252,7 +271,11 @@ end
 
 function RuntimeMount.mount()
   local fs = assert(love and love.filesystem, "LÖVE filesystem unavailable")
-  if runtimeComplete(fs) then return true end
+  if runtimeComplete(fs) then
+    runtimeRoot=(fs.getRealDirectory and fs.getRealDirectory("src/core/GameVersion.lua")) or fs.getSource()
+    addRequirePath(runtimeRoot)
+    return true
+  end
 
   local separator = package.config:sub(1, 1)
   local source = assert(fs.getSource(), "LÖVE source directory unavailable")
@@ -268,7 +291,6 @@ function RuntimeMount.mount()
     end
     candidates[#candidates + 1] = path
   end
-  add(linkedRecompPath())
   if fileExists(archive) then add(archive) end
   if fileExists(fused) then add(fused) end
   if looksLikeRecomp(directory) then add(directory) end
@@ -297,4 +319,6 @@ function RuntimeMount.mount()
   return false
 end
 
+package.loaded["RuntimeMount"]=RuntimeMount
+package.loaded["tools.content-editor.RuntimeMount"]=RuntimeMount
 return RuntimeMount

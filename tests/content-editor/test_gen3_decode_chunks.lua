@@ -26,3 +26,11 @@ rejects("local T = {}\nreturn T\nos.exit()","Nothing may follow return T")
 rejects("local T = {}\nT[\"x\"] = {}","A chunked file must end with return T")
 assert(Decode.decode("return { a = 1 }",limits).a==1,"Plain tables still decode")
 print("PASS: chunked Gen 3 caches decode as data; code is rejected")
+
+local quoted=assert(Decode.decode([=[return {layout='rs',label='Birch\'s "Pokemon"',slash='a\\b',double="player's",nilValue=nil}]=],limits))
+assert(quoted.layout=="rs" and quoted.label==[[Birch's "Pokemon"]] and quoted.slash==[[a\b]] and quoted.double=="player's" and quoted.nilValue==nil)
+assert(Decode.decode([==[--[=[ an unmatched ' in a comment ]=]
+return {layout='rs'}]==],limits).layout=="rs")
+rejects("return {layout='rs',evil=os.exit()}","Single quotes must not allow executable code")
+rejects("return {layout='unterminated}","Unterminated strings rejected")
+print("PASS: single-quoted RS manifests, escaped quotes, nil fields and code rejection")
