@@ -5573,6 +5573,27 @@ function Maps._section.drawBasics(S, map, mutate, App, px, py, propW, listBottom
     end
   end) then return py end
 
+  if map._borderExplicit and type(map._borderTile2) == "number" then
+    if prow("Border direction", function(fx, fy, fw, fh_)
+      local LM = require("LayeredMap")
+      local direction = LM.borderDirection(map)
+      local gap = 6 * s
+      local bw = (fw - gap) / 2
+      for i, option in ipairs({ "vertical", "horizontal" }) do
+        if Kit.button(fx + (i - 1) * (bw + gap), fy, bw, fh_,
+            option == "vertical" and "Vertical" or "Horizontal", {
+              kind = direction == option and "accent" or nil,
+            }) and direction ~= option then
+          map = mutate()
+          LM.setExplicitBorder(map, map._borderSource, map._borderTile,
+            map._borderTile2, option)
+          MapLoader.invalidate(map.id)
+          App.markDirty()
+        end
+      end
+    end) then return py end
+  end
+
   if Generation.isGen2(S) then
     -- Gold: map.palette is PALETTE_AUTO / DAY / NITE / MORN / DARK (ToD pin).
     if prow("Map palette", function(fx, fy, fw, fh_)

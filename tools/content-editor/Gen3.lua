@@ -283,6 +283,7 @@ function Gen3.emit(project, encode)
   require("Gen3Clock").emit(project, encode, out)
   -- New Pokemon evolve from the start (no National Pokedex needed).
   require("Gen3NewPokemon").emit(project, encode, out)
+  require("Gen3EvolutionItems").emit(project, encode, out)
   -- Emerald: evolve by Cool, Beauty, Cute, Clever or Tough condition.
   require("Gen3ContestEvo").emit(project, contestEvos, encode, out)
   -- GAME PATCHES > Physical/Special split. After Gen3Native, so a move's

@@ -1,0 +1,1 @@
+{"id":"custom_stone_test","name":"Custom Stone Test","version":"0.1.0","api":2,"entry":"main.lua","profile":"content","games":["ruby"],"permissions":["engine_internals"]}

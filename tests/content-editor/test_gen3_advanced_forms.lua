@@ -95,7 +95,7 @@ return function(data,root,mount,game)
   Ui.handleInput({wasPressed=function(_,key) return key=="select" end});assert(st._editorAdvanced.requests[0],"SELECT did not queue transformation")
   Engine.planTurnFromActions(st,ad,{kind="move",move=33,slot=1},{kind="move",move=33,slot=1});assert(st.player.species==forms.ultra.index)
   local Battle=require("src.core.game3.battle");local original=mon(133);local originalMax=original.maxHp;local completed=false
-  assert(Battle.start({playerParty={original},foe=mon(113),wild=true,headless=true,autoFight=false,onDone=function()
+  assert(Battle.start({session={version=game},playerParty={original},foe=mon(113),wild=true,headless=true,autoFight=false,onDone=function()
     completed=true;assert(original.maxHp==originalMax and original.hp<=originalMax,"Giant HP leaked into completion callback")
   end}))
   local live=Battle.getState();assert(activate(live,"dynamax"));assert(original.maxHp==originalMax*2)

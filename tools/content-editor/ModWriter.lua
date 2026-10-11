@@ -2874,7 +2874,8 @@ function ModWriter.emitMain(project, baseData, derivedModId)
     out[#out + 1] = "    local rec = def and ((def.forms and def.forms[id])"
     out[#out + 1] = "      or (def.letters and def.letters[id]))"
     out[#out + 1] = "    if type(rec) == \"table\" then"
-    out[#out + 1] = "      local p = (ctx.side == \"back\") and rec.spriteBack or rec.spriteFront"
+    out[#out + 1] = "      local p"
+    out[#out + 1] = "      if ctx.side == \"back\" then p = rec.spriteBack else p = rec.spriteFront end"
     out[#out + 1] = "      if type(p) == \"string\" and p ~= \"\" then path = p end"
     out[#out + 1] = "    end"
     out[#out + 1] = "    return next(path, ctx)"
@@ -3281,6 +3282,7 @@ function ModWriter.emitMain(project, baseData, derivedModId)
       out[#out + 1] = ""
     end
   end
+  require("LegacyEvolutionItems").emit(project, gen2, ModWriter.encodeLua, out)
   local delI = {}
   for iid in pairs((project.deleted and project.deleted.items) or {}) do
     delI[#delI + 1] = iid

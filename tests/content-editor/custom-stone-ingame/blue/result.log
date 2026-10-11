@@ -1,0 +1,31 @@
+Export complete, loading runtime
+Starting game
+[info] generated data loaded (222 maps, 151 species, 165 moves)
+[info] loaded mod custom_stone_test 0.1.0
+[info] game loaded
+[info] display: 960x640 units, 960x640 px, fit scale 4 px/GB px
+[warn] saved position ROUTE_1 (5,5) is not walkable; moved to (4,4)
+[info] map: ROUTE_1 at (4,4)
+[info] map: ROUTE_1 at (4,4)
+PASS 2612_actual_stone_party_picker
+PASS 2612_party_picker_shot
+PASS 2612_intro_hold_reached
+PASS 2612_intro_shot
+PASS 2612_loading_reached
+PASS 2612_loading_shot
+PASS 2612_loading_no_party_obj_replay
+PASS 2612_old_form_flash_reached
+PASS 2612_old_flash_shot
+PASS 2612_old_flash_no_party_obj_replay
+PASS 2612_new_form_flash_reached
+PASS 2612_new_flash_shot
+PASS 2612_new_flash_no_party_obj_replay
+PASS 2612_finished_result_text_reached
+PASS 2612_result_shot
+PASS 2612_result_no_party_obj_replay
+PASS 2612_evolved_to_victreebel
+PASS 2612_one_custom_stone_consumed
+PASS 2612_movie_closed_after_result
+PASS 2612_returned_to_bag
+PASS 2612_returned_bag_shot
+

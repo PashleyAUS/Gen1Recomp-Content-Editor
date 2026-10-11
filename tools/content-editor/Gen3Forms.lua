@@ -2,6 +2,13 @@ local M={}
 local function copy(v) return require("src.mods.Merge").deepCopy(v) end
 -- Emerald's original Deoxys is Speed Forme; FireRed's is Attack Forme.
 local function emerald(S) return require("Generation").id(S)=="emerald" end
+function M.deoxysNames(S)
+  local game=require("Generation").id(S)
+  if game=="emerald" then return {"Speed","Normal","Attack","Defense"} end
+  if game=="leafgreen" then return {"Defense","Normal","Attack","Speed"} end
+  if game=="ruby" or game=="sapphire" then return {"Normal","Attack","Defense","Speed"} end
+  return {"Attack","Normal","Defense","Speed"}
+end
 function M.family(S,id)
   for parent,f in pairs(S.project.gen3Forms or {}) do
     if parent==id then return f,parent end
@@ -24,7 +31,7 @@ function M.encounterChoices(S,id)
   elseif parent=="CASTFORM" then
     for i,name in ipairs({"Normal","Sunny","Rainy","Snowy"}) do ids[#ids+1]=tostring(i);labels[tostring(i)]=name end
   elseif parent=="DEOXYS" then
-    for i,name in ipairs({emerald(S) and "Speed" or "Attack","Normal"}) do ids[#ids+1]=tostring(i);labels[tostring(i)]=name end
+    for i,name in ipairs(M.deoxysNames(S)) do ids[#ids+1]=tostring(i);labels[tostring(i)]=name end
   end
   local current="automatic"
   if family then for i,row in ipairs(family.forms) do if row.species==id and id~=parent then current=tostring(i) end end end
@@ -70,7 +77,7 @@ function M.spritePath(rec,back,shiny,S)
             local species,frame,palette
             if parent=="UNOWN" and i<=28 then species,frame,palette=411+i,0,0
             elseif parent=="CASTFORM" and i<=4 then species,frame,palette=385,i-1,i-1
-            elseif parent=="DEOXYS" and i==2 then species,frame,palette=410,0,0 end
+            elseif parent=="DEOXYS" and row.name=="Normal" then species,frame,palette=410,0,0 end
             if species then return "gen3-form-shiny/"..side:lower().."/"..species.."/"..frame.."/"..palette end
             local base=S.project.pokemon[parent] or S.data.pokemon[parent]
             if base then return M.spritePath(base,back,true) end
@@ -113,11 +120,14 @@ function M.template(S,parent)
     local _,normal=M.add(S,parent,"Normal");writePictures(S,normal,410,0,0)
     for _,name in ipairs({"Attack","Defense"}) do local row=M.add(S,parent,name);row.needsArtwork=true end
   elseif parent=="DEOXYS" then
-    family.forms[1].name="Attack"
+    local names=M.deoxysNames(S)
+    family.forms[1].name=names[1]
     local original=copy(S.project.pokemon[parent] or S.data.pokemon[parent]);S.project.pokemon[parent]=original
-    writePictures(S,original,410,0,0);family.forms[1].needsArtwork=true
-    local _,normal=M.add(S,parent,"Normal");writePictures(S,normal,410,0,0)
-    for _,name in ipairs({"Defense","Speed"}) do local row=M.add(S,parent,name);row.needsArtwork=true end
+    writePictures(S,original,410,0,0);family.forms[1].needsArtwork=names[1]~="Normal" or nil
+    for i=2,4 do
+      local row,rec=M.add(S,parent,names[i])
+      if names[i]=="Normal" then writePictures(S,rec,410,0,0) else row.needsArtwork=true end
+    end
   end
   return family
 end
@@ -130,7 +140,7 @@ function M.draw(S,mon,x,y,w,App)
       local ids,labels={},{}
       for i=1,28 do ids[i]=i;labels[i]=i<=26 and string.char(64+i) or i==27 and "!" or "?" end
       if parent=="CASTFORM" then ids={1,2,3,4};labels={"Normal","Sunny","Rainy","Snowy"}
-      elseif parent=="DEOXYS" then ids={1,2,3,4};labels=emerald(S) and {"Speed","Normal","Attack","Defense"} or {"Attack","Normal","Defense","Speed"} end
+      elseif parent=="DEOXYS" then ids={1,2,3,4};labels=M.deoxysNames(S) end
       S.g3NativeForms=S.g3NativeForms or {}
       local nativeSelection=parent=="UNOWN" and (S.g3NativeUnown or 1) or (S.g3NativeForms[parent] or 1)
       C.field(S,{x=x,y=y,w=w,h=30*s,current=nativeSelection,ids=ids,labels=labels,title="Pokemon form",onPick=function(id) if parent=="UNOWN" then S.g3NativeUnown=id end;S.g3NativeForms[parent]=id end});y=y+40*s
@@ -140,7 +150,7 @@ function M.draw(S,mon,x,y,w,App)
       S._nativeFormPictures=S._nativeFormPictures or {}
       local cacheKey=parent..selected
       local speed=parent=="DEOXYS" and selected==1 and emerald(S)
-      local available=parent~="DEOXYS" or selected==2 or speed
+      local available=parent~="DEOXYS" or labels[selected]=="Normal" or speed
       if available and not S._nativeFormPictures[cacheKey] then
         local ok,pictures=pcall(function()
           local species=parent=="UNOWN" and (selected==1 and 201 or 411+selected) or parent=="CASTFORM" and 385 or 410

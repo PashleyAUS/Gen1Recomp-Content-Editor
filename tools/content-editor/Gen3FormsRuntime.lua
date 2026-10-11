@@ -116,7 +116,7 @@ function M.install(mod,configs,species,artwork)
   for _,side in ipairs({"front","back"}) do
     local method=side.."Pic";local hook="editor.gen3.forms."..side
     bridge(P,method,hook)
-    mod.hooks:wrap(hook,function(proceed,species,form,shiny)
+    mod.hooks:wrap(hook,function(proceed,species,form,shiny,personality)
       local rec=records[tonumber(species)]
       local path=rec and rec[side=="front" and "spriteFront" or "spriteBack"]
       local customShiny=shiny and rec and artwork and artwork[rec.id] and artwork[rec.id][side]
@@ -135,7 +135,11 @@ function M.install(mod,configs,species,artwork)
         end
         return pictures[path]
       end
-      local entry=proceed(species,form);local f=families[tonumber(species)]
+      -- New Species starts with a native sprite path from its template.
+      -- Resolve that source instead of looking for artwork at the new index.
+      local source=path and tonumber(path:match("^data/generated/gba/pokemon/"..side.."/(%d+)%.rgba$"))
+      if source and source~=tonumber(species) then return proceed(source,form,shiny,personality) end
+      local entry=proceed(species,form,shiny,personality);local f=families[tonumber(species)]
       if not entry and f and tonumber(species)~=f.index then return proceed(f.index,0) end
       return entry
     end)

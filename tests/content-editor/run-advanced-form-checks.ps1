@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory=$true)][string]$Runtime,
-  [ValidateSet('firered','leafgreen')][string]$Game = 'firered',
+  [ValidateSet('firered','leafgreen','ruby','sapphire','emerald')][string]$Game = 'firered',
   [string]$Cache
 )
 $ErrorActionPreference = 'Stop'

@@ -1,0 +1,74 @@
+Export complete, loading runtime
+Starting game
+[game3/space] script bundle events=425 fromCache=true
+[game3/pokemon] species pack ready (412)
+[game3/party_chrome] party chrome manifest ready
+[game3/encounters] loaded 420 map tables (ROM extract)
+[game3/dataset] hydrated 426 maps midLayouts=425 eventMaps=425 (start=FR_PLAYERS_HOUSE_2F)
+[game3/items] pack ready (375)
+[warn] mod mods/examples ignored: Could not open file mods/examples/manifest.json. Does not exist.
+[info] mod example_lttp_overhaul skipped: For Gen 1, not FireRed
+[info] mod my_content skipped: For Emerald, not FireRed
+[error] mod mystery_dungeon_follower failed: required asset pack unavailable: Pokémon Mystery Dungeon / sprites: pack is not installed -- import it from the launcher's IMPORTERS tab
+[info] loaded mod custom_stone_test 0.1.0
+[FireRed Voxel World] Ready: F7 orbit, F6 reset, F8 original/3D
+[info] loaded mod firered_hgss_voxel 0.2.1
+[info] loaded mod example_mew_starter 1.0.0
+[game3/party_chrome] party chrome manifest ready
+[game3/battle_chrome] battle chrome ready (v7)
+[game3/items] pack ready (376)
+[game3] ACTIVE engine=game3 map=FR_PLAYERS_HOUSE_2F pos=6,6 reason=new_game
+[game3/player] avatar ready @ 6,6 down
+[game3/collision] grid ready (native) map=FR_PLAYERS_HOUSE_2F cells=12x10 warps=1
+[game3/objects] spawned 0 objects on FR_PLAYERS_HOUSE_2F
+[game3/pokemon] species pack ready (412)
+[game3/party_chrome] party chrome manifest ready
+[game3/battle_chrome] battle chrome ready (v7)
+[game3/objects] reloaded 0 objects on FR_PLAYERS_HOUSE_2F (kept tracks)
+[game3/native] atlas ready pair=player_house mids=209 256x224 layered=true
+[game3/ow] sprites ready (152 sheets)
+[game3] warped via game3 map loader → FR_PLAYERS_HOUSE_2F
+[game3/field] native mid atlas ON pair=player_house
+PASS new game reached the game3 field
+PASS party holds PIKACHU and NIDORINA
+[game3] Start Menu on game3 display (FRLG 240x160)
+[game3/frlg_font] latin_normal ready chrome/fonts/latin_normal_fg.rgba
+PASS CUSTOM STONE: start menu opened
+[game3/bag_chrome] bg ready
+[game3/frlg_font] latin_small ready chrome/fonts/latin_small_fg.rgba (ROM FONT_SMALL)
+PASS CUSTOM STONE: bag opened from the start menu
+PASS CUSTOM STONE is in the ITEMS pocket
+PASS CUSTOM STONE: cursor on the stone
+PASS CUSTOM STONE: item action menu opened
+[game3/party_chrome] party chrome manifest ready
+PASS CUSTOM STONE: party menu opened for the stone
+PASS EVO_MODE_ITEM_CHECK says NIDORINA can use a CUSTOM STONE
+PASS EVO_MODE_ITEM_CHECK says PIKACHU cannot
+PASS the party box recognizes the custom item as an evolution stone
+PASS cursor on NIDORINA
+[game3/battle_chrome] battle chrome ready (v7)
+PASS CUSTOM STONE started the evolution scene
+PASS CUSTOM STONE scene closed
+PASS NIDORINA evolved into NIDOQUEEN
+PASS the CUSTOM STONE was consumed
+PASS the party list is back with no lingering description
+PASS menus closed after the CUSTOM STONE
+[game3] Start Menu on game3 display (FRLG 240x160)
+PASS THUNDERSTONE: start menu opened
+PASS THUNDERSTONE: bag opened from the start menu
+PASS THUNDERSTONE is in the ITEMS pocket
+PASS THUNDERSTONE: cursor on the stone
+PASS THUNDERSTONE: item action menu opened
+[game3/party_chrome] party chrome manifest ready
+PASS THUNDERSTONE: party menu opened for the stone
+PASS EVO_MODE_ITEM_CHECK says PIKACHU can use a THUNDERSTONE
+PASS EVO_MODE_ITEM_CHECK says NIDOQUEEN cannot
+PASS cursor on PIKACHU
+[game3/battle_chrome] battle chrome ready (v7)
+PASS THUNDERSTONE started the evolution scene
+PASS THUNDERSTONE scene closed
+PASS PIKACHU evolved into RAICHU
+PASS the THUNDERSTONE was consumed
+PASS the party list is back with both HP bars
+PASS evolution_stone
+

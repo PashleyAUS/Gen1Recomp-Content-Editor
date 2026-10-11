@@ -152,8 +152,17 @@ function LayeredMap.borderCellTile(map, cellX, cellY)
   return (tonumber(map.borderBlock) or 0) * 4 + (cy % 2) * 2 + (cx % 2)
 end
 
-function LayeredMap.setExplicitBorder(map, sourceId, tileA, tileB)
+function LayeredMap.borderDirection(map)
+  local cells = map and map._borderCells
+  if cells and cells[1] and cells[2] then
+    return (cells[1].dy or 0) ~= (cells[2].dy or 0) and "vertical" or "horizontal"
+  end
+  return "vertical"
+end
+
+function LayeredMap.setExplicitBorder(map, sourceId, tileA, tileB, direction)
   if type(map) ~= "table" then return end
+  direction = direction or LayeredMap.borderDirection(map)
   map._borderExplicit = true
   map._borderSource = sourceId
   map._borderTile = tonumber(tileA) or 0
@@ -162,7 +171,8 @@ function LayeredMap.setExplicitBorder(map, sourceId, tileA, tileB)
     map._borderTile2 = b
     map._borderCells = {
       { dx = 0, dy = 0, tile = map._borderTile },
-      { dx = 1, dy = 0, tile = b },
+      { dx = direction == "horizontal" and 1 or 0,
+        dy = direction == "horizontal" and 0 or 1, tile = b },
     }
   else
     map._borderTile2 = nil

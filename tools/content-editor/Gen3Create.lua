@@ -36,8 +36,8 @@ function M.open(S,kind,App)
     ids=require("RegList").mergeIds(S.project.moves,S.data.moves)
     for _,id in ipairs(ids) do local rec=S.project.moves[id] or S.data.moves[id];labels[id]=(rec.name or id).." - "..(rec.type or "NORMAL") end
   else
-    ids={"POTION","LEFTOVERS","NUGGET","CARD_KEY"}
-    labels={POTION="Healing medicine - restores 20 HP",LEFTOVERS="Held item - start from Leftovers",NUGGET="Collectible - an item to sell",CARD_KEY="Key item - important, not usable"}
+    ids={"POTION","FIRE_STONE","LEFTOVERS","NUGGET","CARD_KEY"}
+    labels={POTION="Healing medicine - restores 20 HP",FIRE_STONE="Evolution stone - evolves a Pokemon using an EVO_ITEM rule",LEFTOVERS="Held item - start from Leftovers",NUGGET="Collectible - an item to sell",CARD_KEY="Key item - important, not usable"}
   end
   require("ChoicePicker").open(S,{ids=ids,labels=labels,title=kind=="moves" and "NEW MOVE - CHOOSE A MOVE TO START FROM" or "NEW ITEM - CHOOSE A STARTING POINT",onPick=function(id) M.create(S,kind,id);App.markDirty() end})
 end

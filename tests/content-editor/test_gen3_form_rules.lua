@@ -80,7 +80,7 @@ return function(data,root,mount,game)
   st,ad=battle(19);st.enemy.mon.hp=1;Engine.resolveMove(st.player,st.enemy,33,1,ad,st,{},{});assert(st.player.species==koform.index)
   local Battle=require("src.core.game3.battle")
   local original=mon(25);local completed=false
-  assert(Battle.start({playerParty={original},foe=mon(113),wild=true,headless=true,autoFight=false,onDone=function()
+  assert(Battle.start({session={version=game},playerParty={original},foe=mon(113),wild=true,headless=true,autoFight=false,onDone=function()
     completed=true;assert(original.species==25);assert(original.attack==P.calcStats(25,40,{}, {},1).attack,"Cleanup left form stats")
   end}))
   local live=Battle.getState();live.rng=function(a,b) return a end;local liveAd=Adapter.new(live,function() end)

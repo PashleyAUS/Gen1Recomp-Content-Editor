@@ -17,11 +17,19 @@ local M = {}
 function M.compile(project)
   local records = ((project.gen3 or {}).pokemon) or {}
   local modes = ((project.gen3Modes or {}).pokemon) or {}
-  local new, byId = {}, {}
+  local new, byId, entries, national = {}, {}, {}, {}
   for id, rec in pairs(records) do
     if modes[id] == "register" and type(rec) == "table" and tonumber(rec.index) then
       new[tonumber(rec.index)] = true
       byId[id] = tonumber(rec.index)
+      national[tonumber(rec.index)] = tonumber(rec.dex)
+      local dex = rec.dexEntry or {}
+      entries[tonumber(rec.index)] = {
+        category = dex.kind or "???", height = dex.height or 0,
+        weight = dex.weight or 0, description = "", description2 = "",
+        pokemonScale = 256, pokemonOffset = 0,
+        trainerScale = 256, trainerOffset = 0,
+      }
     end
   end
   if not next(new) then return nil end
@@ -36,7 +44,7 @@ function M.compile(project)
     end
     if fixes[id] and byId[id] then indices[id] = byId[id] end
   end
-  return { new = new, fixes = fixes, indices = indices }
+  return { new = new, fixes = fixes, indices = indices, entries = entries, national = national }
 end
 
 function M.emit(project, encode, out)
@@ -45,7 +53,35 @@ function M.emit(project, encode, out)
   out[#out + 1] = "  local newPokemon=" .. encode(data) .. "\n" .. [=[
   -- New Pokemon evolve without the National Pokedex, and evolutions into
   -- them keep their target (Gen3NewPokemon.lua).
+  local dexInstalled=false
+  local nationalInstalled=false
   mod.events:on("game.ready",function()
+    -- The catch screen reads a separate species-keyed Pokédex pack, not
+    -- Pokemon._dex (which the content registry updates by national number).
+    if not dexInstalled then
+    local okD,DexData=pcall(require,"src.core.game3.pokedex_data")
+    if okD and type(DexData)=="table" and type(DexData.init)=="function" then
+      local init=DexData.init
+      DexData.init=function(...)
+        local result=init(...)
+        for species,entry in pairs(newPokemon.entries) do DexData._entries[species]=entry end
+        return result
+      end
+    end
+    -- Emerald and Ruby/Sapphire read that pack through Mapsec instead.
+    local okM,Mapsec=pcall(require,"src.ui.game3.rse.mapsec")
+    if okM and type(Mapsec)=="table" and type(Mapsec.readLua)=="function" then
+      local read=Mapsec.readLua
+      Mapsec.readLua=function(path,...)
+        local pack=read(path,...)
+        if path=="pokemon/pokedex/entries.lua" and type(pack)=="table" then
+          for species,entry in pairs(newPokemon.entries) do pack[species]=entry end
+        end
+        return pack
+      end
+    end
+    dexInstalled=true
+    end
     local okE,Evolution=pcall(require,"src.core.game3.evolution")
     if okE and type(Evolution)=="table" and type(Evolution.nationalAllows)=="function" and not Evolution._newPokemonPatched then
       local allows=Evolution.nationalAllows
@@ -56,7 +92,26 @@ function M.emit(project, encode, out)
       Evolution._newPokemonPatched=true
     end
     local okP,Pokemon=pcall(require,"src.core.game3.pokemon")
-    if not okP or type(Pokemon)~="table" or type(Pokemon.evolutions)~="function" then return end
+    if not okP or type(Pokemon)~="table" then return end
+    local function mendNational()
+      local pack=Pokemon._national
+      if not pack then return end
+      pack.toNational=pack.toNational or {};pack.toSpecies=pack.toSpecies or {}
+      for species,nat in pairs(newPokemon.national) do
+        pack.toNational[species]=nat
+        -- Forms keep their parent's reverse mapping.
+        local old=pack.toSpecies[nat]
+        if not old or old==0 or (nat>386 and (not newPokemon.new[old] or species<old)) then
+          pack.toSpecies[nat]=species
+        end
+      end
+    end
+    mendNational()
+    if not nationalInstalled and type(Pokemon.onReload)=="function" then
+      Pokemon.onReload(mendNational)
+      nationalInstalled=true
+    end
+    if type(Pokemon.evolutions)~="function" then return end
     local byNum
     local function fixesFor(num)
       if not byNum then
