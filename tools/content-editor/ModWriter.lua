@@ -5673,6 +5673,13 @@ function ModWriter.emitGoldGiveSpecial(out, cmd)
   out[#out + 1] = "      if not (data and save) then return end"
   out[#out + 1] = "      local spec = SPECIALS[specialId]"
   out[#out + 1] = "      if not spec then return end"
+  out[#out + 1] = "      if ctx.vm and ctx.vm.facePlayerFn then ctx.vm.facePlayerFn() end"
+  out[#out + 1] = "      save.flags = save.flags or {}"
+  out[#out + 1] = "      if spec.flag and save.flags[spec.flag] then"
+  out[#out + 1] = "        if ctx.vm then ctx.vm:showRaw(spec.after) end"
+  out[#out + 1] = "        return"
+  out[#out + 1] = "      end"
+  out[#out + 1] = "      if ctx.vm then ctx.vm:showRaw(spec.text) end"
   out[#out + 1] = "      local Mon = require(\"src.battle.gen2.Mon\")"
   out[#out + 1] = "      local Party = require(\"src.pokemon.Party\")"
   out[#out + 1] = "      local opts = {}"
@@ -5697,7 +5704,11 @@ function ModWriter.emitGoldGiveSpecial(out, cmd)
   out[#out + 1] = "      if not mon then return end"
   out[#out + 1] = "      Mon.stampOT(save, mon)"
   out[#out + 1] = "      save.party = save.party or {}"
-  out[#out + 1] = "      Party.add(save.party, mon)"
+  out[#out + 1] = "      if not Party.add(save.party, mon) then"
+  out[#out + 1] = "        if ctx.vm then ctx.vm:showRaw(\"Your party is full. Make room and come back.\") end"
+  out[#out + 1] = "        return"
+  out[#out + 1] = "      end"
+  out[#out + 1] = "      if spec.flag then save.flags[spec.flag] = true end"
   out[#out + 1] = "      local dex = save.pokedex"
   out[#out + 1] = "      if dex then"
   out[#out + 1] = "        dex.seen = dex.seen or {}"
@@ -5756,6 +5767,13 @@ function ModWriter.emitSpecialEncounters(project, out, gen2)
       species = spec.species or "MAGIKARP",
       level = tonumber(spec.level) or 5,
     }
+    if gen2 then
+      local State = require("State")
+      entry.flag = spec.unique ~= false and State.modFlag(project,
+        (spec.flag and spec.flag ~= "" and spec.flag) or ("GOT_" .. sid)) or nil
+      entry.text = spec.text or "Here! Take this POKeMON!"
+      entry.after = spec.after or "I already gave you one."
+    end
     if type(spec.moves) == "table" and #spec.moves > 0 then
       entry.moves = {}
       for i = 1, math.min(4, #spec.moves) do
@@ -5922,12 +5940,14 @@ function ModWriter.applySpecialEncounterBinds(project, scripts)
         else
           local intro = spec.text or "Here! Take this POKeMON!"
           local after = spec.after or "I already gave you one."
+          rows[#rows + 1] = { "face_player" }
           if unique then
             rows[#rows + 1] = { "check_flag", done }
             rows[#rows + 1] = { "jump_if_true", "after_mon" }
           end
           rows[#rows + 1] = { "show_text", intro }
           rows[#rows + 1] = { cmd, sid }
+          rows[#rows + 1] = { "jump_if_false", "end" }
           if unique then
             rows[#rows + 1] = { "set_flag", done }
             rows[#rows + 1] = { "jump", "end" }
@@ -6070,12 +6090,7 @@ function ModWriter.applyGen2FixedWildBinds(project, baseData)
   end
 end
 
--- Gold: wire bindTextId specials (Encounters tab) into project.scripts as
--- Gen2 opcode rows. No numeric mod event id is allocated yet (Gen2 setevent
--- takes a bitfield index, not a string flag), so a gift script has no
--- oneshot latch here — it always hands out its mon when talked to again.
--- Gifts with dvs/moves route through the give_special modcommand
--- (emitSpecialEncounters); plain gifts use the givepoke opcode directly.
+-- Gold gifts use a mod command for saved named completion flags and custom stats.
 function ModWriter.applySpecialEncounterBindsGold(project)
   local specs = project.specialEncounters
   if type(specs) ~= "table" or not next(specs) then return end
@@ -6093,25 +6108,10 @@ function ModWriter.applySpecialEncounterBindsGold(project)
         and spec.bindTextId or ("mod:SPECIAL_" .. sid)
       local textKey = key .. "_TEXT"
       project.text[textKey] = spec.text or "Here! Take this POKeMON!"
-      local hasDvsOrMoves = (type(spec.dvs) == "table" and next(spec.dvs) ~= nil)
-        or (type(spec.moves) == "table" and #spec.moves > 0)
-      local giveStep
-      if hasDvsOrMoves then
-        giveStep = { op = "modcommand", verb = cmd, args = { sid } }
-      else
-        giveStep = {
-          op = "givepoke",
-          species = spec.species or 1,
-          level = tonumber(spec.level) or 5,
-          item = 0, trainer = 0,
-        }
-      end
       project.scripts[key] = {
         { op = "faceplayer" },
         { op = "opentext" },
-        { op = "writetext", text = textKey },
-        { op = "waitbutton" },
-        giveStep,
+        { op = "modcommand", verb = cmd, args = { sid } },
         { op = "closetext" },
         { op = "end" },
       }

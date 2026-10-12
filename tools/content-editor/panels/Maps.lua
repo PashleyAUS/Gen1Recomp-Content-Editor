@@ -6733,7 +6733,7 @@ function Maps._section.drawObjects(S, map, mutate, App, px, py, propW, listBotto
         map.objects[i].scriptKey = (key ~= "" and key) or nil
       end
     end)
-    row("Event flag", function(fx, fy, fw, fh_)
+    row("Hide event flag", function(fx, fy, fw, fh_)
       local cur = tonumber(obj.eventFlag) or 0
       local v = tonumber(field(App, "ob_ef", fx, fy, 80 * s, fh_,
         tostring(cur), "0")) or 0
