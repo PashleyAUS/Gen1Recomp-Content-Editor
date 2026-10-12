@@ -1,0 +1,54 @@
+RUNNING
+[game3/space] script bundle events=394 fromCache=true
+[game3/pokemon] species pack ready (412)
+[game3/encounters] loaded 291 map tables (ROM extract)
+[game3/dataset] hydrated 394 maps midLayouts=394 eventMaps=394 (start=SA_INSIDE_OF_TRUCK)
+[game3/items] pack ready (349)
+[info] loaded mod Megas 0.1.0
+[game3/battle_chrome] battle chrome ready (v7)
+[game3/items] pack ready (352)
+[game3] ACTIVE engine=game3 map=SA_INSIDE_OF_TRUCK pos=2,2 reason=new_game
+[game3/player] avatar ready @ 2,2 down
+[game3/collision] grid ready (native) map=SA_INSIDE_OF_TRUCK cells=6x6 warps=3
+[game3/objects] spawned 3 objects on SA_INSIDE_OF_TRUCK
+[game3/pokemon] species pack ready (412)
+[warn] [gen3] mod species data not re-applied after reload: src/mods/Schemas.lua:1352: bad argument #4 to 'vanillaSprite' (number expected, got string)
+[game3/battle_chrome] battle chrome ready (v7)
+[game3/objects] reloaded 3 objects on SA_INSIDE_OF_TRUCK (kept tracks)
+[game3/native] atlas ready pair=general__inside_of_truck mids=550 256x560 layered=true
+[game3/ow] sprites ready (218 sheets)
+[game3] warped via game3 map loader → SA_INSIDE_OF_TRUCK
+[game3/field] native mid atlas ON pair=general__inside_of_truck
+TEST SHIFTRY base=300 mega=443 item=349
+PASS SHIFTRY starts as base in party
+PASS SHIFTRY starts as base in battle
+PASS screenshot SHIFTRY_01_base
+PASS SHIFTRY FIGHT opens move menu
+PASS SHIFTRY SELECT queues base -> Mega
+PASS screenshot SHIFTRY_02_selected
+PASS SHIFTRY Mega activates before the move
+PASS SHIFTRY saved party identity remains base while Mega
+PASS screenshot SHIFTRY_03_mega
+PASS SHIFTRY completed battle by winning (result=win)
+PASS SHIFTRY returns to base in party after battle
+PASS SHIFTRY temporary Mega state cleared
+PASS SHIFTRY Mega Stone retained
+PASS SHIFTRY next battle starts as base again
+PASS screenshot SHIFTRY_04_next_battle_base
+TEST TORKOAL base=321 mega=441 item=347
+PASS TORKOAL starts as base in party
+PASS TORKOAL starts as base in battle
+PASS screenshot TORKOAL_01_base
+PASS TORKOAL FIGHT opens move menu
+PASS TORKOAL SELECT queues base -> Mega
+PASS screenshot TORKOAL_02_selected
+PASS TORKOAL Mega activates before the move
+PASS TORKOAL saved party identity remains base while Mega
+PASS screenshot TORKOAL_03_mega
+PASS TORKOAL completed battle by winning (result=win)
+PASS TORKOAL returns to base in party after battle
+PASS TORKOAL temporary Mega state cleared
+PASS TORKOAL Mega Stone retained
+PASS TORKOAL next battle starts as base again
+PASS screenshot TORKOAL_04_next_battle_base
+RESULT: 0 failure(s)

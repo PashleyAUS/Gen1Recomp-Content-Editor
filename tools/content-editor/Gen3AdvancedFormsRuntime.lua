@@ -128,7 +128,7 @@ function M.install(mod,configs,typeIds)
     st._editorAdvanced=nil
   end
   mod.hooks:wrap("editor.gen3.advanced.activate",function(_,st,b,kind)
-    for _,c in ipairs(candidates(b)) do if c.kind==kind then return activate(st,b,c) end end
+    for _,c in ipairs(candidates(b)) do if c.kind==kind and b.species==c.source then return activate(st,b,c) end end
     return false,"No matching transformation."
   end)
   local function entry(st,b,ad)
