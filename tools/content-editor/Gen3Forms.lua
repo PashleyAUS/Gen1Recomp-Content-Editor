@@ -131,6 +131,16 @@ function M.template(S,parent)
   end
   return family
 end
+function M.editSelection(S,f,parent,species)
+  S.g3FormSelection=S.g3FormSelection or {}
+  if S._g3FormSpecies~=species then
+    for i,row in ipairs(f.forms) do
+      if row.species==species then S.g3FormSelection[parent]=i;break end
+    end
+    S._g3FormSpecies=species
+  end
+  return math.max(1,math.min(S.g3FormSelection[parent] or 1,#f.forms))
+end
 function M.draw(S,mon,x,y,w,App)
   local K,C=require("Kit"),require("ChoicePicker");local s=K.scale
   local family,parent=M.family(S,mon.id);parent=parent or mon.id
@@ -189,7 +199,7 @@ function M.draw(S,mon,x,y,w,App)
     tooltip="Fixed forms include regional variants. Held-item forms update when giving/taking items or entering battle. Gender forms use the Pokemon's gender. Existing moves and PP are preserved when changing forms. Weather forms keep the original stats and moves.",
     onPick=function(id) family.mode=id;App.markDirty() end});y=y+40*s
   local ids,names={},{};for i,row in ipairs(family.forms) do ids[#ids+1]=tostring(i);names[tostring(i)]=row.name end
-  S.g3FormSelection=S.g3FormSelection or {};local selection=math.min(S.g3FormSelection[parent] or 1,#ids)
+  local selection=M.editSelection(S,family,parent,mon.id)
   C.field(S,{x=x,y=y,w=w-180*s,h=30*s,current=tostring(selection),ids=ids,labels=names,title="Form to edit",tooltip="Select the form whose settings you want to edit. This does not change a Pokemon in the player's party.",onPick=function(id) S.g3FormSelection[parent]=tonumber(id) end})
   if K.button(x+w-170*s,y,170*s,30*s,"Add custom form",{kind="good",tooltip="Create a new species record for this family, starting with the parent's data. Configure its artwork, stats and selection rules afterward."}) then M.add(S,parent);S.g3FormSelection[parent]=#family.forms;App.markDirty() end;y=y+42*s
   local row=family.forms[selection];local rec=S.project.pokemon[row.species] or S.data.pokemon[row.species]

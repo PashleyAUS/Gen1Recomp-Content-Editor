@@ -28,6 +28,9 @@ function M.draw(S,f,selection,x,y,w,App)
   if not c.kind or c.kind=="none" then return y end
   local ids,labels={},{};for i,r in ipairs(f.forms) do ids[i]=i;labels[i]=r.name end
   field("from",ids,labels,"Required starting form",1)
+  local source=f.forms[c.from or 1]
+  K.caption(x,y,"Transformation: "..(source and source.name or "Unknown").." -> "..row.name);y=y+28*s
+  K.caption(x,y,"The selected form is the result. Configure Mega Evolution on the Mega form.");y=y+28*s
   for _,entry in ipairs({{"item","Required held item (optional)"},{"keyItem","Required Key Item (optional)"}}) do
     local key,title=entry[1],entry[2];K.caption(x,y,title);y=y+26*s
     require("ItemPicker").field(S,{x=x,y=y,w=w-100*s,h=30*s,current=c[key],title=title,tooltip=H.advanced[key],onPick=function(v) c[key]=v;App.markDirty() end})
