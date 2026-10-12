@@ -298,6 +298,11 @@ return function(data, encode)
       end
       ts.image,ts.imageData=bake(under,false)
       if over then ts.overImage,ts.overImageData=bake(over,true) end
+      -- Runtimes from 0.3.6x draw from two textures in turn (NativeTileset.flush
+      -- swaps ts.image and ts.imageAlt and only copies the changed cells into the
+      -- other one). A second texture made before this patch holds the game's
+      -- unedited atlas: drop it, so the next swap makes one from this picture.
+      ts.imageAlt,ts.overImageAlt,ts._pend,ts._dirtyUnder,ts._dirtyOver=nil,nil,nil,nil,nil
       ts.idxBlob=NativePack.encodeIdx(under)
       if over then ts.overBlob=NativePack.encodeIdx(over) end
       ts.cols,ts.rows,ts.midCount=cols,rows,under.midCount
@@ -414,7 +419,11 @@ return function(data, encode)
           end
           local index={}
           for i,mid in ipairs(mids) do index[mid]=i-1 end
-          bank.mids,bank.midIndex,bank.rgba=mids,index,table.concat(chunks)
+          -- A new bank table: runtimes from 0.3.6x cache each frame's picture in
+          -- bank.pieces by position in the list (and warm them up in the
+          -- background from the bank they started on), so changing this one in
+          -- place would paste other blocks' frames over these.
+          entry.banks[kind]={mids=mids,midIndex=index,rgba=table.concat(chunks),frames=bank.frames}
         end
       end
       -- The engine may already have pasted its own frames over blocks that
@@ -425,9 +434,13 @@ return function(data, encode)
         local slot,static=ts.midToSlot[mid],ts._g3Static and ts._g3Static[mid]
         if slot and static then
           ts.imageData:paste(love.image.newImageData(16,16,"rgba8",table.concat(static)),slot%cols*16,math.floor(slot/cols)*16)
+          if T.markDirty then T.markDirty(ts,false,slot) end
         end
       end
-      if next(restore) and ts.image and ts.image.replacePixels then ts.image:replacePixels(ts.imageData) end
+      if next(restore) then
+        if T.flush and T.markDirty then T.flush(ts,true,false)          -- both textures (0.3.6x)
+        elseif ts.image and ts.image.replacePixels then ts.image:replacePixels(ts.imageData) end
+      end
       for _,kind in ipairs({"water","sand","flower"}) do
         pcall(Anim._applyKind,entry,kind,Anim["_"..kind.."Frame"] or 0)
       end
