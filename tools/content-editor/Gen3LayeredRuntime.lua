@@ -238,6 +238,15 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
       love.graphics.pop();renderNative=nil;batches,order=nil,nil
       if not ok then error(err) end
     end
+    -- The atlas a cell is redrawn from, loaded: runtimes from 0.3.6x release
+    -- atlases beyond NativeTileset.RESIDENT_MAX (their images go nil), so an
+    -- atlas held from before may be empty -- fetch it again then.
+    local function loaded(pair)
+      local ts=T._pairs[pair]
+      if not (ts and ts.image) then ts=T.get(pair) end
+      if ts and ts.image then return ts end
+      return nil
+    end
     local function animate(entry)
       if #entry.frameRefs==0 then return end
       local dirty
@@ -246,9 +255,20 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
         local anim=ref.pair and NativeAnim._pairs and NativeAnim._pairs[ref.pair]
         local current=ref.kind and nativeFrame(anim,ref.kind)
         if frame~=ref.frame or current~=ref.nativeFrame then
-          dirty=dirty or {};dirty[state.slot]=true
-          ref.frame,ref.nativeFrame=frame,current
-          if ref.pair then entry.resolved[ref.pair]=T._pairs[ref.pair] or entry.resolved[ref.pair] end
+          -- A cell is cleared before it is redrawn: only redraw it when every
+          -- atlas it draws from is loaded, else it would stay blank. It keeps
+          -- its last picture and tries again on the next step.
+          local all=true
+          for _,r in ipairs(entry.slots[state.slot] or {}) do
+            if r.pair then
+              local ts=loaded(r.pair)
+              if ts then entry.resolved[r.pair]=ts else all=false end
+            end
+          end
+          if all then
+            dirty=dirty or {};dirty[state.slot]=true
+            ref.frame,ref.nativeFrame=frame,current
+          end
         end
       end
       if dirty then render(entry,dirty) end
@@ -332,6 +352,44 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
       local ok,err=pcall(build,id,source)
       if not ok then print("[editor layers] map "..tostring(id).." not built: "..tostring(err)) end
     end
+    -- Runtimes from 0.3.6x keep at most NativeTileset.RESIDENT_MAX atlases and
+    -- release the rest. The field view keeps the atlases of the maps it shows:
+    -- for an edited map that is only its own canvas, not the native atlases its
+    -- animated cells (water, flowers, the modder's own animations) are redrawn
+    -- from -- those were released and the animated cells drew blank. Keep them
+    -- with the map that uses them.
+    local byPair={}
+    for id,entry in pairs(built) do byPair["editor_"..mod.id.."_"..id]=entry end
+    if T.trim and not T._editorLayersTrim then
+      T._editorLayersTrim=true
+      local trim=T.trim
+      T.trim=function(...) return Runtime.call("editor.gen3.layers.trim",trim,...) end
+    end
+    -- The atlases the field view kept on its last trim: the maps it is drawing
+    -- (the one you are on and the ones near the camera). Only those animate --
+    -- a map further away in Map.world is not drawn, and animating it would
+    -- fetch its released atlases again on every step (a Route 36 two links from
+    -- Ecruteak rebuilt Ecruteak's pond tileset ~16 times a second: severe lag).
+    local lastKeep
+    mod.hooks:wrap("editor.gen3.layers.trim",function(proceed,keep,max,busy)
+      lastKeep=keep or {}
+      local held={}
+      -- An edited map's own atlas is a canvas drawn once, here, at game.ready:
+      -- NativeTileset.get can't load it back from the cache the way it reloads
+      -- a game atlas. Released, the map has no tiles any more (the field view
+      -- falls back to the Gen 2 atlas) -- so every one of them stays.
+      for p in pairs(byPair) do held[p]=true end
+      for p in pairs(keep or {}) do
+        held[p]=true
+        local entry=byPair[p]
+        if entry and #entry.frameRefs>0 then
+          for _,state in ipairs(entry.frameRefs) do
+            for _,r in ipairs(entry.slots[state.slot] or {}) do if r.pair then held[r.pair]=true end end
+          end
+        end
+      end
+      return proceed(held,max,busy)
+    end)
     -- The native animation step owns the clock. No draw hook, wall-clock poll,
     -- visible-set allocation or pair rebinding is needed.
     if okAnim and NativeAnim.step then
@@ -357,15 +415,16 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
         frameClock=frameClock+1/60
         local current=built[Map.current]
         if current then animate(current) end
+        local function shown(id) return lastKeep==nil or lastKeep["editor_"..mod.id.."_"..tostring(id)] end
         for _,n in ipairs(Map.neighborList or {}) do
-          local entry=built[n.map or n.mapId]
-          if entry and entry~=current and entry.lastStep~=frameClock then
+          local id=n.map or n.mapId;local entry=built[id]
+          if entry and entry~=current and entry.lastStep~=frameClock and shown(id) then
             entry.lastStep=frameClock;animate(entry)
           end
         end
         for _,n in ipairs(Map.world or {}) do
           local entry=built[n.id]
-          if entry and entry~=current and entry.lastStep~=frameClock then
+          if entry and entry~=current and entry.lastStep~=frameClock and shown(n.id) then
             entry.lastStep=frameClock;animate(entry)
           end
         end

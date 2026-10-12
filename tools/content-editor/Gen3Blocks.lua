@@ -1143,8 +1143,11 @@ function M.compileRuntime(S)
   for _, rows in pairs(project.gen3Blocks or {}) do if next(rows) then any = true end end
   if not any then return nil, {} end
   local data = { pairs = {}, tiles = {} }
+  -- Every tileset copy, with edited blocks or without: a copy with no
+  -- blocks of its own is still read from its base's cache in game. Left
+  -- out, a map using it can't be drawn at all (the whole map stays blank).
   for id, copy in pairs(M.copies(project)) do
-    if project.gen3Blocks[id] then
+    if type(copy) == "table" and copy.base then
       data.copies = data.copies or {}
       data.copies[id] = copy.base
     end
