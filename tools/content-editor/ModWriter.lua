@@ -213,6 +213,75 @@ local function appendReturnFn(lines, assign, value, pad)
   lines[#lines + 1] = pad .. "end)()"
 end
 
+-- LuaJIT allows 65536 constants per function, and a table written as one
+-- constructor costs about one per table plus one per string key of a nested
+-- table. Blocks (gen3Blocks, gen3BlockRuntime) grow past that on big region
+-- projects: the save then can't be opened again. A value heavier than
+-- SPLIT_WEIGHT is built in pieces instead -- heavy children in their own
+-- function (recursively), the rest in chunk functions of at most
+-- SPLIT_WEIGHT each. Lighter values are written exactly as before.
+local SPLIT_WEIGHT = 30000
+
+local function weight(v)
+  if type(v) == "string" then return 1 end
+  if type(v) ~= "table" then return 0 end
+  local n = 1
+  for k, x in pairs(v) do
+    if type(k) == "string" then n = n + 1 end
+    if type(x) == "table" or type(x) == "string" then n = n + weight(x) end
+  end
+  return n
+end
+
+local function splitField(prefix, key)
+  if type(key) == "string" and key:match("^[%a_][%w_]*$") and not LUA_KEYWORDS_FLAT[key] then
+    return prefix .. "." .. key
+  end
+  if type(key) == "number" then
+    return prefix .. "[" .. tostring(key) .. "]"
+  end
+  return prefix .. "[" .. escapeStr(tostring(key)) .. "]"
+end
+
+local function appendSplitFn(lines, assign, value, pad, w)
+  w = w or weight(value)
+  if type(value) ~= "table" or w <= SPLIT_WEIGHT then
+    return appendReturnFn(lines, assign, value, pad)
+  end
+  local keys = {}
+  for k in pairs(value) do keys[#keys + 1] = k end
+  table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+  lines[#lines + 1] = pad .. assign .. " = (function()"
+  lines[#lines + 1] = pad .. "  local t = {}"
+  local chunk, cw = {}, 0
+  local function flush()
+    if #chunk == 0 then return end
+    lines[#lines + 1] = pad .. "  t = (function(t)"
+    for _, k in ipairs(chunk) do
+      local sub = {}
+      writeValue(value[k], 0, sub)
+      lines[#lines + 1] = pad .. "    " .. splitField("t", k) .. " = " .. table.concat(sub, "\n")
+    end
+    lines[#lines + 1] = pad .. "    return t"
+    lines[#lines + 1] = pad .. "  end)(t)"
+    chunk, cw = {}, 0
+  end
+  for _, k in ipairs(keys) do
+    local kw = weight(value[k]) + 1
+    if kw > SPLIT_WEIGHT then
+      flush()
+      appendSplitFn(lines, splitField("t", k), value[k], pad .. "  ", kw - 1)
+    else
+      if cw + kw > SPLIT_WEIGHT then flush() end
+      chunk[#chunk + 1] = k
+      cw = cw + kw
+    end
+  end
+  flush()
+  lines[#lines + 1] = pad .. "  return t"
+  lines[#lines + 1] = pad .. "end)()"
+end
+
 function ModWriter.serializeProject(project)
   -- Never persist ROM-cache paths into editor_project.lua (MK301).
   local scrubbed = scrubRomCachePaths(deepCopy(project or {}))
@@ -238,12 +307,12 @@ function ModWriter.serializeProject(project)
         for sk in pairs(v) do sub[#sub + 1] = sk end
         table.sort(sub, function(a, b) return tostring(a) < tostring(b) end)
         for _, sk in ipairs(sub) do
-          appendReturnFn(lines, fieldName("t", sk), v[sk], "    ")
+          appendSplitFn(lines, fieldName("t", sk), v[sk], "    ")
         end
         lines[#lines + 1] = "    return t"
         lines[#lines + 1] = "  end)()"
       else
-        appendReturnFn(lines, assign, v)
+        appendSplitFn(lines, assign, v, "  ")
       end
     end
   end
