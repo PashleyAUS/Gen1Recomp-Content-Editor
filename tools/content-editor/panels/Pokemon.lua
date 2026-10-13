@@ -818,6 +818,7 @@ local function drawBasics(S, mon, mutate, App, formX, fy, formW, labelW, fh, s)
     and { "hp", "attack", "defense", "speed", "specialAttack", "specialDefense" }
     or { "hp", "attack", "defense", "speed", "special" }
   local sw = (Generation.isGen2(S) or Generation.isGen3(S)) and (58 * s) or (70 * s)
+  local baseStatTotal = 0
   for _, key in ipairs(statKeys) do
     local lab = key == "specialAttack" and "SPA"
       or key == "specialDefense" and "SPD"
@@ -837,10 +838,16 @@ local function drawBasics(S, mon, mutate, App, formX, fy, formW, labelW, fh, s)
       mon.baseStats = mon.baseStats or {}
       mon.baseStats[key] = math.max(1, math.min(255, v))
       if Generation.isGen2(S) then mon.baseStats.special = nil end
+      cur = mon.baseStats[key]
     end
+    baseStatTotal = baseStatTotal + cur
     sx = sx + sw + 6 * s
   end
   fy = fy + fh + 28 * s
+
+  row("Base Stat Total", function(fx, fy_)
+    Kit.text("small", tostring(baseStatTotal), fx, fy_ + 6 * s, PAL.caption)
+  end)
 
   row("Catch", function(fx, fy_, fw, fh_)
     local v = numField(S, App, "pk_catch", fx, fy_, 80 * s, fh_, mon.catchRate)

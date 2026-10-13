@@ -1,7 +1,7 @@
 local U=require("tests.drivers.util")
 local root=assert(os.getenv("EDITOR_TEST_ROOT")):gsub("\\","/")
 local dir=root.."/tests/content-editor/mega-ingame/shots"
-local project=assert(loadfile(root.."/mods/Mega/Megas.editor_project.lua"))()
+local fixture={SHIFTRY={mega=443,item=349},TORKOAL={mega=441,item=347}}
 return function(game)
   local failures=0
   local function check(ok,label)
@@ -33,14 +33,19 @@ return function(game)
     for _=1,4000 do if not game.capturePath then break end;U.wait(1) end
     local f=io.open(dir.."/"..name..".png","rb");check(f~=nil,"screenshot "..name);if f then f:close() end
   end
-  for _,name in ipairs({"SHIFTRY","TORKOAL"}) do
-    local family=project.gen3Forms[name]
+  for _,entry in ipairs({{"SHIFTRY",false},{"TORKOAL",false},{"SHIFTRY",true},{"TORKOAL",true}}) do
+    local name,saved=entry[1],entry[2]
     local base=assert(P.speciesFromName(name))
-    local mega=project.pokemon[family.forms[2].species].index
-    local item=project.items[family.forms[2].mechanic.item].index
+    local mega=fixture[name].mega
+    local item=fixture[name].item
     print("TEST "..name.." base="..base.." mega="..mega.." item="..item)
     session.party={};Party.giveMon(session,base,50)
     local mon=session.party[1];mon.item=item;mon.heldItem=item;mon.moves={33};mon.pp={35};mon.maxPp={35}
+    if saved then
+      mon.species=mega;mon.speciesId=mega;mon._editorFormAssigned=name
+      P.applyStats(mon)
+      check(mon.species==base and mon.speciesId==base,name.." old saved Mega recovers base identity")
+    end
     check(mon.species==base,name.." starts as base in party")
     assert(Bridge.startWild(Runtime._mod,game,{species=25,level=3,moves={150},pp={40}},{fade=false}))
     assert(pump(menu),"Battle menu did not open")

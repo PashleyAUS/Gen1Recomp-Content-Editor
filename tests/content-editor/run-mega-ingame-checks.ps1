@@ -2,7 +2,9 @@ $ErrorActionPreference='Stop'
 $taskRoot=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $taskRun=Join-Path $PSScriptRoot 'mega-ingame'
 New-Item -ItemType Directory -Force -Path "$taskRun/save/mods", "$taskRun/shots" | Out-Null
-Copy-Item -LiteralPath "$taskRoot/mods/Mega/Megas" -Destination "$taskRun/save/mods" -Recurse -Force
+if (Test-Path -LiteralPath "$taskRoot/mods/Mega/Megas") {
+  Copy-Item -LiteralPath "$taskRoot/mods/Mega/Megas" -Destination "$taskRun/save/mods" -Recurse -Force
+}
 Set-Content -LiteralPath "$taskRun/save/options.lua" -Value 'return {mods={Megas=true},modsByVersion={sapphire={Megas=true}}}'
 Set-Content -LiteralPath "$taskRun/result.log" -Value 'RUNNING'
 $env:EDITOR_TEST_ROOT=$taskRoot

@@ -1,4 +1,13 @@
 local M={}
+function M.savedMegaSource(f,species)
+  for _,row in ipairs(f.forms) do
+    local c=row.mechanic
+    if row.index==species and c and c.kind=="mega" then
+      local source=f.forms[c.from or 1]
+      if source and source.index~=species then return source.index end
+    end
+  end
+end
 function M.choose(f,personality,mon,gender)
   local p=tonumber(personality) or 0
   if f.mode=="unown" then
@@ -103,6 +112,14 @@ function M.install(mod,configs,species,artwork)
   local function assign(mon)
     if type(mon)~="table" then return end
     local species=tonumber(mon.species or mon.speciesId);local f=families[species]
+    -- Mega forms are battle appearances, not permanent party identities.
+    -- Recover old saves and gifts that already contain the custom Mega species.
+    local source=f and M.savedMegaSource(f,species)
+    if source and not mon.isEgg and not mon.egg then
+      mon.species=source;mon.speciesId=source;mon._editorFormAssigned=f.parent
+      mon.ability=P.abilityId(source,mon.personality or 0);mon.abilityId=mon.ability
+      return true
+    end
     local dynamic=f and (f.mode=="held_item" or f.mode=="gender")
     if not f or f.fieldControlled or f.mode=="weather" or f.mode=="fusion" or f.mode=="rules" or mon._editorFusion or mon.isEgg or mon.egg then return end
     if not dynamic and (not parents[species] or mon._editorFormAssigned==f.parent) then return end

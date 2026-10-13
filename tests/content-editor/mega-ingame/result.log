@@ -51,4 +51,38 @@ PASS TORKOAL temporary Mega state cleared
 PASS TORKOAL Mega Stone retained
 PASS TORKOAL next battle starts as base again
 PASS screenshot TORKOAL_04_next_battle_base
+TEST SHIFTRY base=300 mega=443 item=349
+PASS SHIFTRY old saved Mega recovers base identity
+PASS SHIFTRY starts as base in party
+PASS SHIFTRY starts as base in battle
+PASS screenshot SHIFTRY_01_base
+PASS SHIFTRY FIGHT opens move menu
+PASS SHIFTRY SELECT queues base -> Mega
+PASS screenshot SHIFTRY_02_selected
+PASS SHIFTRY Mega activates before the move
+PASS SHIFTRY saved party identity remains base while Mega
+PASS screenshot SHIFTRY_03_mega
+PASS SHIFTRY completed battle by winning (result=win)
+PASS SHIFTRY returns to base in party after battle
+PASS SHIFTRY temporary Mega state cleared
+PASS SHIFTRY Mega Stone retained
+PASS SHIFTRY next battle starts as base again
+PASS screenshot SHIFTRY_04_next_battle_base
+TEST TORKOAL base=321 mega=441 item=347
+PASS TORKOAL old saved Mega recovers base identity
+PASS TORKOAL starts as base in party
+PASS TORKOAL starts as base in battle
+PASS screenshot TORKOAL_01_base
+PASS TORKOAL FIGHT opens move menu
+PASS TORKOAL SELECT queues base -> Mega
+PASS screenshot TORKOAL_02_selected
+PASS TORKOAL Mega activates before the move
+PASS TORKOAL saved party identity remains base while Mega
+PASS screenshot TORKOAL_03_mega
+PASS TORKOAL completed battle by winning (result=win)
+PASS TORKOAL returns to base in party after battle
+PASS TORKOAL temporary Mega state cleared
+PASS TORKOAL Mega Stone retained
+PASS TORKOAL next battle starts as base again
+PASS screenshot TORKOAL_04_next_battle_base
 RESULT: 0 failure(s)
