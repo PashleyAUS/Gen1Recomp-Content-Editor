@@ -18,6 +18,8 @@ function M.answer(p,value)
   if not p.prompt then return end
   if p.prompt.kind=="flag" then
     p.flags[p.prompt.id]=value==true;p.result=value and 1 or 0
+  elseif p.prompt.kind=="choice" then
+    p.vars[0x800D]=value==true and 1 or 0;p.result=nil
   elseif p.prompt.kind=="skip" then p.result=nil
   elseif p.prompt.kind=="comparison" then p.result=math.max(0,math.min(2,value))
   else p.vars[p.prompt.id]=value;p.result=nil end
@@ -55,6 +57,8 @@ function M.step(p)
   elseif op=="special" or op=="waitstate" then
     p.notice="Game routine "..tostring(row.special or row[1] or op).." omitted from preview; game playtest is required for its effects."
     p.notes[op]=true;p.result=nil;p.vars={}
+  elseif op=="yesnobox" then
+    p.prompt={kind="choice",id="Yes / No"};p.playing=false
   elseif op=="checkflag" then
     local id=row.flag or row[1]
     if id==nil then p.error="Missing flag ID."

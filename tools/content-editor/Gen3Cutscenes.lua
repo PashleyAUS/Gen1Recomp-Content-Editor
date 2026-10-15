@@ -68,8 +68,8 @@ function M.draw(S,x,y,w,h,App)
   if not location then S._cutscenePlayer=nil;K.caption(x,y,"No map event references this script. Attach it to a map event to preview it here.");return end
   if K.button(x,y,170*s,28*s,"Playtest event",{kind="good"}) then
     local event=type(location.event)=="table" and location.event or {}
-    App.playtestMod({script=id,map=mapId,actor=location.actor,x=event.x or 0,
-      y=(event.y or 0)+(location.kind=="objects" and 1 or 0)})
+    local request,err=require("Gen3EventPlaytest").request(S,id,mapId,event,location.actor)
+    if request then App.playtestMod(request) else S.status=err end
   end
   K.caption(x+185*s,y+6*s,"Runs in the real game; saving is disabled.")
   y=y+38*s;h=h-38*s
@@ -93,13 +93,14 @@ function M.draw(S,x,y,w,h,App)
   K.caption(x+315*s,y+6*s,K.ellipsize("micro",tostring(p.script or id).." - Command "..p.index.." / "..#p.steps..(p.done and " - Finished" or p.waiting and " - Press Play to continue" or ""),w-315*s))
   y=y+40*s
   if p.prompt then
-    K.caption(x,y,p.prompt.kind=="skip" and "This command needs game playtest for full behavior." or "Preview only: choose "..(p.prompt.kind=="flag" and "switch " or "variable ")..tostring(p.prompt.id).." to select the story path.")
+    K.caption(x,y,p.prompt.kind=="choice" and "Choose the player's answer to follow this story path." or p.prompt.kind=="skip" and "This command needs game playtest for full behavior." or "Preview only: choose "..(p.prompt.kind=="flag" and "switch " or "variable ")..tostring(p.prompt.id).." to select the story path.")
     y=y+27*s
     if p.prompt.kind=="skip" then
       if K.button(x,y,200*s,28*s,"Continue without effect",{}) then Preview.answer(p,true);p.playing=true end
-    elseif p.prompt.kind=="flag" then
-      if K.button(x,y,110*s,28*s,"ON",{}) then Preview.answer(p,true);p.playing=true end
-      if K.button(x+120*s,y,110*s,28*s,"OFF",{}) then Preview.answer(p,false);p.playing=true end
+    elseif p.prompt.kind=="flag" or p.prompt.kind=="choice" then
+      local choice=p.prompt.kind=="choice"
+      if K.button(x,y,110*s,28*s,choice and "Yes" or "ON",{}) then Preview.answer(p,true);p.playing=true end
+      if K.button(x+120*s,y,110*s,28*s,choice and "No" or "OFF",{}) then Preview.answer(p,false);p.playing=true end
     else
       S._cutsceneVar=K.textfield("cutsceneVariable",x,y,140*s,28*s,S._cutsceneVar or "0","")
       local value=tonumber(S._cutsceneVar);local valid=value and value>=0 and value<=65535 and value%1==0

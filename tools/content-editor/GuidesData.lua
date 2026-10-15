@@ -8,6 +8,20 @@ return {
   },
   guides = {
     {
+      id="adventure_workflow",category="start",gen3=true,
+      title="Build and share an adventure",
+      summary="Create a map, add a character, branch a cutscene, test both paths and export your mod.",
+      steps={
+        {"Create or open a mod and choose its Gen 3 game. Import your game data or link Recomp.",go={tab="project"}},
+        {"Open Build adventure for the connected workflow. Choose Open Maps to create terrain, paint collision and connect doors.",go={tab="events",set={g3EventMode="workflow"}}},
+        {"Choose your scene map, place a character or select an existing one, then enter the question and both answers. Create and attach cutscene makes its talk trigger.",go={tab="events",set={g3EventMode="workflow"}}},
+        {"Edit Question, Yes path and No path in the maker to add movement, dialogue and timing. Existing scripts remain available under Cutscenes.",go={tab="events",set={g3EventMode="cutscenes",g3CutsceneView=false}}},
+        {"Open the viewer, press Play, and choose an answer. Restart and test the other answer. Playtest event runs the real game interpreter with saving disabled.",go={tab="events",set={g3EventMode="cutscenes",g3CutsceneView=true}}},
+        {"Save, Validate and Scan. Playtest the normal mod too, checking travel into and out of your map and talking to the character.",go={tab="project"}},
+        {"Use Share mod > Save and export mod ZIP. Send that ZIP; it includes installation instructions and the editable project beside the mod folder. Recipients supply their own compatible game and dependencies.",go={tab="project"}},
+      },
+    },
+    {
       id = "first_mod", category = "start",
       title = "Start your first mod",
       summary = "Make a mod, point the editor at your game, save it and play it.",

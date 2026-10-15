@@ -67,6 +67,18 @@ hand. `POKEPORT_NO_UPDATE_CHECK=1` also turns them off (`Updater.autoEnabled`).
 
 ## Cutscene maker and viewer (Gen 3)
 
+Start with **Events → Build adventure** for a connected map-to-mod workflow.
+It links to map creation, places or selects a character, and creates an attached
+Yes/No cutscene. Edit the question and either response in the existing maker;
+both responses are normal linked scripts, so movement and additional actions
+use the same export path. The viewer pauses at Yes/No choices and follows the
+selected branch. Restart lets you test the other answer.
+
+**Project → Share mod → Save and export mod ZIP** saves and compiles the open
+project, then bundles its mod files, custom assets and adjacent editable project
+with installation instructions. Omitted ROM/save/cache/backup paths are shown
+in the Project panel. Run Validate, Scan and game playtests before sharing.
+
 **Playtest event** launches the linked Gen1Recomp game on the selected event's
 map and runs the script through the real game interpreter. It saves/syncs editor
 changes using the normal playtest workflow, then uses an in-memory copy of the
@@ -74,7 +86,7 @@ current game save (or a new session if none exists). Saving is disabled in this
 test process. Map-entry scripts are suppressed during setup so the selected
 event can start directly. Normal game controls handle dialogue, movement and
 battles; the save's party, flags and inventory still determine event behavior.
-This requires a linked source runtime with `POKEPORT_DRIVER` support.
+This requires a bundled or linked runtime with `POKEPORT_DRIVER` support.
 
 Open **Events → Cutscenes**, or select a map event and choose **Cutscene maker /
 viewer**. **New cutscene** creates a normal event script with dialogue and

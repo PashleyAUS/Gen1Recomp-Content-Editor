@@ -1,4 +1,28 @@
 local M={}
+function M.request(S,script,mapId,event,actor)
+  local Map=require("Gen3Map")
+  local layout,err=Map.layout(S.data,mapId,S.project)
+  if not layout then return nil,err end
+  local map=(S.project.maps or {})[mapId] or (S.data.maps or {})[mapId] or {}
+  local x,y=event.x or 0,event.y or 0
+  local candidates=actor and {{x,y+1},{x,y-1},{x-1,y},{x+1,y}} or {{x,y}}
+  for _,position in ipairs(candidates) do
+    local px,py=position[1],position[2]
+    local occupied=false
+    for _,object in ipairs(map.objects or {}) do if object.x==px and object.y==py then occupied=true;break end end
+    if px>=0 and py>=0 and px<layout.width and py<layout.height and not occupied then
+      local cell=Map.cell(S.project,mapId,layout,px,py)
+      local source=(S.project.layeredMaps or {})[mapId]
+      local mode=source and (source.collision or {})[py*layout.width+px+1]
+        or cell and require("Gen3Collision").mode(cell.coll or 0)
+      if mode=="walk" or mode=="grass" then
+        local facing=py>y and "up" or py<y and "down" or px<x and "right" or "left"
+        return {script=script,map=mapId,actor=actor,x=px,y=py,facing=facing}
+      end
+    end
+  end
+  return nil,"No open tile beside this event. Move the character or adjust the map collision before playtesting."
+end
 function M.source(request)
   assert(type(request.script)=="string" and type(request.map)=="string","Choose an attached event")
   assert(type(request.x)=="number" and type(request.y)=="number","Event position missing")
@@ -16,7 +40,7 @@ return function(game)
   local function noSave() return false,"Saving is disabled during event playtest" end
   Save.save=noSave;Save.writeSlot=noSave;Save.writeCartSlot=noSave
   game.saveGame=noSave
-  session.map=target.map;session.x=target.x;session.y=target.y;session.facing="up"
+  session.map=target.map;session.x=target.x;session.y=target.y;session.facing=target.facing or "up"
   local map=assert(game.data.maps[target.map],"Event map is unavailable")
   -- Map-entry scripts must not compete with the explicitly selected event.
   local entry=map.mapScripts;map.mapScripts={}

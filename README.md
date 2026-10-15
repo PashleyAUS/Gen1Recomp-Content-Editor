@@ -89,9 +89,39 @@ Hand-written example mods are protected: Save will not overwrite their
 
 ### Share your mod
 
-Zip and send the `mods/<your_mod>/` folder (include `assets/` if you added
-sprites). Do **not** ship ROM files (`.gb`) or `data/generated` /
-`assets/generated`.
+Use **Project → Share mod → Save and export mod ZIP**, then **Open exported ZIP
+folder**. The ZIP contains the runtime mod, custom assets, installation
+instructions, and the adjacent `<mod>.editor_project.lua` authoring source.
+Recipients can install the mod folder or keep the adjacent source to edit it.
+ROMs, saves, generated caches, backups, and nested archives are omitted; the
+editor lists omitted paths. Validate, scan, and playtest before sharing.
+Gen 3 export also runs the runtime-loader and script-reference validation;
+resolve any reported errors before creating the ZIP.
+
+### Build an adventure (Gen 3)
+
+**Events → Build adventure** connects the complete authoring workflow:
+
+1. Open **Maps**, create a map, paint terrain and collision, and connect its doors.
+2. Return to **Build adventure**, select the scene map, and place a character
+   with a sprite and tile position, or choose an existing character.
+3. Enter a question and the Yes/No responses. **Create and attach cutscene**
+   creates normal linked scripts and attaches the question to the character's
+   talk interaction. Replacing an existing interaction supports Undo.
+4. Use **Edit Question / Yes path / No path** to add movement, dialogue and
+   timing in the cutscene maker. These scripts are also listed in **Cutscenes**.
+5. **Preview both story paths** opens the viewer. Choose Yes or No during
+   playback; Restart clears preview state so you can try the other answer.
+   **Playtest this cutscene** runs the actual interpreter with saving disabled.
+   It starts on an open adjacent tile, facing the character.
+6. Save, validate, scan, and playtest normal map travel and the talk trigger.
+   Export the ZIP under **Project → Share mod**.
+
+The guided branching workflow supports FireRed, LeafGreen, Ruby, Sapphire and
+Emerald. Viewer movement remains an endpoint approximation; game playtest is
+required for collision, animation, battles and other game effects. Packaged
+runtime archives are unpacked into a writable cache keyed by their contents
+for standalone playtesting; no linked installation is needed when bundled.
 
 ---
 

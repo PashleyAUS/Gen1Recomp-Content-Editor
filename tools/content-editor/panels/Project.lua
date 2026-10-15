@@ -99,6 +99,9 @@ function Project.draw(S, x, y, w, h, App)
   local GameVersion = require("src.core.GameVersion")
   local status = require("ProjectStatus").get(S, DataSource, ModIO,
     GameVersion.ORDER or { "red", "blue", "yellow", "gold", "silver", "crystal" })
+  if status.playtestAvailable==nil then
+    status.playtestAvailable=App.playtestRuntime and App.playtestRuntime()~=nil or false
+  end
   local mods = status.mods
   local btnH = 32 * s
   local chipH = 28 * s
@@ -333,7 +336,7 @@ function Project.draw(S, x, y, w, h, App)
   Kit.caption(x, row, "4  CHECK & RUN")
   row = row + 28 * s
   Kit.text("micro",
-    "Validate finds content errors. Scan checks assets for ROM dumps and sprite rips. Playtest launches Linked Recomp.",
+    "Validate finds content errors. Scan checks assets. Playtest uses the bundled runtime or a linked install.",
     x, row, PAL.muted)
   row = row + 22 * s
 
@@ -383,16 +386,31 @@ function Project.draw(S, x, y, w, h, App)
   if Kit.button(x + 20 * s + 2 * (actionW + actionGap), row + 108 * s,
       actionW, 36 * s, "Playtest mod", {
         kind = "accent",
-        enabled = validRecompRoot,
-        tooltip = validRecompRoot
-          and "Save, copy this mod into the Linked Recomp folder, and launch that game"
-          or "Link a Gen1Recomp folder first (Link Recomp)",
+        enabled = status.playtestAvailable or validRecompRoot,
+        tooltip = "Save and launch this mod with the bundled runtime; a linked install is used when the bundle is missing",
       }) then
     if App.playtestMod then App.playtestMod()
     else S.status = "Implement App.playtestMod() to launch a playtest build" end
   end
 
   row = row + overviewH + 16 * s
+  Kit.caption(x,row,"SHARE MOD");row=row+28*s
+  if Kit.button(x,row,math.min(w,280*s),30*s,"Save and export mod ZIP",{kind="good"}) then App.shareMod() end
+  row=row+38*s
+  Kit.text("micro","Includes mod files and editable project. ROMs, saves, caches and backups are omitted.",x,row,PAL.muted)
+  row=row+22*s
+  if S.sharePath and S.shareProject==S.project then
+    Kit.text("micro",Kit.ellipsize("micro",S.sharePath,w),x,row,PAL.text);row=row+24*s
+    if Kit.button(x,row,math.min(w,280*s),28*s,"Open exported ZIP folder",{}) then
+      love.system.openURL("file://"..S.sharePath:match("^(.*)/[^/]+$"))
+    end
+    row=row+36*s
+    if #(S.shareOmitted or {})>0 then
+      Kit.text("micro",tostring(#S.shareOmitted).." paths omitted. Hover for details.",x,row,PAL.yellow)
+      Kit.offerTooltip(x,row,w,22*s,table.concat(S.shareOmitted,"\n"));row=row+28*s
+    end
+  end
+  row=row+12*s
   local report=S.data and S.data._editorGen3Report
   if S.gen3ModError or report then
     Kit.caption(x,row,"MOD CONTENT")

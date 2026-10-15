@@ -5,8 +5,12 @@ function M.create(S,d)
   local original=S.project
   local T=setmetatable({project=copy(original)},{__index=S})
   local ok,key=pcall(function()
-    assert(d.kind=="dialog" or d.kind=="item" or d.kind=="pickup","Choose an event action")
+    assert(d.kind=="dialog" or d.kind=="item" or d.kind=="pickup" or d.kind=="branch","Choose an event action")
     if d.kind~="pickup" then assert(type(d.text)=="string" and d.text:match("%S"),"Enter dialogue first") end
+    if d.kind=="branch" then
+      assert(type(d.yes)=="string" and d.yes:match("%S"),"Enter the Yes dialogue")
+      assert(type(d.no)=="string" and d.no:match("%S"),"Enter the No dialogue")
+    end
     require("Gen3ContentAdapter").prepare(T)
     local source=assert(require("Gen3Workspace").convert(T,d.map))
     local map=T.project.maps[d.map]
@@ -15,8 +19,13 @@ function M.create(S,d)
       assert(type(d.x)=="number" and type(d.y)=="number" and d.x%1==0 and d.y%1==0
         and d.x>=0 and d.y>=0 and d.x<source.cellWidth and d.y<source.cellHeight,"Choose a tile inside the map")
       map.objects=map.objects or {};npc=#map.objects+1
+      for _,row in ipairs(map.objects) do
+        assert(row.x~=d.x or row.y~=d.y,"A character already occupies this tile")
+      end
       local localId=0;for _,row in ipairs(map.objects) do localId=math.max(localId,row.localId or row.index or 0) end
-      local graphics=d.kind=="pickup" and 92 or 1
+      assert(localId<254,"This map has no available character IDs")
+      local graphics=d.kind=="pickup" and 92 or tonumber(d.graphics or 1)
+      assert(graphics and graphics>=0 and graphics%1==0 and graphics<=65535,"Choose a character sprite")
       map.objects[npc]={x=d.x,y=d.y,localId=localId+1,index=localId+1,graphicsId=graphics,graphics=graphics,
         movement="STAY",movementType=8,flag=0,elevation=(source.gen3Elevation or {})[d.y*source.cellWidth+d.x+1] or 3}
     end
@@ -50,11 +59,36 @@ function M.create(S,d)
       local base="EditorTalk_"..tostring(p.id):gsub("[^%w_]","_").."_"
       local catalog=require("Gen3").catalog(S.data,"map_scripts");local n=1
       repeat script=base..n;n=n+1 until not p.gen3.map_scripts[script] and not catalog[script] and not p.text[script.."_Text"]
+        and not p.gen3.map_scripts[script.."_Yes"] and not catalog[script.."_Yes"]
+        and not p.gen3.map_scripts[script.."_No"] and not catalog[script.."_No"]
+        and not p.text[script.."_Yes_Text"] and not p.text[script.."_No_Text"]
       p.text[script.."_Text"]=require("Gen3Dialog").encode(d.text)
       p.gen3.map_scripts[script]={{op="lock"},{op="faceplayer"},{op="message",ptr=script.."_Text"},{op="waitmessage"},{op="waitbuttonpress"},{op="closemessage"},{op="release"},{op="end"}}
       p.gen3Modes.map_scripts[script]="register"
+      if d.kind=="branch" then
+        p.gen3.map_scripts[script]={{op="lockall"},{op="faceplayer"},{op="message",ptr=script.."_Text"},
+          {op="waitmessage"},{op="yesnobox",x=20,y=8},{op="closemessage"},
+          {op="compare_var_to_value",var=0x800D,value=1},{op="goto_if",cond=1,target=script.."_Yes"},
+          {op="goto",target=script.."_No"}}
+        for _,choice in ipairs({{"Yes",d.yes},{"No",d.no}}) do
+          local child=script.."_"..choice[1]
+          p.text[child.."_Text"]=require("Gen3Dialog").encode(choice[2])
+          p.gen3.map_scripts[child]={{op="message",ptr=child.."_Text"},{op="waitmessage"},
+            {op="waitbuttonpress"},{op="closemessage"},{op="releaseall"},{op="end"}}
+          p.gen3Modes.map_scripts[child]="register"
+        end
+      end
     end
     object.scriptKey=script
+    -- A new talk interaction must not leave an older touch trigger active.
+    if object.touchScriptKey then
+      local owner="objects/"..tostring(object.localId or npc)
+      for i=#(map.coordEvents or {}),1,-1 do
+        if map.coordEvents[i]._editorTriggerOwner==owner then table.remove(map.coordEvents,i) end
+      end
+      object.touchScriptKey=nil
+      if object.trigger=="player_touch" then object.trigger=nil end
+    end
     return script
   end)
   if not ok then return nil,tostring(key) end

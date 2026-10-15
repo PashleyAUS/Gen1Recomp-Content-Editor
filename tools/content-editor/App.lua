@@ -247,7 +247,12 @@ local function refreshModsAndEvents(step)
       S.gen3ModError = not ok and tostring(loaded) or (not loaded and tostring(err) or nil)
       if ok and loaded then mods = loaded end
     end
-  else mods:load(Data) end
+  else
+    local restoreEncounters = require("Generation").preserveBaseEncounters(Data)
+    local ok, err = pcall(function() mods:load(Data) end)
+    restoreEncounters()
+    if not ok then error(err, 0) end
+  end
   if step then step() end
   S.data = Data
   if require("Generation").isGen3(S) then require("Gen3ContentAdapter").prepare(S) end
@@ -894,6 +899,20 @@ local function linkedRecompRoot()
     recompIsLaunchable)
 end
 
+function App.playtestRuntime()
+  -- The shipped pin is the reproducible default. A linked install is a
+  -- fallback for source trees without an initialized runtime.
+  for _,root in ipairs({repoRoot(),os.getenv("POKEPORT_CONTENT_ROOT") or ""}) do
+    if root~="" then
+      local pinned=PlaytestPaths.pinnedRuntime(root,recompIsLaunchable,function(path)
+        local f=io.open(path,"rb");if f then f:close();return true end
+      end)
+      if pinned then return pinned end
+    end
+  end
+  return linkedRecompRoot()
+end
+
 local function validationEngineRoot()
   local sep = package.config:sub(1, 1)
   local linked = linkedRecompRoot()
@@ -913,9 +932,33 @@ local function validationEngineRoot()
   return source
 end
 
+function App.shareMod()
+  if not S or not S.project or not S.path then return say("Open a mod first") end
+  if S.codeDirty then return say("Write or reload the unsaved Code edits before exporting") end
+  -- Always compile and save so the ZIP matches the authoring state.
+  if not App.save() then return false end
+  if require("Generation").isGen3(S) then
+    local valid,output=require("Gen3WorkflowValidation").validate(S)
+    S.validateOutput=output
+    if not valid then say("Share blocked by validation errors — see the Project log");return false end
+  end
+  local path,omitted=require("ModShare").export(S.path,S.project)
+  if not path then say("Share failed: "..tostring(omitted));return false end
+  S.sharePath=path;S.shareOmitted=omitted;S.shareProject=S.project
+  say("Exported "..path..(#omitted>0 and (" ("..#omitted.." cache, backup or game files omitted)") or ""))
+  return path
+end
+
 function App.validateMod()
   if not S or not S.project or not S.project.id then
     return say("No mod open")
+  end
+  if require("Generation").isGen3(S) then
+    if not App.save() then return false end
+    local ok,output=require("Gen3WorkflowValidation").validate(S)
+    S.validateOutput=output
+    say(ok and ("Validate OK — "..S.project.id) or "Validate failed — see log on Project tab")
+    return ok
   end
   if S.dirty then
     if not App.save() then return false end
@@ -1178,10 +1221,14 @@ function App.playtestMod(eventRequest)
     end
   end
   local sep = package.config:sub(1, 1)
-  local recomp = linkedRecompRoot()
+  local recomp = App.playtestRuntime()
   if not recomp then
-    return say("Playtest requires a Linked Recomp folder. "
-      .. "Use Project > Link Recomp, then try again.")
+    return say("Playtest runtime is missing. Restore the bundled runtime or use Project > Link Recomp.")
+  end
+  if recomp:match("%.love$") or recomp:match("%.exe$") then
+    local prepared,prepareErr=require("PlaytestRuntime").unpack(recomp)
+    if not prepared then return say("Could not prepare bundled playtest: "..tostring(prepareErr)) end
+    recomp=prepared
   end
   if not recompIsLaunchable(recomp) then
     return say("Linked Recomp is not a launchable game (needs main.lua or gen1recomp.exe). "
@@ -1208,22 +1255,7 @@ function App.playtestMod(eventRequest)
   local okEnable, errEnable = pcall(function()
     local SaveData = require("src.core.SaveData")
     local options = SaveData.loadOptions()
-    options.mods = options.mods or {}
-    for otherId in pairs(options.mods) do
-      options.mods[otherId] = false
-    end
-    options.mods[id] = true
-    options.modsByVersion = options.modsByVersion or {}
-    -- Latest Recomp reads per-game enablement. Turn this mod on for every
-    -- supported game so Playtest works after switching Red/Blue/Yellow/Gold/Silver/Crystal.
-    for _, vid in ipairs(GameVersion.ORDER or { version }) do
-      local bucket = options.modsByVersion[vid] or {}
-      options.modsByVersion[vid] = bucket
-      for otherId in pairs(bucket) do
-        bucket[otherId] = false
-      end
-      bucket[id] = true
-    end
+    require("PlaytestOptions").selectOnly(options,id,version)
     SaveData.saveOptions(options)
   end)
   if not okEnable then
@@ -1231,9 +1263,8 @@ function App.playtestMod(eventRequest)
     return
   end
 
-  -- Launch only the Linked Recomp folder. Do not fall back to this editor's
-  -- bundled / fused runtime — that is a different game tree.
-  local loveExe, fused = resolveLoveExe({ recomp })
+  -- Use a standalone LÖVE executable with the selected runtime source.
+  local loveExe, fused = resolveLoveExe({ recomp,repoRoot(),os.getenv("POKEPORT_CONTENT_ROOT") })
   if (not loveExe or loveExe == "love") and not fused then
     local fusedEditor = love and love.filesystem
       and love.filesystem.isFused and love.filesystem.isFused()
@@ -1242,14 +1273,14 @@ function App.playtestMod(eventRequest)
     end
   end
   if not loveExe or loveExe == "love" then
-    return say("Playtest needs love.exe or gen1recomp.exe inside the Linked Recomp folder.")
+    return say("Playtest needs the packaged LÖVE executable or an installed LÖVE runtime.")
   end
   local cmd
   local driverPath
   if eventRequest then
     local main=ModIO.readText(recomp..sep.."main.lua")
     if not main or not main:find("POKEPORT_DRIVER",1,true) then
-      return say("Event playtest requires a Linked Recomp source runtime with POKEPORT_DRIVER support.")
+      return say("Event playtest requires a runtime with POKEPORT_DRIVER support. Update the bundled or linked runtime.")
     end
     local err
     driverPath,err=require("Gen3EventPlaytest").prepare(eventRequest)
@@ -1278,7 +1309,7 @@ function App.playtestMod(eventRequest)
   if not ok then
     return say("Playtest launch failed: " .. tostring(err))
   end
-  say("Playtest launched " .. version .. " via Linked Recomp: " .. recomp)
+  say("Playtest launched " .. version .. " via runtime: " .. recomp)
 end
 
 function App.markDirty()

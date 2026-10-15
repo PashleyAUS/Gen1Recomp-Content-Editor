@@ -77,11 +77,12 @@ end
 
 -- Every PHYSFS_mount we can reach. Windows often has the symbol on love.dll
 -- (next to love.exe) rather than ffi.C; keep trying after a failed call.
-local function physfsMountFns()
+local function physfsMountFns(mountPoint)
+  mountPoint=mountPoint or ""
   local fns = {}
   if love.filesystem.mountFullPath then
     fns[#fns + 1] = function(path)
-      local ok, result = pcall(love.filesystem.mountFullPath, path, "", true)
+      local ok, result = pcall(love.filesystem.mountFullPath, path, mountPoint, true)
       return ok and result
     end
   end
@@ -104,7 +105,7 @@ local function physfsMountFns()
         fns[#fns + 1] = function(path)
           -- Append: editor-owned tools at the package root must win collisions
           -- such as tools/save-editor/Kit.lua.
-          local called, result = pcall(fn, path, "", 1)
+          local called, result = pcall(fn, path, mountPoint, 1)
           return called and result ~= 0
         end
       end
@@ -251,6 +252,13 @@ end
 function RuntimeMount.mountData(path)
   for _,mount in ipairs(physfsMountFns()) do if mount(path) then return true end end
   return false
+end
+
+-- Temporary readers need an isolated namespace, including for folders the
+-- user opened outside LÖVE's source/save directories.
+function RuntimeMount.mountAt(path,mountPoint)
+  for _,mount in ipairs(physfsMountFns(mountPoint)) do if mount(path) then return true end end
+  return love.filesystem.mount(path,mountPoint,true)
 end
 
 function RuntimeMount.unmountData(path)

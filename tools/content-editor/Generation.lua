@@ -162,6 +162,18 @@ function Generation.isEditorMap(rec)
     or (type(rec.index) == "number" and rec.index >= 1000))
 end
 
+-- Installed mods may patch the global encounter registry in place. Editor
+-- projects resolve their own overrides separately and must inherit ROM data.
+function Generation.preserveBaseEncounters(data)
+  local seen = {}
+  local encounters = deepClone(data.encounters, seen)
+  local gen2Encounters = deepClone(data.gen2Encounters, seen)
+  return function()
+    data.encounters = encounters
+    data.gen2Encounters = gen2Encounters
+  end
+end
+
 function Generation.cloneMapRecord(rec)
   if type(rec) ~= "table" then return rec end
   return deepClone(rec)
