@@ -185,6 +185,22 @@ local function say(msg)
   if S then S.status = tostring(msg) end
 end
 
+-- RomImporter:setError keeps the reason on `detail` and a fixed headline on
+-- `status` ("That ROM could not be imported"). Show both.
+local function importNotice(imp)
+  if not imp then return nil end
+  local notice = imp.notice and imp.notice.text
+  if type(notice) == "string" and notice ~= "" then return notice end
+  local status = type(imp.status) == "string" and imp.status or ""
+  local detail = type(imp.detail) == "string" and imp.detail or ""
+  if status ~= "" and detail ~= "" and detail ~= status then
+    return status .. ": " .. detail
+  end
+  if status ~= "" then return status end
+  if detail ~= "" then return detail end
+  return nil
+end
+
 function App.getState()
   return S
 end
@@ -564,11 +580,8 @@ function App.importRomFile(path)
   if importer.workState == "working" then
     return true
   end
-  if importer.notice and importer.notice.text then
-    say(importer.notice.text)
-  elseif importer.status then
-    say(tostring(importer.status))
-  end
+  local failed = importNotice(importer)
+  if failed then say(failed) end
   S._romImporter = nil
   return false
 end
@@ -1600,7 +1613,12 @@ function App.update(dt)
   pcall(function() RegList.update(S, dt or 0) end)
   if S._romImporter then
     local imp = S._romImporter
-    pcall(function() imp:update(dt or 0) end)
+    local updated, updateErr = pcall(function() imp:update(dt or 0) end)
+    if not updated then
+      say("ROM import failed: " .. tostring(updateErr))
+      S._romImporter = nil
+      return
+    end
     if imp.status and imp.workState == "working" then
       local pct = imp.progress and math.floor((imp.progress or 0) * 100) or 0
       S.status = string.format("Importing ROM… %s (%d%%)",
@@ -1608,8 +1626,8 @@ function App.update(dt)
     end
     if imp.workState ~= "working" and not imp.worker then
       if imp.workState ~= "complete" and S._romImporter == imp then
-        local msg = (imp.notice and imp.notice.text) or imp.status
-        if msg and tostring(msg) ~= "" then say(tostring(msg)) end
+        local msg = importNotice(imp)
+        if msg and msg ~= "" then say(msg) end
         S._romImporter = nil
       end
     end
