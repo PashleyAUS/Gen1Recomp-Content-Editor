@@ -17,6 +17,10 @@ function M.installUnits()
   for _, list in ipairs({ M.directories, M.files, { "main.lua", "conf.lua",
       "runtime/gen1recomp.love", "tools/rom_manifest.json", "tools/rom_manifest_blue.json",
       "tools/rom_manifest_yellow.json", "tools/rom_manifest_gold.json",
+      "tools/rom_manifest_silver.json", "tools/rom_manifest_crystal.json",
+      "tools/rom_manifest_firered.json", "tools/rom_manifest_leafgreen.json",
+      "tools/rom_manifest_ruby.json", "tools/rom_manifest_sapphire.json",
+      "tools/rom_manifest_emerald.json",
       "content-editor-commit.txt" } }) do
     for _, path in ipairs(list) do units[#units + 1] = path end
   end

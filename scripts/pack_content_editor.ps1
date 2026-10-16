@@ -240,7 +240,14 @@ function New-ContentEditorStage([string]$Stage, [string]$Kind) {
     "rom_manifest.json",
     "rom_manifest_blue.json",
     "rom_manifest_yellow.json",
-    "rom_manifest_gold.json"
+    "rom_manifest_gold.json",
+    "rom_manifest_silver.json",
+    "rom_manifest_crystal.json",
+    "rom_manifest_firered.json",
+    "rom_manifest_leafgreen.json",
+    "rom_manifest_ruby.json",
+    "rom_manifest_sapphire.json",
+    "rom_manifest_emerald.json"
   )) {
     if (-not ($manifests | Where-Object { $_.Name -eq $need })) {
       throw "Missing tools\$need - cannot build pack."

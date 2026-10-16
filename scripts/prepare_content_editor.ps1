@@ -34,7 +34,11 @@ function Get-SourceSignature {
   }
   foreach ($relative in @("tools\modkit.py", "tools\rom_manifest.json",
       "tools\rom_manifest_blue.json", "tools\rom_manifest_yellow.json",
-      "tools\rom_manifest_gold.json", "tests\love_stub.lua")) {
+      "tools\rom_manifest_gold.json", "tools\rom_manifest_silver.json",
+      "tools\rom_manifest_crystal.json", "tools\rom_manifest_firered.json",
+      "tools\rom_manifest_leafgreen.json", "tools\rom_manifest_ruby.json",
+      "tools\rom_manifest_sapphire.json", "tools\rom_manifest_emerald.json",
+      "tests\love_stub.lua")) {
     $path = Join-Path $Root $relative
     if (Test-Path -LiteralPath $path) {
       $inputs += "$relative=$((Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash)"
@@ -115,7 +119,10 @@ Copy-Filtered (Join-Path $Root "tests\fixture_data") `
   (Join-Path $Stage "tests\fixture_data")
 
 foreach ($file in @("modkit.py", "rom_manifest.json", "rom_manifest_blue.json",
-    "rom_manifest_yellow.json", "rom_manifest_gold.json")) {
+    "rom_manifest_yellow.json", "rom_manifest_gold.json", "rom_manifest_silver.json",
+    "rom_manifest_crystal.json", "rom_manifest_firered.json",
+    "rom_manifest_leafgreen.json", "rom_manifest_ruby.json",
+    "rom_manifest_sapphire.json", "rom_manifest_emerald.json")) {
   Copy-Item -LiteralPath (Join-Path $Root "tools\$file") `
     -Destination (Join-Path $Stage "tools\$file") -Force
 }

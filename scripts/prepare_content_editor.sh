@@ -31,7 +31,10 @@ cp -R "$ROOT/libs/flexlove" "$STAGE/libs/flexlove"
 cp -R "$ROOT/tests/fixture_data" "$STAGE/tests/fixture_data"
 cp "$ROOT/tests/love_stub.lua" "$STAGE/tests/love_stub.lua"
 for file in modkit.py rom_manifest.json rom_manifest_blue.json \
-  rom_manifest_yellow.json rom_manifest_gold.json; do
+  rom_manifest_yellow.json rom_manifest_gold.json rom_manifest_silver.json \
+  rom_manifest_crystal.json rom_manifest_firered.json \
+  rom_manifest_leafgreen.json rom_manifest_ruby.json \
+  rom_manifest_sapphire.json rom_manifest_emerald.json; do
   cp "$ROOT/tools/$file" "$STAGE/tools/$file"
 done
 cp "$ROOT/tools/content-editor/runtime/main.lua" "$STAGE/main.lua"
