@@ -5,8 +5,13 @@ palettes, and talk scripts. Edits live under `mods/<id>/` — never the ROM cach
 
 Supports Red, Blue, Yellow, Gold, Silver, Crystal, FireRed, LeafGreen, Ruby,
 Sapphire, and Emerald. Ruby and Sapphire use their native game profiles for
-ROM import, map editing, mod export, intro previews, and Playtest. Their credits
-are available as artwork; Emerald-only patches and wireless mini-games are hidden.
+ROM import, map editing, mod export, intro previews, and Playtest. Berry
+flavors, Pokéblock names, contest evolutions, and credits pages edit the same
+way they do in Emerald. The Physical/Special split is available on every Gen 3
+game, and the bedroom system clock is available on Ruby, Sapphire, and Emerald.
+Slot machine, Berry Crush, Pokémon Jump, and Dodrio Berry Picking pictures
+can be replaced on every Gen 3 game that has them. Emerald-only region patches
+stay hidden on Ruby and Sapphire.
 
 Deep reference: [docs/content-editor.md](docs/content-editor.md)
 

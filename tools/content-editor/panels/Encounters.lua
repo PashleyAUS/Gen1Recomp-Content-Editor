@@ -569,18 +569,14 @@ function Encounters.draw(S, x, y, w, h, App)
     S.encountersMode = "wild"
   end
 
-  local top = y
-  y = require("EncounterGrace").draw(S, x, y, w, App)
-  y = require("EncounterRate").draw(S, x, y, w, App)
-  y = require("EncounterSlots").draw(S, x, y, w, App)
-  y = require("WildOdds").draw(S, x, y, w, App)
-  y = require("Gen2Clock").draw(S, x, y, w, App)
-  h = h - (y - top)
+  modes[#modes + 1] = { id = "settings", label = "Settings", tip = "Global encounter rules and slot weights" }
   local modeY = RegList.modeChips(S, "encountersMode", modes, x, y, s)
 
   local bodyY = modeY + 4 * s
   local bodyH = h - (bodyY - y)
-  if S.encountersMode == "contest" then
+  if S.encountersMode == "settings" then
+    require("EncounterSettings").draw(S, x, bodyY, w, bodyH, App)
+  elseif S.encountersMode == "contest" then
     drawContest(S, App, x, bodyY, w, bodyH)
   elseif S.encountersMode == "roam" then
     drawRoamers(S, App, x, bodyY, w, bodyH)

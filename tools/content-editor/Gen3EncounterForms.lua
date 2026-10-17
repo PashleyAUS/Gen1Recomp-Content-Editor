@@ -13,14 +13,9 @@ function M.draw(S,x,y,w,h,App)
   -- GAME PATCHES > Encounter tables: keep Crystal's lists filled in (or
   -- taken back out) even if the switch was flipped somewhere else.
   if require("Gen3DayNight").syncCrystalPopulation(S) then App.markDirty() end
-  local top=y
-  y=require("EncounterGrace").draw(S,x,y,w,App)
-  y=require("EncounterRate").draw(S,x,y,w,App)
-  y=require("EncounterSlots").draw(S,x,y,w,App)
-  y=require("WildOdds").draw(S,x,y,w,App)
-  h=h-(y-top)
-  local nextY=List.modeChips(S,"g3EncounterSection",{{id="wild",label="Wild encounters"},{id="roamers",label="Roaming Pokemon"}},x,y,s)+8*s
+  local nextY=List.modeChips(S,"g3EncounterSection",{{id="wild",label="Wild encounters"},{id="roamers",label="Roaming Pokemon"},{id="settings",label="Settings"}},x,y,s)+8*s
   h=h-(nextY-y);y=nextY
+  if S.g3EncounterSection=="settings" then return require("EncounterSettings").draw(S,x,y,w,h,App) end
   if S.g3EncounterSection=="roamers" then return require("Gen3Roamers").draw(S,x,y,w,h,App) end
   local ids=List.mergeIds(S.project.encounters,S.data.encounters)
   local labels=require("Gen3Labels")
