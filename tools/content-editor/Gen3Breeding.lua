@@ -61,6 +61,20 @@ function M.draw(S,x,y,w,h,App)
   local K,P,L=require("Kit"),require("ChoicePicker"),require("RegList");local s=K.scale
   local top,view=require("FormPane").begin(S,"g3Daycare",x,y,w,h);y=top;w=view.contentW
   K.caption(x,y,"DAY-CARE: two parents, inherited moves, and Eggs");y=y+36*s
+  K.caption(x,y,"Hatch checks. Flame Body and Magma Armor are Ruby, Sapphire, and Emerald.");y=y+28*s
+  for _,row in ipairs({{"stepCycle","Steps per hatch check",256,1,65535},{"flameCycles","Flame Body / Magma Armor cycles",2,0,255},{"plainCycles","Cycles without those abilities",1,0,255},{"expPerStep","Day-Care experience per step",1,0,255},{"compatLow","Low compatibility percent",20,0,100},{"compatMid","Medium compatibility percent",50,0,100},{"compatMax","High compatibility percent",70,0,100},{"ivCount","IVs inherited from the parents",3,0,6},{"baseWalks","Evolution steps back",5,0,16},{"wynaut","Wynaut",360,0,65535},{"wobbuffet","Without Lax Incense",202,0,65535},{"laxIncense","Lax Incense",221,0,65535},{"azurill","Azurill",350,0,65535},{"marill","Without Sea Incense",183,0,65535},{"seaIncense","Sea Incense",220,0,65535},{"nidoranF","Nidoran female",29,0,65535},{"nidoranM","Male Nidoran egg",32,0,65535},{"illumise","Illumise",387,0,65535},{"volbeat","Male Illumise egg",386,0,65535},{"maleAt","Male personality from",32768,0,65535},{"withdrawFee","Withdrawal fee",100,0,999999},{"withdrawFeePerLevel","Fee per level gained",100,0,999999}}) do
+    K.caption(x,y,row[2])
+    local bag=S.project.gen3Hatch or {}
+    local old=bag[row[1]];if old==nil then old=row[3] end
+    local value=math.floor(math.max(row[4],math.min(row[5],L.num(App,"g3_hatch_"..row[1],x+330*s,y,120*s,28*s,old))))
+    if value~=old then
+      S.project.gen3Hatch=S.project.gen3Hatch or {}
+      S.project.gen3Hatch[row[1]]=(value==row[3]) and nil or value
+      if not next(S.project.gen3Hatch) then S.project.gen3Hatch=nil end
+      App.markDirty()
+    end
+    y=y+36*s
+  end
   local config=S.project.gen3Breeding or {}
   if K.button(x,y,240*s,28*s,config.enabled and "Pause egg production" or "Enable Day-Care",{}) then
     local ok,err=pcall(function() local b=M.ensure(S);b.enabled=not b.enabled end)
@@ -86,6 +100,71 @@ function M.draw(S,x,y,w,h,App)
   K.caption(x,y,"In game: leave two parents, walk, then return to collect the Egg.");y=y+32*s
   K.caption(x,y,"Parents and pending Eggs stay in this mod's save data. Withdraw before disabling it.");y=y+32*s
   require("FormPane").finish(S,"g3Daycare",top,y,view)
+end
+function M.emitHatch(p, encode, out)
+  local h = p.gen3Hatch
+  if type(h) ~= "table" then return end
+  local function take(key, minV, maxV)
+    local n = tonumber(h[key])
+    if n == nil then return nil end
+    n = math.floor(n)
+    if n < minV then n = minV end
+    if n > maxV then n = maxV end
+    return n
+  end
+  local cycle = take("stepCycle", 1, 65535)
+  local flame = take("flameCycles", 0, 255)
+  local plain = take("plainCycles", 0, 255)
+  local exp = take("expPerStep", 0, 255)
+  local low = take("compatLow", 0, 100)
+  local mid = take("compatMid", 0, 100)
+  local high = take("compatMax", 0, 100)
+  local ivs = take("ivCount", 0, 6)
+  local walks = take("baseWalks", 0, 16)
+  local wynaut = take("wynaut", 0, 65535)
+  local wobbuffet = take("wobbuffet", 0, 65535)
+  local lax = take("laxIncense", 0, 65535)
+  local azurill = take("azurill", 0, 65535)
+  local marill = take("marill", 0, 65535)
+  local sea = take("seaIncense", 0, 65535)
+  local nidoranF = take("nidoranF", 0, 65535)
+  local nidoranM = take("nidoranM", 0, 65535)
+  local illumise = take("illumise", 0, 65535)
+  local volbeat = take("volbeat", 0, 65535)
+  local maleAt = take("maleAt", 0, 65535)
+  local fee = take("withdrawFee", 0, 999999)
+  local per = take("withdrawFeePerLevel", 0, 999999)
+  local incense = wynaut ~= nil or wobbuffet ~= nil or lax ~= nil or azurill ~= nil or marill ~= nil or sea ~= nil
+  local swaps = nidoranF ~= nil or nidoranM ~= nil or illumise ~= nil or volbeat ~= nil or maleAt ~= nil
+  if cycle == nil and flame == nil and plain == nil and exp == nil and low == nil and mid == nil and high == nil and ivs == nil and walks == nil and not incense and not swaps and fee == nil and per == nil then return end
+  out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+  out[#out + 1] = "    local Daycare = require(\"src.core.game3.daycare\")"
+  if cycle ~= nil then out[#out + 1] = "    Daycare.STEP_CYCLE = " .. cycle end
+  if flame ~= nil then out[#out + 1] = "    Daycare.FLAME_CYCLES = " .. flame end
+  if plain ~= nil then out[#out + 1] = "    Daycare.PLAIN_CYCLES = " .. plain end
+  if exp ~= nil then out[#out + 1] = "    Daycare.EXP_PER_STEP = " .. exp end
+  if fee ~= nil then out[#out + 1] = "    Daycare.WITHDRAW_FEE = " .. fee end
+  if per ~= nil then out[#out + 1] = "    Daycare.WITHDRAW_FEE_PER_LEVEL = " .. per end
+  if low ~= nil or mid ~= nil or high ~= nil or ivs ~= nil or walks ~= nil or incense or swaps then
+    out[#out + 1] = "    local Breeding = require(\"src.core.game3.breeding\")"
+    if low ~= nil then out[#out + 1] = "    Breeding.PARENTS_LOW_COMPATIBILITY = " .. low end
+    if mid ~= nil then out[#out + 1] = "    Breeding.PARENTS_MED_COMPATIBILITY = " .. mid end
+    if high ~= nil then out[#out + 1] = "    Breeding.PARENTS_MAX_COMPATIBILITY = " .. high end
+    if ivs ~= nil then out[#out + 1] = "    Breeding.INHERITED_IV_COUNT = " .. ivs end
+    if walks ~= nil then out[#out + 1] = "    Breeding.EVOS_PER_MON = " .. walks end
+    if wynaut ~= nil then out[#out + 1] = "    Breeding.WYNAUT = " .. wynaut end
+    if wobbuffet ~= nil then out[#out + 1] = "    Breeding.WOBBUFFET = " .. wobbuffet end
+    if lax ~= nil then out[#out + 1] = "    Breeding.LAX_INCENSE = " .. lax end
+    if azurill ~= nil then out[#out + 1] = "    Breeding.AZURILL = " .. azurill end
+    if marill ~= nil then out[#out + 1] = "    Breeding.MARILL = " .. marill end
+    if sea ~= nil then out[#out + 1] = "    Breeding.SEA_INCENSE = " .. sea end
+    if nidoranF ~= nil then out[#out + 1] = "    Breeding.NIDORAN_F = " .. nidoranF end
+    if nidoranM ~= nil then out[#out + 1] = "    Breeding.NIDORAN_M = " .. nidoranM end
+    if illumise ~= nil then out[#out + 1] = "    Breeding.ILLUMISE = " .. illumise end
+    if volbeat ~= nil then out[#out + 1] = "    Breeding.VOLBEAT = " .. volbeat end
+    if maleAt ~= nil then out[#out + 1] = "    Breeding.EGG_GENDER_MALE = " .. maleAt end
+  end
+  out[#out + 1] = "  end)"
 end
 function M.emit(p,encode,out)
   local b=p.gen3Breeding;if not b then return end

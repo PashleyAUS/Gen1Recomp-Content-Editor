@@ -1,4 +1,5 @@
--- Breeding tab (Gold): species egg fields + Day-Care knobs.
+-- Breeding tab: species egg fields and Day-Care knobs.
+-- Gold, Silver, and Crystal share the Day-Care. Gen 3 has its own service.
 
 local Kit = require("Kit")
 local Theme = require("Theme")
@@ -24,7 +25,56 @@ local DAYCARE_KEYS = {
   { key = "minStepsToEgg", label = "Min steps to egg", default = 150, tip = "First egg countdown floor" },
   { key = "withdrawFee", label = "Withdraw fee", default = 100, tip = "Flat ¥ on retrieve" },
   { key = "withdrawFeePerLevel", label = "Fee / level", default = 100, tip = "¥ per level grown" },
+  { key = "expPerStep", label = "Exp per step", default = 1, min = 0, max = 255, clearDefault = true },
+  { key = "eggHighAt", label = "Best egg odds from", default = 230, min = 0, max = 255, clearDefault = true },
+  { key = "eggHigh", label = "Best egg chance", default = 80, min = 0, max = 256, clearDefault = true },
+  { key = "eggMidAt", label = "Good egg odds from", default = 170, min = 0, max = 255, clearDefault = true },
+  { key = "eggMid", label = "Good egg chance", default = 40, min = 0, max = 256, clearDefault = true },
+  { key = "eggLowAt", label = "Fair egg odds from", default = 110, min = 0, max = 255, clearDefault = true },
+  { key = "eggLow", label = "Fair egg chance", default = 30, min = 0, max = 256, clearDefault = true },
+  { key = "eggBase", label = "Low egg chance", default = 10, min = 0, max = 256, clearDefault = true },
+  { key = "stepCycle", label = "Steps per egg tick", default = 256, min = 1, max = 65535, clearDefault = true },
+  { key = "eggStepPhase", label = "Egg tick on step", default = 128, min = 0, max = 65535, clearDefault = true },
+  { key = "sameSpecies", label = "Same species score", default = 254, min = 0, max = 254, clearDefault = true },
+  { key = "otherSpecies", label = "Other species score", default = 128, min = 0, max = 254, clearDefault = true },
+  { key = "sameOtCut", label = "Same trainer cut", default = 77, min = 0, max = 255, clearDefault = true },
+  { key = "caresAt", label = "Cares from", default = 230, min = 0, max = 255, clearDefault = true },
+  { key = "friendlyAt", label = "Friendly from", default = 70, min = 0, max = 255, clearDefault = true },
+  { key = "nidoranFemale", label = "Nidoran female below", default = 128, min = 0, max = 256, clearDefault = true },
+  { key = "baseWalks", label = "Evolution steps back", default = 2, min = 0, max = 16, clearDefault = true },
 }
+
+local HAPPINESS_KNOBS = {
+  { key = "base", label = "Starting happiness", default = 70, min = 0, max = 255 },
+  { key = "friendBall", label = "Friend Ball", default = 200, min = 0, max = 255 },
+  { key = "toEvolve", label = "Happiness to evolve", default = 220, min = 0, max = 255 },
+  { key = "threshold1", label = "Low tier below", default = 100, min = 0, max = 255 },
+  { key = "threshold2", label = "Mid tier below", default = 200, min = 0, max = 255 },
+  { key = "stepGain", label = "Walk gain", default = 1, min = -255, max = 255 },
+  { key = "stepSkip", label = "Wraps per walk gain", default = 2, min = 0, max = 255 },
+}
+
+-- data/events/happiness_changes.asm, in event order. Crystal sends the
+-- last row when a Pokémon levels up where it was caught.
+local HAPPINESS_EVENTS = {
+  "Level up", "Vitamin", "X item", "Gym battle", "Learned a move",
+  "Fainted", "Poison faint", "Lost to stronger foe",
+  "Older haircut 1", "Older haircut 2", "Older haircut 3",
+  "Younger haircut 1", "Younger haircut 2", "Younger haircut 3",
+  "Bitter powder", "Energy root", "Revival herb", "Grooming",
+  "Level up where caught",
+}
+
+local function vanillaHappinessChanges()
+  local ok, Happiness = pcall(require, "src.core.gen2.Happiness")
+  local rows = ok and Happiness and Happiness.CHANGES
+  if type(rows) ~= "table" then return {} end
+  local copy = {}
+  for i, row in ipairs(rows) do
+    copy[i] = { tonumber(row[1]) or 0, tonumber(row[2]) or 0, tonumber(row[3]) or 0 }
+  end
+  return copy
+end
 
 local function cycle(list, cur)
   local idx = 0
@@ -156,7 +206,7 @@ function Breeding.draw(S, x, y, w, h, App)
   end
   if Generation.isGen3(S) then require("Gen3ContentAdapter").prepare(S) end
   if not Generation.isGen2(S) and not Generation.isGen3(S) then
-    Kit.emptyBox(x, y, w, h, "Breeding is Gold-only (Day-Care / eggs)")
+    Kit.emptyBox(x, y, w, h, "Breeding is in Gold, Silver, Crystal, and the Gen 3 games")
     return
   end
   State.ensureProjectFields(S.project)
@@ -236,7 +286,7 @@ function Breeding.draw(S, x, y, w, h, App)
     mon, owned = resolveMon(S, first)
   end
   if not mon then
-    Kit.emptyBox(formX, listY, formW, listH, "No species in data — import a Gold cache")
+    Kit.emptyBox(formX, listY, formW, listH, "No species in this game's data")
     return
   end
 
@@ -318,7 +368,10 @@ function Breeding.draw(S, x, y, w, h, App)
     end
   end)
   if Generation.isGen3(S) then
-    Kit.caption(viewX,fy,"Hatching takes about "..tostring((mon.eggCycles or 20)*256).." steps at this setting.")
+    local cycle = 256
+    local hatch = S.project and S.project.gen3Hatch
+    if hatch and hatch.stepCycle ~= nil then cycle = tonumber(hatch.stepCycle) or 256 end
+    Kit.caption(viewX,fy,"Hatching takes about "..tostring((mon.eggCycles or 20)*cycle).." steps at this setting.")
     fy=fy+32*s
     Kit.caption(viewX,fy,"Parents normally need a shared egg group; Ditto is the special pairing group.");fy=fy+32*s
     fy=require("Gen3Breeding").eggFields(S,mon,viewX,fy,viewW,App)
@@ -343,12 +396,92 @@ function Breeding.draw(S, x, y, w, h, App)
     row(rowDef.label, function(fx, fy_, fw, fh_)
       local cur = breedField(S, rowDef.key, rowDef.default)
       local v = numField(S, App, "br_dc_" .. rowDef.key, fx, fy_, 80 * s, fh_, cur)
-      v = math.max(0, math.floor(v))
+      v = math.max(rowDef.min or 0, math.floor(v))
+      if rowDef.max then v = math.min(rowDef.max, v) end
       if v ~= cur then
         local b = ensureBreeding(S, App)
-        b[rowDef.key] = v
+        if rowDef.clearDefault and v == rowDef.default then
+          b[rowDef.key] = nil
+        else
+          b[rowDef.key] = v
+        end
       end
     end)
+  end
+
+  fy = fy + 8 * s
+  Kit.caption(viewX, fy, "FRIENDSHIP")
+  fy = fy + 22 * s
+  Kit.text("micro",
+    "How much happiness each event adds or removes. The three numbers are the low, middle, and high tiers.",
+    viewX, fy, PAL.muted)
+  fy = fy + 32 * s
+
+  local function happinessTable()
+    local h = S.project.happiness
+    if type(h) ~= "table" then
+      State.ensureProjectFields(S.project)
+      S.project.happiness = {}
+      h = S.project.happiness
+    end
+    return h
+  end
+  local function happinessValue(key, default)
+    local h = S.project.happiness
+    if h and h[key] ~= nil then return tonumber(h[key]) or default end
+    return default
+  end
+
+  for _, knob in ipairs(HAPPINESS_KNOBS) do
+    row(knob.label, function(fx, fy_, fw, fh_)
+      local cur = happinessValue(knob.key, knob.default)
+      local v = numField(S, App, "br_hp_" .. knob.key, fx, fy_, 80 * s, fh_, cur)
+      v = math.max(knob.min, math.min(knob.max, math.floor(v)))
+      if v ~= cur then
+        local h = happinessTable()
+        h[knob.key] = v == knob.default and nil or v
+        if next(h) == nil then S.project.happiness = nil end
+        App.markDirty()
+      end
+    end)
+  end
+
+  local vanilla = vanillaHappinessChanges()
+  local ownedChanges = S.project.happiness and S.project.happiness.changes
+  local changes = ownedChanges or vanilla
+  Kit.text("small", "Low    Mid    High", viewX + 168 * s, fy, PAL.faint)
+  fy = fy + 18 * s
+  for i, label in ipairs(HAPPINESS_EVENTS) do
+    local src = changes[i] or { 0, 0, 0 }
+    Kit.text("small", label, viewX, fy + 6 * s, PAL.caption)
+    local nextRow = {}
+    for col = 1, 3 do
+      local cur = tonumber(src[col]) or 0
+      local v = numField(S, App, "br_hc_" .. i .. "_" .. col,
+        viewX + 168 * s + (col - 1) * 56 * s, fy, 52 * s, fh, cur)
+      nextRow[col] = math.max(-255, math.min(255, math.floor(v)))
+    end
+    if nextRow[1] ~= (tonumber(src[1]) or 0)
+        or nextRow[2] ~= (tonumber(src[2]) or 0)
+        or nextRow[3] ~= (tonumber(src[3]) or 0) then
+      local h = happinessTable()
+      if type(h.changes) ~= "table" then
+        h.changes = {}
+        for n, row in ipairs(vanilla) do
+          h.changes[n] = { row[1], row[2], row[3] }
+        end
+      end
+      h.changes[i] = nextRow
+      App.markDirty()
+    end
+    fy = fy + fh + 4 * s
+  end
+  if type(S.project.happiness) == "table" and next(S.project.happiness) then
+    if Kit.button(viewX, fy, 140 * s, fh, "Revert friendship", { kind = "ghost" }) then
+      S.project.happiness = nil
+      App.markDirty()
+    end
+    fy = fy + fh + 8 * s
   end
 
   FormPane.finish(S, "breedingFormScroll", contentTop, fy, view)

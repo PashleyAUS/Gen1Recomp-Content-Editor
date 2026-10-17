@@ -49,26 +49,54 @@ M.kanto={
  },
  crush=M.emerald.crush,jump=M.emerald.jump,dodrio=M.emerald.dodrio,
 }
-local function lists(S) return require("Generation").id(S)=="emerald" and M.emerald or M.kanto end
+local function lists(S)
+  if require("Generation").isRse(S) then return M.emerald end
+  return M.kanto
+end
 function M.list(S,game) return lists(S)[game] end
-local function cacheImage(S,game,rec)
- local dir="data/generated/gba/"..lists(S)[game].dir.."/"
- if rec.file then
-  local bytes=S.data._gen3Read(dir..rec.file);if not bytes then return nil,"Missing Gen 3 cache: "..dir..rec.file end
-  return love.image.newImageData(love.filesystem.newFileData(bytes,rec.file))
- end
- local entry=require("Gen3Resources").readTable(S.data,dir.."manifest.lua")[rec.key]
- if not entry then return nil,"Missing Gen 3 cache: "..dir.."manifest.lua" end
- local file=entry.file or rec.key..".rgba"
- local bytes=S.data._gen3Read(dir..file)
- if not bytes or #bytes<entry.width*entry.height*4 then return nil,"Missing Gen 3 cache: "..dir..file end
- return love.image.newImageData(entry.width,entry.height,"rgba8",bytes:sub(1,entry.width*entry.height*4))
+
+-- Cache path the game reads for this picture, plus the manifest row when
+-- the sheet is raw RGBA.
+function M.cachePath(S, game, index)
+  local spec = lists(S)[game]
+  local rec = spec and spec[index]
+  if not rec then return nil, "Unknown mini-game image" end
+  local dir = "data/generated/gba/" .. spec.dir .. "/"
+  if rec.file then return dir .. rec.file, rec end
+  local manifest = require("Gen3Resources").readTable(S.data, dir .. "manifest.lua")
+  local entry = manifest[rec.key]
+  if type(entry) ~= "table" then return nil, "Missing Gen 3 cache: " .. dir .. "manifest.lua" end
+  return dir .. (entry.file or rec.key .. ".rgba"), rec, entry
+end
+
+local function cacheImage(S, game, index)
+  local path, err, entry = M.cachePath(S, game, index)
+  if not path then return nil, err end
+  local override = (S.project and S.project.gen3Assets or {})[path]
+  local bytes
+  if override and override.file and S.path then
+    bytes = require("ModIO").readText(S.path .. "/" .. override.file)
+  else
+    bytes = S.data._gen3Read(path)
+  end
+  if not bytes then return nil, "Missing Gen 3 cache: " .. path end
+  if path:match("%.rgba$") then
+    local width = (entry and entry.width) or (override and override.width)
+    local height = (entry and entry.height) or (override and override.height)
+    if not width or not height or #bytes < width * height * 4 then
+      return nil, "Missing Gen 3 cache: " .. path
+    end
+    return love.image.newImageData(width, height, "rgba8", bytes:sub(1, width * height * 4))
+  end
+  return love.image.newImageData(love.filesystem.newFileData(bytes, path:match("[^/]+$")))
 end
 function M.image(S,game,index)
+ local path = M.cachePath(S, game, index)
+ local override = path and (S.project and S.project.gen3Assets or {})[path]
  local cache=S.data._miniGameImages or {};S.data._miniGameImages=cache
- local key=game.."/"..index;if cache[key] then return cache[key] end
- local rec=assert(M.list(S,game) and M.list(S,game)[index],"Unknown mini-game image")
- local img,err=cacheImage(S,game,rec);if not img then return nil,err end
+ local key=game.."/"..index.."/"..(override and override.file or "")
+ if cache[key] then return cache[key] end
+ local img,err=cacheImage(S,game,index);if not img then return nil,err end
  cache[key]=img;return img
 end
 return M

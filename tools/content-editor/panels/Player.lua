@@ -981,6 +981,113 @@ local function drawStart(S, x, y, w, h, App)
     App.markDirty()
   end
 
+  if Generation.isGen3(S) then
+    bootRow("Money cap", function(fx, fy_, fw, fh_)
+      local cur = Player.constField(S, "moneyCap")
+      if cur == nil then cur = 999999 end
+      local v = math.max(0, math.floor(RegList.num(App, "pl_g3_money", fx, fy_, 100 * s, fh_, cur)))
+      if v ~= cur then
+        if v == 999999 then
+          if S.project.constants then S.project.constants.moneyCap = nil end
+          App.markDirty()
+        else
+          Player.setConst(S, "moneyCap", v, App)
+        end
+      end
+    end)
+    bootRow("Coin cap", function(fx, fy_, fw, fh_)
+      local cur = Player.constField(S, "coinCap")
+      if cur == nil then cur = 9999 end
+      local v = math.max(0, math.floor(RegList.num(App, "pl_g3_coin", fx, fy_, 80 * s, fh_, cur)))
+      if v ~= cur then
+        if v == 9999 then
+          if S.project.constants then S.project.constants.coinCap = nil end
+          App.markDirty()
+        else
+          Player.setConst(S, "coinCap", v, App)
+        end
+      end
+    end)
+    if Generation.isRse(S) then
+      bootRow("Blackout divisor", function(fx, fy_, fw, fh_)
+        local Whiteout = require("Whiteout")
+        local cur = tonumber(Whiteout.get(S, "div", 2)) or 2
+        local v = math.max(1, math.floor(RegList.num(App, "pl_g3_whiteout", fx, fy_, 80 * s, fh_, cur)))
+        if v ~= cur then Whiteout.set(S, App, "div", v, 2) end
+      end)
+    else
+      bootRow("Blackout level factor", function(fx, fy_, fw, fh_)
+        local Whiteout = require("Whiteout")
+        local cur = tonumber(Whiteout.get(S, "levelFactor", 4)) or 4
+        local v = math.max(0, math.floor(RegList.num(App, "pl_g3_wfactor", fx, fy_, 80 * s, fh_, cur)))
+        if v ~= cur then Whiteout.set(S, App, "levelFactor", v, 4) end
+      end)
+      bootRow("Badge loss", function(fx, fy_, fw, fh_)
+        local Whiteout = require("Whiteout")
+        local def = table.concat(Whiteout.badgeDefault(), ", ")
+        local curList = Whiteout.get(S, "badgeMult", nil)
+        local cur = type(curList) == "table" and table.concat(curList, ", ") or def
+        local v = RegList.field(App, "pl_g3_wbadges", fx, fy_, fw, fh_, cur, def)
+        if v ~= cur then
+          local nums = {}
+          for part in tostring(v):gmatch("[^,]+") do
+            local n = tonumber(part)
+            if n then nums[#nums + 1] = math.max(0, math.floor(n)) end
+          end
+          while #nums < 9 do nums[#nums + 1] = Whiteout.badgeDefault()[#nums + 1] end
+          Whiteout.set(S, App, "badgeMult", nums, Whiteout.badgeDefault())
+        end
+      end)
+    end
+    if Generation.isRse(S) then
+      bootRow("Lottery digits", function(fx, fy_, fw, fh_)
+        local g = S.project.lotteryOdds
+        local cur = g and g.minDigits
+        if cur == nil then cur = 2 end
+        local v = math.max(0, math.min(5, math.floor(RegList.num(App, "pl_lottery", fx, fy_, 80 * s, fh_, cur))))
+        if v ~= cur then
+          State.ensureProjectFields(S.project)
+          S.project.lotteryOdds = S.project.lotteryOdds or {}
+          S.project.lotteryOdds.minDigits = (v == 2) and nil or v
+          if not next(S.project.lotteryOdds) then S.project.lotteryOdds = nil end
+          App.markDirty()
+        end
+      end)
+    end
+    bootRow("Poison steps", function(fx, fy_, fw, fh_)
+      local PoisonField = require("PoisonField")
+      local cur = tonumber(PoisonField.get(S, "interval", 4)) or 4
+      local v = math.max(0, math.floor(RegList.num(App, "pl_g3_poison_steps", fx, fy_, 80 * s, fh_, cur)))
+      if v ~= cur then PoisonField.set(S, App, "interval", v, 4) end
+    end)
+    bootRow("Poison damage", function(fx, fy_, fw, fh_)
+      local PoisonField = require("PoisonField")
+      local cur = tonumber(PoisonField.get(S, "damage", 1)) or 1
+      local v = math.max(0, math.floor(RegList.num(App, "pl_g3_poison_dmg", fx, fy_, 80 * s, fh_, cur)))
+      if v ~= cur then PoisonField.set(S, App, "damage", v, 1) end
+    end)
+    if not Generation.isRse(S) then
+      bootRow("Vs. Seeker steps", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "seekerCharge", 100)) or 100
+        local v = math.max(0, math.floor(RegList.num(App, "pl_seeker_charge", fx, fy_, 80 * s, fh_, cur)))
+        if v ~= cur then Steps.set(S, App, "seekerCharge", v, 100) end
+      end)
+      bootRow("Rematch refuses below", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "seekerRefuse", 30)) or 30
+        local v = math.max(0, math.floor(RegList.num(App, "pl_seeker_refuse", fx, fy_, 80 * s, fh_, cur)))
+        if v ~= cur then Steps.set(S, App, "seekerRefuse", v, 30) end
+      end)
+      bootRow("Rematch roll", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "seekerDice", 100)) or 100
+        local v = math.max(1, math.floor(RegList.num(App, "pl_seeker_dice", fx, fy_, 80 * s, fh_, cur)))
+        if v ~= cur then Steps.set(S, App, "seekerDice", v, 100) end
+      end)
+    end
+  end
+
   if not Generation.isGen3(S) then
   bootRow("Player names", function(fx, fy_, fw, fh_)
     local cur = joinCsvIds(namePresetList("player"))
@@ -1015,6 +1122,27 @@ function Player.constField(S, key)
   local c = S.project and S.project.constants
   if c and c[key] ~= nil then return c[key] end
   return Player.dataConstants(S)[key]
+end
+
+function Player.worldField(S, key, default)
+  local c = S.project and S.project.constants
+  local world = c and c.world
+  if type(world) == "table" and world[key] ~= nil then return world[key] end
+  local dataWorld = Player.dataConstants(S).world
+  if type(dataWorld) == "table" and dataWorld[key] ~= nil then return dataWorld[key] end
+  return default
+end
+
+function Player.setWorld(S, key, value, default, App)
+  State.ensureProjectFields(S.project)
+  local world = S.project.constants.world
+  if type(world) ~= "table" then
+    world = {}
+    S.project.constants.world = world
+  end
+  world[key] = (value == default) and nil or value
+  if not next(world) then S.project.constants.world = nil end
+  App.markDirty()
 end
 
 function Player.setConst(S, key, val, App)
@@ -1131,15 +1259,2129 @@ function Player.drawAdvanced(S, x, y, w, h, App)
     if v ~= cur then Player.setConst(S, "bagSize", v, App) end
   end)
   advRow("Money cap", function(fx, fy_, fw, fh_)
-    local cur = Player.constField(S, "moneyCap") or 999999
-    local v = RegList.num(App, "pl_const_money", fx, fy_, 100 * s, fh_, cur)
-    if v ~= cur then Player.setConst(S, "moneyCap", v, App) end
+    local cur = Player.constField(S, "moneyCap")
+    if cur == nil then cur = 999999 end
+    local v = math.max(0, math.floor(RegList.num(App, "pl_const_money", fx, fy_, 100 * s, fh_, cur)))
+    if v ~= cur then
+      if v == 999999 then
+        if S.project.constants then S.project.constants.moneyCap = nil end
+        App.markDirty()
+      else
+        Player.setConst(S, "moneyCap", v, App)
+      end
+    end
   end)
   advRow("Coin cap", function(fx, fy_, fw, fh_)
-    local cur = Player.constField(S, "coinCap") or 9999
-    local v = RegList.num(App, "pl_const_coin", fx, fy_, 80 * s, fh_, cur)
-    if v ~= cur then Player.setConst(S, "coinCap", v, App) end
+    local cur = Player.constField(S, "coinCap")
+    if cur == nil then cur = 9999 end
+    local v = math.max(0, math.floor(RegList.num(App, "pl_const_coin", fx, fy_, 80 * s, fh_, cur)))
+    if v ~= cur then
+      if v == 9999 then
+        if S.project.constants then S.project.constants.coinCap = nil end
+        App.markDirty()
+      else
+        Player.setConst(S, "coinCap", v, App)
+      end
+    end
   end)
+  advRow("Blackout divisor", function(fx, fy_, fw, fh_)
+    local Whiteout = require("Whiteout")
+    local cur = tonumber(Whiteout.get(S, "div", 2)) or 2
+    local v = math.max(1, math.floor(RegList.num(App, "pl_whiteout_div", fx, fy_, 80 * s, fh_, cur)))
+    if v ~= cur then Whiteout.set(S, App, "div", v, 2) end
+  end)
+  advRow("Poison steps", function(fx, fy_, fw, fh_)
+    local PoisonField = require("PoisonField")
+    local cur = tonumber(PoisonField.get(S, "interval", 4)) or 4
+    local v = math.max(0, math.floor(RegList.num(App, "pl_poison_steps", fx, fy_, 80 * s, fh_, cur)))
+    if v ~= cur then PoisonField.set(S, App, "interval", v, 4) end
+  end)
+  advRow("Poison damage", function(fx, fy_, fw, fh_)
+    local PoisonField = require("PoisonField")
+    local cur = tonumber(PoisonField.get(S, "damage", 1)) or 1
+    local v = math.max(0, math.floor(RegList.num(App, "pl_poison_dmg", fx, fy_, 80 * s, fh_, cur)))
+    if v ~= cur then PoisonField.set(S, App, "damage", v, 1) end
+  end)
+  advRow("Poison flash", function(fx, fy_, fw, fh_)
+    local PoisonField = require("PoisonField")
+    local cur = tonumber(PoisonField.get(S, "flash", 4)) or 4
+    local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_poison_flash", fx, fy_, 80 * s, fh_, cur))))
+    if v ~= cur then PoisonField.set(S, App, "flash", v, 4) end
+  end)
+  if Generation.isGen2(S) then
+    advRow("Bike shop call", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "bikeCall", 1024)) or 1024
+      local v = math.max(0, math.floor(RegList.num(App, "pl_bike_call", fx, fy_, 100 * s, fh_, cur)))
+      if v ~= cur then Steps.set(S, App, "bikeCall", v, 1024) end
+    end)
+    advRow("Bike step cap", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "bikeCap", 65535)) or 65535
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_bike_cap", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "bikeCap", v, 65535) end
+    end)
+    advRow("Pitfall beat", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "skyfallBeats", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_skyfall", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "skyfallBeats", v, 16) end
+    end)
+    advRow("Pitfall shake", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "pitfallShake", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_pitfall", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "pitfallShake", v, 16) end
+    end)
+    advRow("Teleport beat", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "teleportBeats", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_teleport", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "teleportBeats", v, 16) end
+    end)
+    advRow("Teleport lift", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "teleportLift", 96)) or 96
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_teleport_lift", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "teleportLift", v, 96) end
+    end)
+    advRow("Teleport rise", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "teleportRise", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_teleport_rise", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "teleportRise", v, 16) end
+    end)
+    advRow("Teleport fall", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "teleportFall", 0)) or 0
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_teleport_fall", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "teleportFall", v, 0) end
+    end)
+    advRow("Ledge arc", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local default = "-4, -6, -8, -10, -11, -12, -12, -12, -11, -10, -9, -8, -6, -4, 0, 0"
+      local cur = Steps.get(S, "g2Ledge", default)
+      if type(cur) ~= "string" then cur = default end
+      local v = RegList.field(App, "pl_g2_ledge", fx, fy_, fw, fh_, cur, default)
+      local list = Steps.arcList(v)
+      local same = list and table.concat(list, ", ") == table.concat(Steps.arcList(default), ", ")
+      if same or not list then v = default end
+      if v ~= cur then Steps.set(S, App, "g2Ledge", v, default) end
+    end)
+    advRow("Tree shake", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "treeShake", 24)) or 24
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_tree_shake", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "treeShake", v, 24) end
+    end)
+    advRow("Dig step", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "digStep", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_dig_step", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "digStep", v, 16) end
+    end)
+    advRow("Dig spin", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "digSpin", 32)) or 32
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_dig_spin", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "digSpin", v, 32) end
+    end)
+    advRow("Sleep unit", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "sleepUnit", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_sleep_unit", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "sleepUnit", v, 16) end
+    end)
+    advRow("NPC step frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "npcStep", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_npc_step", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "npcStep", v, 16) end
+    end)
+    advRow("Spin frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "spinFrames", 4)) or 4
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_spin_frames", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "spinFrames", v, 4) end
+    end)
+    advRow("Bounce cycle", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "bouncePeriod", 32)) or 32
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_bounce", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "bouncePeriod", v, 32) end
+    end)
+    advRow("Bounce pose", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "bounceHalf", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_bounce_half", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "bounceHalf", v, 16) end
+    end)
+    advRow("Spinner turn", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "spinTurn", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_spin_turn", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "spinTurn", v, 16) end
+    end)
+    advRow("Wander from", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "wanderLo", 30)) or 30
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_wander_lo", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "wanderLo", v, 30) end
+    end)
+    advRow("Wander to", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "wanderHi", 180)) or 180
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_wander_hi", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "wanderHi", v, 180) end
+    end)
+    advRow("Turn chance", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "turnOdds", 50)) or 50
+      local v = math.max(0, math.min(100, math.floor(RegList.num(App, "pl_turn_odds", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "turnOdds", v, 50) end
+    end)
+    advRow("First pause from", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "spawnLo", 30)) or 30
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_spawn_lo", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "spawnLo", v, 30) end
+    end)
+    advRow("First pause to", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "spawnHi", 120)) or 120
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_spawn_hi", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "spawnHi", v, 120) end
+    end)
+    advRow("Slow spin from", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "slowSpinLo", 60)) or 60
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_slow_spin_lo", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "slowSpinLo", v, 60) end
+    end)
+    advRow("Slow spin to", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "slowSpinHi", 180)) or 180
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_slow_spin_hi", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "slowSpinHi", v, 180) end
+    end)
+    advRow("Fast spin from", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "fastSpinLo", 20)) or 20
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_fast_spin_lo", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "fastSpinLo", v, 20) end
+    end)
+    advRow("Fast spin to", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "fastSpinHi", 60)) or 60
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_fast_spin_hi", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "fastSpinHi", v, 60) end
+    end)
+    advRow("Walk frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "playerStep", 16)) or 16
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_walk_frames", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "playerStep", v, 16) end
+    end)
+    advRow("Turn frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "turnFrames", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_turn_frames", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "turnFrames", v, 4) end
+    end)
+    advRow("Approach gap", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "approachGap", 1)) or 1
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g2_approach", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "approachGap", v, 1) end
+    end)
+    advRow("Notice pause", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "noticeFrames", 30)) or 30
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g2_notice", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "noticeFrames", v, 30) end
+    end)
+    advRow("Fade steps", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "fadeSteps", 4)) or 4
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_fade_steps", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "fadeSteps", v, 4) end
+    end)
+    advRow("Fade frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "fadeFrames", 2)) or 2
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_fade_frames", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "fadeFrames", v, 2) end
+    end)
+    local fadeRamps = {
+      { "White fade", "fadeWhite", "FADE_WHITE" },
+      { "Black fade", "fadeBlack", "FADE_BLACK" },
+    }
+    for _, row in ipairs(fadeRamps) do
+      local label, key, cart = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[cart]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local list = Steps.shadeRows(v)
+        if not list then
+          v = default
+        else
+          local parts = {}
+          for _, shade in ipairs(list) do
+            for _, n in ipairs(shade) do parts[#parts + 1] = tostring(n) end
+          end
+          v = table.concat(parts, ", ")
+        end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Palette poll", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "palettePoll", 60)) or 60
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_palette_poll", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "palettePoll", v, 60) end
+    end)
+    advRow("Map reach", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "neighborHops", 2)) or 2
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_neighbor_hops", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "neighborHops", v, 2) end
+    end)
+    local g2Cues = {
+      { "Headbutt sound", "g2HeadbuttSfx", 109, 0, 255 },
+      { "Cut sound", "g2CutSfx", 30, 0, 255 },
+      { "Flash sound", "g2FlashSfx", 169, 0, 255 },
+      { "Falls sound", "g2FallSfx", 81, 0, 255 },
+      { "Boulder sound", "g2BoulderSfx", 27, 0, 255 },
+      { "Shock emote", "g2Shock", 0, 0, 255 },
+      { "Whirlpool wait", "g2Whirl", 180, 0, 255 },
+      { "Heal ball", "g2HealBall", 30, 0, 255 },
+      { "Heal flash", "g2HealFlash", 10, 0, 255 },
+      { "Heal flashes", "g2HealFlashes", 8, 0, 255 },
+      { "Heal anchor", "g2HealAnchor", 64, 0, 255 },
+      { "Heal flip", "g2HealFlip", 8, 0, 255 },
+    }
+    for _, row in ipairs(g2Cues) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local g2HealShift = {
+      { "Lab x", "g2HealShiftX", 16, -512, 512 },
+      { "Lab y", "g2HealShiftY", 32, -512, 512 },
+    }
+    for _, row in ipairs(g2HealShift) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local g2HealLists = {
+      { "Center lights", "g2HealPc", "HEAL_PC_MACHINE", "pair" },
+      { "Center balls", "g2HealBalls", "HEAL_PC_BALLS", "triple" },
+      { "Hall balls", "g2HealHof", "HEAL_HOF", "triple" },
+    }
+    for _, row in ipairs(g2HealLists) do
+      local label, key, which, kind = row[1], row[2], row[3], row[4]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local function flat(text)
+          if kind == "pair" then
+            local pairs = Steps.pairList(text) or {}
+            local parts = {}
+            for i = 1, #pairs do parts[i] = pairs[i][1] .. "," .. pairs[i][2] end
+            return table.concat(parts, ",")
+          end
+          local triples = Steps.tripleList(text) or {}
+          local parts = {}
+          for i = 1, #triples do
+            parts[i] = triples[i][1] .. "," .. triples[i][2] .. "," .. (triples[i][3] and 1 or 0)
+          end
+          return table.concat(parts, ",")
+        end
+        local parsed = kind == "pair" and Steps.pairList(v) or Steps.tripleList(v)
+        if not parsed or flat(v) == flat(default) then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Rod", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local default = Steps.G2_ROD
+      local cur = Steps.get(S, "g2Rod", default)
+      if type(cur) ~= "string" then cur = default end
+      local v = RegList.field(App, "pl_g2Rod", fx, fy_, fw, fh_, cur, default)
+      local function flat(text)
+        local rows = Steps.rodList(text) or {}
+        local parts = {}
+        for i = 1, #rows do
+          local row = rows[i]
+          parts[#parts + 1] = row.dx .. "," .. row.dy .. "," .. row.tile .. "," .. (row.flip and 1 or 0)
+        end
+        return table.concat(parts, ",")
+      end
+      if not Steps.rodList(v) or flat(v) == flat(default) then v = default end
+      if v ~= cur then Steps.set(S, App, "g2Rod", v, default) end
+    end)
+    advRow("Rod pose", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local default = Steps.G2_FISH_ROW
+      local cur = Steps.get(S, "g2FishRow", default)
+      if type(cur) ~= "string" then cur = default end
+      local v = RegList.field(App, "pl_g2FishRow", fx, fy_, fw, fh_, cur, default)
+      local function flat(text)
+        local list = Steps.holdList(text) or {}
+        if #list < 4 then return "" end
+        local parts = {}
+        for i = 1, 4 do
+          local n = list[i]
+          if n > 2 then n = 2 end
+          parts[i] = tostring(n)
+        end
+        return table.concat(parts, ",")
+      end
+      if flat(v) == "" or flat(v) == flat(default) then v = default end
+      if v ~= cur then Steps.set(S, App, "g2FishRow", v, default) end
+    end)
+    local g2TileRows = {
+      { "Tower frames", "g2Tower", "G2_TOWER", "hold" },
+      { "Scroll shift", "g2Scroll", "G2_SCROLL", "arc" },
+      { "Water frames", "g2Water", "G2_WATER", "hold" },
+      { "Whirlpool frames", "g2WhirlRows", "G2_WHIRL_ROWS", "hold" },
+      { "Lava ahead", "g2Lava", "G2_LAVA", "hold" },
+      { "Lava frames", "g2Lava2", "G2_LAVA2", "hold" },
+    }
+    for _, row in ipairs(g2TileRows) do
+      local label, key, which, kind = row[1], row[2], row[3], row[4]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local function flat(text)
+          local list = (kind == "arc" and Steps.arcList(text) or Steps.holdList(text)) or {}
+          if #list < 8 then return "" end
+          local parts = {}
+          for i = 1, 8 do parts[i] = tostring(list[i]) end
+          return table.concat(parts, ",")
+        end
+        if flat(v) == "" or flat(v) == flat(default) then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Strength pause", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "strengthPause", 3)) or 3
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_strength_pause", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "strengthPause", v, 3) end
+    end)
+    local g2Battle = {
+      { "Text pause", "g2TextPause", 30, 0, 255 },
+      { "Move delay", "g2MoveDelay", 40, 0, 255 },
+      { "HP step", "g2HpStep", 2, 0, 255 },
+      { "Faint row", "g2FaintRow", 2, 1, 255 },
+      { "Trainer steps", "g2SlideSteps", 8, 0, 255 },
+      { "Trainer step", "g2SlideStep", 2, 1, 255 },
+      { "Back steps", "g2BackSteps", 9, 0, 255 },
+      { "Win steps", "g2WinSteps", 6, 0, 255 },
+      { "Win step", "g2WinStep", 4, 1, 255 },
+      { "Win rest", "g2WinRest", 2, 0, 255 },
+      { "Win delay", "g2WinDelay", 40, 0, 255 },
+      { "Exit fade", "g2ExitFade", 8, 0, 255 },
+      { "Exit music", "g2ExitMusic", 4, 0, 255 },
+      { "Whiteout fade", "g2WhiteFade", 2, 0, 255 },
+      { "Whiteout hold", "g2WhiteHold", 40, 0, 255 },
+      { "Intro slide", "g2IntroSlide", 72, 0, 255 },
+      { "Exp sound", "g2ExpSound", 10, 0, 255 },
+      { "Exp wait", "g2ExpWait", 180, 0, 255 },
+      { "Exp gap", "g2ExpGap", 3, 0, 255 },
+      { "Exp burst", "g2ExpBurst", 8, 0, 255 },
+      { "Exp sparks", "g2ExpSparks", 8, 0, 255 },
+      { "Exp x", "g2ExpX", 76, 0, 255 },
+      { "Exp y", "g2ExpY", 88, 0, 255 },
+      { "Text x", "g2TextX", 1, 0, 255 },
+      { "Text y", "g2TextY", 14, 0, 255 },
+      { "Text width", "g2TextW", 18, 1, 255 },
+      { "Text rows", "g2TextRows", 2, 1, 255 },
+      { "Text step", "g2TextStep", 2, 0, 255 },
+      { "Arrow x", "g2ArrowX", 18, 0, 255 },
+      { "Arrow y", "g2ArrowY", 17, 0, 255 },
+      { "Menu x", "g2MenuX", 8, 0, 255 },
+      { "Menu gap", "g2MenuGap", 6, 0, 255 },
+      { "Park x", "g2ParkX", 2, 0, 255 },
+      { "Park gap", "g2ParkGap", 12, 0, 255 },
+    }
+    for _, row in ipairs(g2Battle) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Door white", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "mapWhite", 13)) or 13
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_map_white", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "mapWhite", v, 13) end
+    end)
+    advRow("Warp white", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "warpWhite", 15)) or 15
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_warp_white", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "warpWhite", v, 15) end
+    end)
+    local menuWhites = {
+      { "Menu white", "menuWhite", 23 },
+      { "Fly white", "flyWhite", 31 },
+      { "Fly build", "flyBuild", 28 },
+      { "Fly blank", "flyBlank", 21 },
+      { "Fly icon", "flyIcon", 3 },
+    }
+    for _, row in ipairs(menuWhites) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local pageWhites = {
+      { "Party white", "partyWhite", 11 },
+      { "Party icon", "partyIcon", 3 },
+      { "Bag white", "packWhite", 16 },
+      { "Gear white", "gearWhite", 20 },
+      { "Gear exit", "gearExit", 4 },
+      { "Card white", "cardWhite", 14 },
+      { "Dex white", "dexWhite", 27 },
+      { "Option white", "optionWhite", 8 },
+      { "Fade in", "fadeIn", 3 },
+    }
+    for _, row in ipairs(pageWhites) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    if not Generation.isCrystal(S) then
+      advRow("Party extra", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "partyExtra", 3)) or 3
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_party_extra", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "partyExtra", v, 3) end
+      end)
+    end
+    advRow("Walk cycle", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "walkCycle", 16)) or 16
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g2_cycle", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "walkCycle", v, 16) end
+    end)
+    advRow("Leg up from", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "legFrom", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g2_leg_from", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "legFrom", v, 4) end
+    end)
+    advRow("Leg up to", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "legTo", 12)) or 12
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g2_leg_to", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "legTo", v, 12) end
+    end)
+  elseif Generation.isGen3(S) then
+    advRow("Walk frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3Walk", 16)) or 16
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g3_walk", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3Walk", v, 16) end
+    end)
+    local g3Fish = {
+      { "Fish wait", "fishWait", 60, 0, 255 },
+      { "Fish dot", "fishDot", 20, 0, 255 },
+      { "Fish dots", "fishDots", 10, 0, 255 },
+      { "First dots", "fishFirst", 4, 0, 255 },
+      { "Waterfall", "waterfall", 32, 1, 255 },
+      { "Trade fade", "tradeFade", 16, 1, 255 },
+      { "Trade hold", "tradeHold", 60, 0, 255 },
+      { "Trade bye", "tradeBye", 80, 0, 255 },
+      { "Ball wait", "tradeDepart", 20, 0, 255 },
+      { "Ball return", "tradeReturn", 33, 1, 255 },
+      { "Ball close", "tradeClose", 10, 0, 255 },
+      { "Screen flash", "tradeFlash", 20, 0, 255 },
+      { "Arrived", "tradeArrived", 10, 0, 255 },
+      { "New mon", "tradeMon", 60, 0, 255 },
+      { "After mon", "tradeAfter", 60, 0, 255 },
+      { "Link save", "tradeSave", 50, 0, 255 },
+      { "Link jitter", "tradeJitter", 30, 0, 255 },
+      { "Link close", "tradeLink", 60, 0, 255 },
+    }
+    for _, row in ipairs(g3Fish) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local tradeVersion = Generation.isRse(S)
+      and { { "Fanfare", "tradeFanfareRs", 4 }, { "Take care", "tradeCareRs", 240 } }
+      or { { "Fanfare", "tradeFanfare", 10 }, { "Take care", "tradeCare", 250 } }
+    for _, row in ipairs(tradeVersion) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local sceneRows = {
+      { "Trade open", "tradeOpen", 16, 0 },
+      { "Anim pause", "animPause", 32, 0 },
+    }
+    if not Generation.isRse(S) then
+      sceneRows[#sceneRows + 1] = { "Ship horn", "anneHorn", 50, 0 }
+      sceneRows[#sceneRows + 1] = { "Ship smoke", "anneSmoke", 70, 0 }
+      sceneRows[#sceneRows + 1] = { "Ship step", "anneSlide", 5, 1 }
+      sceneRows[#sceneRows + 1] = { "Ship leave", "anneLeave", 40, 0 }
+      sceneRows[#sceneRows + 1] = { "Ship gone", "boatGone", -120, -512 }
+      sceneRows[#sceneRows + 1] = { "Wake step", "wakeStep", 6, 1 }
+      sceneRows[#sceneRows + 1] = { "Wake cap", "wakeCap", 22, 0 }
+      sceneRows[#sceneRows + 1] = { "Wake flip", "wakeFlip", 12, 1 }
+      sceneRows[#sceneRows + 1] = { "Wake x", "wakeX", 80, 0 }
+      sceneRows[#sceneRows + 1] = { "Wake gone", "wakeCull", -18, -512 }
+      sceneRows[#sceneRows + 1] = { "Wake y", "wakeY", 109, 0 }
+      sceneRows[#sceneRows + 1] = { "Wake lift", "wakeLift", 16, 0 }
+      sceneRows[#sceneRows + 1] = { "Smoke drift", "smokeStep", 4, 1 }
+      sceneRows[#sceneRows + 1] = { "Smoke 1", "smokeA", 10, 0 }
+      sceneRows[#sceneRows + 1] = { "Smoke 2", "smokeB", 30, 0 }
+      sceneRows[#sceneRows + 1] = { "Smoke 3", "smokeC", 50, 0 }
+      sceneRows[#sceneRows + 1] = { "Smoke end", "smokeEnd", 80, 0 }
+      sceneRows[#sceneRows + 1] = { "Smoke x", "smokeSpawn", 49, 0 }
+      sceneRows[#sceneRows + 1] = { "Smoke gone", "smokeCull", -32, -512 }
+      sceneRows[#sceneRows + 1] = { "Smoke y", "smokeY", 78, 0 }
+      sceneRows[#sceneRows + 1] = { "Smoke lift", "smokeLift", 8, 0 }
+      sceneRows[#sceneRows + 1] = { "Ferry cross", "ferryCross", 140, 0 }
+      sceneRows[#sceneRows + 1] = { "Ferry music", "ferryMusic", 64, 0 }
+      sceneRows[#sceneRows + 1] = { "Dude scroll", "dudeScroll", 120, 0 }
+      sceneRows[#sceneRows + 1] = { "Oak shade", "oakDim", 8, 0 }
+      sceneRows[#sceneRows + 1] = { "Oak wait", "oakWait", 4, 0 }
+    end
+    if Generation.versionId(S) == "emerald" then
+      sceneRows[#sceneRows + 1] = { "Arena pause", "arenaPause", 64, 0 }
+    end
+    for _, row in ipairs(sceneRows) do
+      local label, key, default, minV = row[1], row[2], row[3], row[4]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local motionRows = {
+      { "Slide start", "slideStart", 180, 0, 1024 },
+      { "Slide step", "slideStep", 3, 1, 255 },
+      { "Ball sound", "ballSound", 11, 0, 255 },
+      { "Ball fly", "ballFly", 44, 0, 255 },
+      { "Ball bounce", "ballBounce", 22, 0, 255 },
+      { "Ball rest", "ballRest", 20, 0, 255 },
+      { "Ball end", "ballEnd", 23, 0, 255 },
+      { "Zoom far", "zoomMax", 1024, 0, 4096 },
+      { "Zoom near", "zoomMin", 256, 0, 4096 },
+      { "Zoom step", "zoomStep", 52, 1, 255 },
+      { "Zoom screen", "zoomFar", 128, 0, 4096 },
+      { "Flash length", "flashAnim", 126, 0, 255 },
+      { "Screen top", "gbaTop", 348, 0, 1024 },
+      { "Screen pan", "panEnd", 316, 0, 1024 },
+      { "Cable line", "cableEnd", 328, 0, 1024 },
+      { "Cable stop", "travelEnd", 166, 0, 1024 },
+      { "Link height", "linkY", 80, -512, 512 },
+      { "Link off", "linkOff", -8, -512, 512 },
+      { "Cross step", "crossStep", 3, 1, 255 },
+      { "Cross enter", "crossEnter", -90, -512, 512 },
+      { "Cross exit", "crossExit", -222, -512, 512 },
+      { "Cross mons", "crossMon", -222, -512, 512 },
+      { "Cross top", "crossAy", 170, -512, 512 },
+      { "Cross bottom", "crossBy", -10, -512, 512 },
+      { "Arrive height", "arriveY", -20, -512, 512 },
+      { "Arrive stop", "arriveAt", 64, -512, 512 },
+      { "Screen center", "gbaCenter", 348, 0, 1024 },
+      { "Ball drop", "ballDrop", -8, -512, 512 },
+      { "Ball land", "ballLand", 74, -512, 512 },
+      { "Ball fall", "ballFall", 4, 1, 255 },
+      { "Ball bounce at", "ballIdx", 22, 0, 255 },
+      { "Ball stop", "ballStop", 108, 0, 255 },
+      { "Bounce 2", "bounce2", 66, 0, 255 },
+      { "Bounce 3", "bounce3", 92, 0, 255 },
+      { "Bounce 4", "bounce4", 107, 0, 255 },
+      { "Screen height", "screenH", 160, 1, 255 },
+    }
+    for _, row in ipairs(motionRows) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Ball arc", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local default = Steps.BALL_VEL
+      local cur = Steps.get(S, "ballVel", default)
+      if type(cur) ~= "string" then cur = default end
+      local v = RegList.field(App, "pl_ballVel", fx, fy_, fw, fh_, cur, default)
+      local function flat(text)
+        local rows = Steps.arcList(text) or {}
+        return table.concat(rows, ",")
+      end
+      if not Steps.arcList(v) or flat(v) == flat(default) then v = default end
+      if v ~= cur then Steps.set(S, App, "ballVel", v, default) end
+    end)
+    local g3HealRows = {
+      { "Center x", "g3HealX", 93, 0, 255 },
+      { "Center y", "g3HealY", 36, 0, 255 },
+      { "Screen x", "g3HealMonX", 128, 0, 255 },
+      { "Screen y", "g3HealMonY", 24, 0, 255 },
+      { "Ball nudge x", "g3HealNudgeX", -4, -512, 512 },
+      { "Ball nudge y", "g3HealNudgeY", -4, -512, 512 },
+      { "Screen nudge x", "g3HealMonNudgeX", -16, -512, 512 },
+      { "Screen nudge y", "g3HealMonNudgeY", -8, -512, 512 },
+      { "Ball gap", "g3HealGap", 25, 0, 255 },
+      { "Ball end", "g3HealEnd", 32, 0, 255 },
+      { "Glow step", "g3HealGlow", 8, 0, 255 },
+      { "Glow laps", "g3HealLaps", 3, 0, 255 },
+      { "Glow rest", "g3HealRest", 30, 0, 255 },
+      { "Screen laps", "g3HealMonLaps", 3, 0, 255 },
+    }
+    for _, row in ipairs(g3HealRows) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local g3HealLists = {
+      { "Ball places", "g3HealOffs", "G3_HEAL_OFFS", "pair" },
+      { "Screen frames", "g3HealSeq", "G3_HEAL_SEQ", "hold" },
+      { "Screen holds", "g3HealDurs", "G3_HEAL_DURS", "hold" },
+      { "Glow bright", "g3GlowK", "G3_GLOW_K", "hold" },
+      { "Glow colors", "g3GlowSlots", "G3_GLOW_SLOTS", "hold" },
+      { "Glow lead", "g3GlowLead", "G3_GLOW_LEAD", "hold" },
+    }
+    for _, row in ipairs(g3HealLists) do
+      local label, key, which, kind = row[1], row[2], row[3], row[4]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local function flat(text)
+          if kind == "pair" then
+            local pairs = Steps.pairList(text) or {}
+            local parts = {}
+            for i = 1, #pairs do parts[i] = pairs[i][1] .. "," .. pairs[i][2] end
+            return table.concat(parts, ",")
+          end
+          local list = Steps.holdList(text) or {}
+          return table.concat(list, ",")
+        end
+        local parsed = kind == "pair" and Steps.pairList(v) or Steps.holdList(v)
+        if not parsed or flat(v) == flat(default) then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local g3FishLists = {
+      { "Fish pictures", "g3FishBase", "G3_FISH_BASE", "base" },
+      { "Rod out", "g3FishOut", "G3_FISH_OUT", "hold" },
+      { "Rod away", "g3FishSn", "G3_FISH_SN", "hold" },
+      { "Rod away side", "g3FishWe", "G3_FISH_WE", "hold" },
+      { "Rod bite", "g3FishHook", "G3_FISH_HOOK", "hold" },
+      { "Rod shift", "g3FishOff", "G3_FISH_OFF", "quad" },
+      { "Field move", "g3FieldMove", "G3_FIELD_MOVE", "hold" },
+    }
+    if not Generation.isRse(S) then
+      g3FishLists[#g3FishLists + 1] = { "Seeker", "g3VsSeq", "G3_VS_SEQ", "hold" }
+      g3FishLists[#g3FishLists + 1] = { "Seeker bike", "g3VsBike", "G3_VS_BIKE", "hold" }
+    end
+    for _, row in ipairs(g3FishLists) do
+      local label, key, which, kind = row[1], row[2], row[3], row[4]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local function flat(text)
+          if kind == "quad" then
+            local rows = Steps.quadList(text) or {}
+            local parts = {}
+            for i = 1, #rows do
+              local r = rows[i]
+              parts[i] = r.frame .. "," .. r.x .. "," .. r.left .. "," .. r.y
+            end
+            return table.concat(parts, ",")
+          end
+          local list = Steps.holdList(text) or {}
+          if kind == "base" and #list < 4 then return "" end
+          if kind == "base" then
+            return list[1] .. "," .. list[2] .. "," .. list[3] .. "," .. list[4]
+          end
+          return table.concat(list, ",")
+        end
+        local parsed = kind == "quad" and Steps.quadList(v) or Steps.holdList(v)
+        if kind == "base" and parsed and #parsed < 4 then parsed = nil end
+        if not parsed or flat(v) == flat(default) then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local emeraldRun = Generation.versionId(S) == "emerald"
+    local g3PoseLists = {
+      { "Stand pictures", "g3Stand", "G3_STAND" },
+      { "Step pictures", "g3WalkA", "G3_WALK_A" },
+      { "Step pictures 2", "g3WalkB", "G3_WALK_B" },
+      { "Run still", "g3RunStill", emeraldRun and "G3_RUN_STILL_E" or "G3_RUN_STILL" },
+      { "Run step", "g3RunA", emeraldRun and "G3_RUN_A_E" or "G3_RUN_A" },
+      { "Run step 2", "g3RunB", emeraldRun and "G3_RUN_B_E" or "G3_RUN_B" },
+    }
+    for _, row in ipairs(g3PoseLists) do
+      local label, key, which = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local function flat(text)
+          local list = Steps.holdList(text) or {}
+          if #list < 4 then return "" end
+          return list[1] .. "," .. list[2] .. "," .. list[3] .. "," .. list[4]
+        end
+        local parsed = Steps.holdList(v)
+        if parsed and #parsed < 4 then parsed = nil end
+        if not parsed or flat(v) == flat(default) then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Bow picture", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3Bow", 9)) or 9
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g3Bow", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3Bow", v, 9) end
+    end)
+    advRow("Flash light", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local default = Generation.isRse(S) and Steps.G3_FLASH_RSE or Steps.G3_FLASH
+      local cur = Steps.get(S, "g3Flash", default)
+      if type(cur) ~= "string" then cur = default end
+      local v = RegList.field(App, "pl_g3Flash", fx, fy_, fw, fh_, cur, default)
+      local function flat(text)
+        local list = Steps.holdList(text) or {}
+        return table.concat(list, ",")
+      end
+      if flat(v) == "" or flat(v) == flat(default) then v = default end
+      if v ~= cur then Steps.set(S, App, "g3Flash", v, default) end
+    end)
+    advRow("Run frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3Run", 8)) or 8
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g3_run", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3Run", v, 8) end
+    end)
+    advRow("Turn frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3Turn", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g3_turn", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3Turn", v, 4) end
+    end)
+    advRow("Bike frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3Bike", 4)) or 4
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g3_bike", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3Bike", v, 4) end
+    end)
+    advRow("Ledge frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3Jump", 32)) or 32
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g3_jump", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3Jump", v, 32) end
+    end)
+    advRow("Slow run", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3Slow", 11)) or 11
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g3_slow", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3Slow", v, 11) end
+    end)
+    advRow("Downhill frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3Fast", 4)) or 4
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g3_fast", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3Fast", v, 4) end
+    end)
+    advRow("Run cycle", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3RunCycle", 8)) or 8
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g3_run_cycle", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3RunCycle", v, 8) end
+    end)
+    advRow("Run pose", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3RunPose", 5)) or 5
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g3_run_pose", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3RunPose", v, 5) end
+    end)
+    advRow("Approach gap", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "approachGap", 1)) or 1
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g3_approach", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "approachGap", v, 1) end
+    end)
+    advRow("Notice pause", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "emoteFrames", 60)) or 60
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g3_notice", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "emoteFrames", v, 60) end
+    end)
+    if not Generation.isRse(S) then
+      advRow("Mark step", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "markStep", 1)) or 1
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_mark_step", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "markStep", v, 1) end
+      end)
+      advRow("Emote first", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "emoteA", 4)) or 4
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_emote_a", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "emoteA", v, 4) end
+      end)
+      advRow("Emote second", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "emoteB", 8)) or 8
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_emote_b", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "emoteB", v, 8) end
+      end)
+      advRow("Mark height", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "markLift", 16)) or 16
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_mark_lift", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "markLift", v, 16) end
+      end)
+      local markPics = {
+        { "Exclaim", "markBang", 0 }, { "Double", "markBang2", 6 },
+        { "Cross", "markX", 3 }, { "Smile", "markSmile", 9 },
+        { "Question", "markAsk", 12 },
+      }
+      for _, row in ipairs(markPics) do
+        local label, key, default = row[1], row[2], row[3]
+        advRow(label, function(fx, fy_, fw, fh_)
+          local Steps = require("StepCounters")
+          local cur = tonumber(Steps.get(S, key, default)) or default
+          local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+          if v ~= cur then Steps.set(S, App, key, v, default) end
+        end)
+      end
+    end
+    local reflRows = {
+      { "Reflection drop", "reflDrop", 14, -128, 127 },
+      { "Reflection reach", "reflCull", 64, 0, 255 },
+      { "Reflection pad", "reflPad", 8, 0, 255 },
+    }
+    for _, row in ipairs(reflRows) do
+      local label, key, default, lo, hi = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(lo, math.min(hi, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    if Generation.isRse(S) then
+      local bridges = {
+        { "Bridge 1", "reflBridge1", 12 },
+        { "Bridge 2", "reflBridge2", 28 },
+        { "Bridge 3", "reflBridge3", 44 },
+      }
+      for _, row in ipairs(bridges) do
+        local label, key, default = row[1], row[2], row[3]
+        advRow(label, function(fx, fy_, fw, fh_)
+          local Steps = require("StepCounters")
+          local cur = tonumber(Steps.get(S, key, default)) or default
+          local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+          if v ~= cur then Steps.set(S, App, key, v, default) end
+        end)
+      end
+      advRow("Water wave", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps.DISTORT
+        local cur = Steps.get(S, "distort", default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_distort", fx, fy_, fw, fh_, cur, default)
+        local list = Steps.arcList(v)
+        local same = list and table.concat(list, ", ") == table.concat(Steps.arcList(default), ", ")
+        if same or not list or #list < 2 then v = default end
+        if v ~= cur then Steps.set(S, App, "distort", v, default) end
+      end)
+    end
+    advRow("Cut frame", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "cutHold", 6)) or 6
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_cut_hold", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "cutHold", v, 6) end
+    end)
+    local cutRows = {
+      { "Cut across", "cutX", -8 },
+      { "Cut down", "cutY", -16 },
+    }
+    for _, row in ipairs(cutRows) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(-128, math.min(127, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Leaf frame", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "leafStep", 4)) or 4
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_leaf_step", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "leafStep", v, 4) end
+    end)
+    advRow("Leaf fall", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "leafFall", 0.12)) or 0.12
+      local v = tonumber(RegList.num(App, "pl_leaf_fall", fx, fy_, 100 * s, fh_, cur)) or cur
+      if v < 0 then v = 0 end
+      if v > 10 then v = 10 end
+      if v ~= cur then Steps.set(S, App, "leafFall", v, 0.12) end
+    end)
+    local grassPuff = {
+      { "Grass speed", "grassBase", 1.2 },
+      { "Grass spread", "grassSpread", 1 },
+      { "Grass lift", "grassLift", 1 },
+    }
+    for _, row in ipairs(grassPuff) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = tonumber(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur)) or cur
+        if v < 0 then v = 0 end
+        if v > 10 then v = 10 end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Grass spot", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "grassSpot", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_grass_spot", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "grassSpot", v, 4) end
+    end)
+    advRow("Smash frame", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "smashHold", 6)) or 6
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_smash_hold", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "smashHold", v, 6) end
+    end)
+    advRow("Smash chip", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "smashStep", 4)) or 4
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_smash_step", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "smashStep", v, 4) end
+    end)
+    advRow("Smash fall", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "smashFall", 0.15)) or 0.15
+      local v = tonumber(RegList.num(App, "pl_smash_fall", fx, fy_, 100 * s, fh_, cur)) or cur
+      if v < 0 then v = 0 end
+      if v > 10 then v = 10 end
+      if v ~= cur then Steps.set(S, App, "smashFall", v, 0.15) end
+    end)
+    local smashPuff = {
+      { "Chip speed", "smashBase", 1.2 },
+      { "Chip spread", "smashSpread", 1.6 },
+      { "Chip lift", "smashLift", 1.5 },
+      { "Chip wobble", "smashJitter", 0.3 },
+    }
+    for _, row in ipairs(smashPuff) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = tonumber(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur)) or cur
+        if v < 0 then v = 0 end
+        if v > 10 then v = 10 end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Chip spot", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "smashSpot", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_smash_spot", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "smashSpot", v, 4) end
+    end)
+    advRow("Grass length", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "grassFrames", 24)) or 24
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_grass_frames", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "grassFrames", v, 24) end
+    end)
+    advRow("Scent length", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "scentFrames", 50)) or 50
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_scent_frames", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "scentFrames", v, 50) end
+    end)
+    advRow("Scent size", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "scentRadius", 120)) or 120
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_scent_radius", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "scentRadius", v, 120) end
+    end)
+    local scentRows = {
+      { "Scent gap", "scentGap", 20 },
+      { "Scent across", "scentX", 120 },
+      { "Scent down", "scentY", 80 },
+    }
+    for _, row in ipairs(scentRows) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Splash frame", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "splashHold", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_splash_hold", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "splashHold", v, 4) end
+    end)
+    advRow("Dust frame", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "dustHold", 8)) or 8
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_dust_hold", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "dustHold", v, 8) end
+    end)
+    local puffPics = {
+      { "Splash pictures", "splashPics", "SPLASH_PICS" },
+      { "Dust pictures", "dustPics", "DUST_PICS" },
+    }
+    for _, row in ipairs(puffPics) do
+      local label, key, which = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local list = Steps.holdList(v)
+        local same = list and table.concat(list, ", ") == table.concat(Steps.holdList(default), ", ")
+        if same or not list then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Rustle frame", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "rustleHold", 10)) or 10
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_rustle_hold", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "rustleHold", v, 10) end
+    end)
+    advRow("Rustle pictures", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local default = Steps.RUSTLE
+      local cur = Steps.get(S, "rustlePics", default)
+      if type(cur) ~= "string" then cur = default end
+      local v = RegList.field(App, "pl_rustle_pics", fx, fy_, fw, fh_, cur, default)
+      local list = Steps.holdList(v)
+      local same = list and table.concat(list, ", ") == table.concat(Steps.holdList(default), ", ")
+      if same or not list then v = default end
+      if v ~= cur then Steps.set(S, App, "rustlePics", v, default) end
+    end)
+    advRow("Foot height", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "feetH", 8)) or 8
+      local v = math.max(1, math.min(16, math.floor(RegList.num(App, "pl_feet_h", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "feetH", v, 8) end
+    end)
+    advRow("Grass slack", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "grassSlack", 2)) or 2
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_grass_slack", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "grassSlack", v, 2) end
+    end)
+    local waterHolds = {
+      { "Feet pictures", "feetPics", "FEET_PICS" },
+      { "Ripple pictures", "ripplePics", "RIPPLE_PICS" },
+      { "Feet holds", "feetHold", "FEET_HOLD" },
+      { "Ripple holds", "rippleHold", "RIPPLE_HOLD" },
+    }
+    for _, row in ipairs(waterHolds) do
+      local label, key, which = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local list = Steps.holdList(v)
+        local same = list and table.concat(list, ", ") == table.concat(Steps.holdList(default), ", ")
+        if same or not list then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Ripple down", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "rippleY", 6)) or 6
+      local v = math.max(-128, math.min(127, math.floor(RegList.num(App, "pl_ripple_y", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "rippleY", v, 6) end
+    end)
+    if Generation.isRse(S) then
+      local groundRows = {
+        { "Short grass", "shortLift", 8, -128, 127 },
+        { "Sand lift", "sandLift", 2, -128, 127 },
+        { "Tire blink", "tireBlink", 41, 0, 255 },
+        { "Tire end", "tireEnd", 57, 0, 255 },
+        { "Effect center", "place", 8, 0, 255 },
+        { "Puddle drop", "splashDrop", 12, 0, 255 },
+        { "Bubble down", "bubbleY", 0, 0, 255 },
+        { "Berry sparkle", "berryY", 4, 0, 255 },
+        { "Sand pillar", "pillarY", 0, 0, 255 },
+        { "Sparkle wait", "sparkleWait", 34, 0, 255 },
+        { "Sand picture", "sandFrame", 2, 0, 255 },
+      }
+      for _, row in ipairs(groundRows) do
+        local label, key, default, lo, hi = row[1], row[2], row[3], row[4], row[5]
+        advRow(label, function(fx, fy_, fw, fh_)
+          local Steps = require("StepCounters")
+          local cur = tonumber(Steps.get(S, key, default)) or default
+          local v = math.max(lo, math.min(hi, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+          if v ~= cur then Steps.set(S, App, key, v, default) end
+        end)
+      end
+      advRow("Bubble rise", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "bubbleRise", 0.5)) or 0.5
+        local v = tonumber(RegList.num(App, "pl_bubble_rise", fx, fy_, 100 * s, fh_, cur)) or cur
+        if v < 0 then v = 0 end
+        if v > 10 then v = 10 end
+        if v ~= cur then Steps.set(S, App, "bubbleRise", v, 0.5) end
+      end)
+      advRow("Tire turns", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps.TIRE_TURNS
+        local cur = Steps.get(S, "tireTurns", default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_tire_turns", fx, fy_, fw, fh_, cur, default)
+        local list = Steps.holdList(v)
+        local same = list and table.concat(list, ", ") == table.concat(Steps.holdList(default), ", ")
+        if same or not list or #list < 16 then v = default end
+        if v ~= cur then Steps.set(S, App, "tireTurns", v, default) end
+      end)
+    end
+    advRow("Surf frame", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "surfHold", 48)) or 48
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_surf_hold", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "surfHold", v, 48) end
+    end)
+    local surfSize = {
+      { "Blob width", "surfW", 32 },
+      { "Blob height", "surfH", 32 },
+      { "Blob frames", "surfFrames", 6 },
+    }
+    for _, row in ipairs(surfSize) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local blobRows = {
+      { "Blob across", "blobX", -8 },
+      { "Blob down", "blobY", -8 },
+      { "Blob bob", "blobBob", -1 },
+    }
+    for _, row in ipairs(blobRows) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(-128, math.min(127, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Track blink", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "trackBlink", 41)) or 41
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_track_blink", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "trackBlink", v, 41) end
+    end)
+    advRow("Track length", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "trackEnd", 57)) or 57
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_track_end", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "trackEnd", v, 57) end
+    end)
+    advRow("Shake every", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "shakeEvery", 4)) or 4
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_shake_every", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "shakeEvery", v, 4) end
+    end)
+    advRow("Shake size", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "shakeAmp", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_shake_amp", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "shakeAmp", v, 4) end
+    end)
+    advRow("Shake fade", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "shakeFade", 2)) or 2
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_shake_fade", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "shakeFade", v, 2) end
+    end)
+    advRow("Rock wait", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "rockWait", 120)) or 120
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_rock_wait", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "rockWait", v, 120) end
+    end)
+    advRow("Rock size", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "rockAmp", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_rock_amp", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "rockAmp", v, 4) end
+    end)
+    advRow("Rock fade", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "rockDecay", 21)) or 21
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_rock_decay", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "rockDecay", v, 21) end
+    end)
+    advRow("Shard across", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "fragX", 260)) or 260
+      local v = math.max(0, math.min(9999, math.floor(RegList.num(App, "pl_frag_x", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "fragX", v, 260) end
+    end)
+    advRow("Shard down", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "fragY", 200)) or 200
+      local v = math.max(0, math.min(9999, math.floor(RegList.num(App, "pl_frag_y", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "fragY", v, 200) end
+    end)
+    local rockRows = {
+      { "Shard step", "shardX", 16, 0 }, { "Shard lift", "shardY", 12, 0 },
+      { "Rock hold", "rockHold", 2, 1 }, { "Rock flip", "rockFlip", 1, 1 },
+    }
+    for _, row in ipairs(rockRows) do
+      local label, key, default, minV = row[1], row[2], row[3], row[4]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local startRows = {
+      { "Start across", "rockFootX", -8, -128, 127 },
+      { "Start down", "rockFootY", -20, -128, 127 },
+      { "Start above", "rockTop", 4, 0, 255 },
+    }
+    for _, row in ipairs(startRows) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local flyRows = {
+      { "Fly pause", "flySwoop", 16 },
+      { "Fly mount", "flyMount", 8 },
+      { "Fly away", "flyOff", 10 },
+      { "Fly ride", "flyIn", 33 },
+      { "Fly pose", "flyPose", 24 },
+      { "Fly finish", "flyEnd", 16 },
+    }
+    for _, row in ipairs(flyRows) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local warpRows = {
+      { "Warp spin", "tpSpin", 8 }, { "Warp turns", "tpTurns", 8 },
+      { "Warp rise", "tpRiseTurn", 4 }, { "Rise first", "tpSpeedFirst", 8 },
+      { "Rise every", "tpSpeedEvery", 4 }, { "Rise cap", "tpSpeedCap", 8 },
+      { "Warp lift", "tpLift", 8 }, { "Warp height", "tpVanish", 168 },
+      { "Warp drop", "tpDrop", 8 }, { "Drop turn", "tpDropTurn", 4 },
+      { "Drop slow", "tpSlow", 48 }, { "Drop clear", "tpGround", 8 },
+      { "Land spin", "tpLand", 8 }, { "Land turns", "tpLandTurns", 4 },
+      { "Drop start", "tpStart", 88 },
+    }
+    for _, row in ipairs(warpRows) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local birdRows = {
+      { "Swoop wide", "birdSwoopX", 140, 0 }, { "Swoop high", "birdSwoopY", 72, 0 },
+      { "Swoop step", "birdSwoopStep", 4, 1 }, { "Swoop end", "birdSwoopEnd", 128, 0 },
+      { "Ride wide", "birdRideX", 180, 0 }, { "Ride high", "birdRideY", 72, 0 },
+      { "Ride step", "birdRideStep", 2, 1 }, { "Ride end", "birdRideEnd", 128, 0 },
+    }
+    for _, row in ipairs(birdRows) do
+      local label, key, default, minV = row[1], row[2], row[3], row[4]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(255, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local spawnRows = {
+      { "Boy pop", "popBoy", 128, 0, 255 }, { "Girl pop", "popGirl", 118, 0, 255 },
+      { "Pop height", "popY", -48, -128, 127 },
+      { "Boy return", "backBoy", 112, 0, 255 }, { "Girl return", "backGirl", 100, 0, 255 },
+      { "Return height", "backY", -32, -128, 127 },
+      { "Dive across", "diveX", 120, 0, 255 }, { "Dive height", "diveY", 0, -128, 127 },
+      { "Ride across", "rideX", 120, 0, 255 }, { "Ride down", "rideY", 72, 0, 255 },
+      { "Seat", "seat", 8, 0, 255 }, { "Bird nudge", "birdNudge", 8, 0, 255 },
+      { "Boy away", "boyAway", 1, 0, 255 }, { "Girl away", "girlAway", 3, 0, 255 },
+      { "Boy home", "boyHome", 2, 0, 255 }, { "Girl home", "girlHome", 4, 0, 255 },
+      { "Bird rest", "birdRest", 0, 0, 255 },
+      { "Bird width", "birdW", 64, 1, 255 },
+      { "Bird height", "birdH", 64, 1, 255 },
+      { "Bird frames", "birdFrames", 5, 1, 255 },
+    }
+    for _, row in ipairs(spawnRows) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local ballRows = {
+      { "Ball wide", "ballWide", 120, 255 }, { "Ball push", "ballPush", 96, 255 },
+      { "Ball cap", "ballCap", 2048, 9999 }, { "Ball end", "ballEnd", 129, 255 },
+      { "Ball angle", "ballAngle", 64, 255 }, { "Ball speed", "ballSpeed", 256, 9999 },
+    }
+    for _, row in ipairs(ballRows) do
+      local label, key, default, maxV = row[1], row[2], row[3], row[4]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(0, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local backRows = {
+      { "Back wide", "returnWide", 32, 255 }, { "Back high", "returnHigh", 120, 255 },
+      { "Back angle", "returnAngle", 240, 255 }, { "Back speed", "returnSpeed", 2048, 9999 },
+      { "Back brake", "returnBrake", 128, 255 }, { "Brake grow", "returnGrow", 24, 255 },
+      { "Back floor", "returnFloor", 256, 9999 }, { "Brake cap", "returnBrakeCap", 256, 9999 },
+      { "Back end", "returnEnd", 60, 255 },
+    }
+    local spinRows = {
+      { "Pop size", "leaveScale", 8, 0, 9999 }, { "Pop tilt", "leaveTilt", -30, -128, 127 },
+      { "Pop frames", "leaveFrames", 30, 0, 255 }, { "Pop grow", "leaveGrow", 28, 0, 255 },
+      { "Shrink size", "shrinkScale", 256, 0, 9999 }, { "Shrink tilt", "shrinkTilt", 64, -128, 127 },
+      { "Shrink frames", "shrinkFrames", 22, 0, 255 }, { "Shrink step", "shrinkStep", 10, 0, 255 },
+      { "Away grow", "awayGrow", 24, 0, 255 }, { "Arrive pop", "arrivePop", 512, 0, 9999 },
+      { "Arrive shrink", "arriveShrink", 16, 0, 255 },
+    }
+    for _, row in ipairs(backRows) do
+      local label, key, default, maxV = row[1], row[2], row[3], row[4]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(0, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    for _, row in ipairs(spinRows) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Flash length", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "flashFrames", 30)) or 30
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_flash_frames", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "flashFrames", v, 30) end
+    end)
+    advRow("Veil length", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "veilFrames", 8)) or 8
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_veil_frames", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "veilFrames", v, 8) end
+    end)
+    local flyHops = {
+      { "Onto bird", "mountArc", "MOUNT_ARC" },
+      { "Off bird", "dismountArc", "DISMOUNT_ARC" },
+    }
+    for _, row in ipairs(flyHops) do
+      local label, key, which = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local list = Steps.arcList(v)
+        local same = list and table.concat(list, ", ") == table.concat(Steps.arcList(default), ", ")
+        if same or not list then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("NPC walk", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3NpcWalk", 16)) or 16
+      local v = math.max(1, math.min(65535, math.floor(RegList.num(App, "pl_g3_npc_walk", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3NpcWalk", v, 16) end
+    end)
+    advRow("NPC run", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3NpcRun", 8)) or 8
+      local v = math.max(1, math.min(65535, math.floor(RegList.num(App, "pl_g3_npc_run", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3NpcRun", v, 8) end
+    end)
+    advRow("NPC slow run", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3NpcSlow", 11)) or 11
+      local v = math.max(1, math.min(65535, math.floor(RegList.num(App, "pl_g3_npc_slow", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3NpcSlow", v, 11) end
+    end)
+    advRow("Float step", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3LevStep", 4)) or 4
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g3_lev_step", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3LevStep", v, 4) end
+    end)
+    advRow("Float turn", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3LevTurn", 16)) or 16
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g3_lev_turn", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3LevTurn", v, 16) end
+    end)
+    advRow("Float pixels", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3LevPixel", 1)) or 1
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g3_lev_px", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3LevPixel", v, 1) end
+    end)
+    local figRows = {
+      { "Figure 8 across", "fig8X", "FIG8_X" },
+      { "Figure 8 down", "fig8Y", "FIG8_Y" },
+      { "Copy from", "copyFor", "COPY_FOR" },
+      { "Copy to", "copyTo", "COPY_TO" },
+    }
+    for _, row in ipairs(figRows) do
+      local label, key, which = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local list = Steps.arcList(v)
+        local same = list and table.concat(list, ", ") == table.concat(Steps.arcList(default), ", ")
+        if same or not list then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local playerArcs = {
+      { "Ledge arc", "playerHopHigh", "-4, -6, -8, -10, -11, -12, -12, -12, -11, -10, -9, -8, -6, -4, 0, 0" },
+      { "Player hop", "playerHop", "-2, -4, -6, -8, -9, -10, -10, -10, -9, -8, -6, -5, -3, -2, 0, 0" },
+      { "Player low hop", "playerHopLow", "0, -2, -3, -4, -5, -6, -6, -6, -5, -5, -4, -3, -2, 0, 0, 0" },
+      { "Surf hop arc", "surfHop", "-2, -4, -6, -8, -9, -10, -10, -9, -8, -6, -4, -2, 0, 0, 0, 0" },
+    }
+    for _, row in ipairs(playerArcs) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local list = Steps.arcList(v)
+        local same = list and table.concat(list, ", ") == table.concat(Steps.arcList(default), ", ")
+        if same or not list then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local pauseRows = {
+      { "Medium 1", "g3Med1", 32 }, { "Medium 2", "g3Med2", 64 },
+      { "Medium 3", "g3Med3", 96 }, { "Medium 4", "g3Med4", 128 },
+      { "Long 1", "g3Long1", 32 }, { "Long 2", "g3Long2", 64 },
+      { "Long 3", "g3Long3", 128 }, { "Long 4", "g3Long4", 192 },
+      { "Short 1", "g3Short1", 32 }, { "Short 2", "g3Short2", 48 },
+      { "Short 3", "g3Short3", 64 }, { "Short 4", "g3Short4", 80 },
+    }
+    for _, row in ipairs(pauseRows) do
+      local label, key, default = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Rotate pause", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "g3Rotate", 48)) or 48
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_g3_rotate", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "g3Rotate", v, 48) end
+    end)
+    if Generation.isRse(S) then
+      advRow("Mach coast", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseCoast", 16)) or 16
+        local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_rse_coast", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseCoast", v, 16) end
+      end)
+      advRow("Mach speed", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseSpeed", 8)) or 8
+        local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_rse_speed", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseSpeed", v, 8) end
+      end)
+      advRow("Mach top", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseTop", 4)) or 4
+        local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_rse_top", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseTop", v, 4) end
+      end)
+      advRow("Acro roll", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseAcro", 6)) or 6
+        local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_rse_acro", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseAcro", v, 6) end
+      end)
+      advRow("Acro hop", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseHop", 16)) or 16
+        local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_rse_hop", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseHop", v, 16) end
+      end)
+      advRow("Acro ledge", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseLedge", 32)) or 32
+        local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_rse_ledge", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseLedge", v, 32) end
+      end)
+      advRow("Hop window", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseWindow", 4)) or 4
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_rse_window", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseWindow", v, 4) end
+      end)
+      advRow("Wall bump", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseBump", 16)) or 16
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_rse_bump", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseBump", v, 16) end
+      end)
+      advRow("Turn bump", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseTurnBump", 8)) or 8
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_rse_turnbump", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseTurnBump", v, 8) end
+      end)
+      advRow("Wheelie frames", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "rseWheelie", 8)) or 8
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_rse_wheelie", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "rseWheelie", v, 8) end
+      end)
+      advRow("NPC hop", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "g3NpcHop", 16)) or 16
+        local v = math.max(1, math.min(65535, math.floor(RegList.num(App, "pl_g3_npc_hop", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "g3NpcHop", v, 16) end
+      end)
+      advRow("NPC far hop", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "g3NpcFar", 32)) or 32
+        local v = math.max(1, math.min(65535, math.floor(RegList.num(App, "pl_g3_npc_far", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "g3NpcFar", v, 32) end
+      end)
+      local arcRows = {
+        { "Hop arc", "hopArc", "-2, -4, -6, -8, -9, -10, -10, -10, -9, -8, -6, -5, -3, -2, 0, 0" },
+        { "High hop arc", "hopArcHigh", "-4, -6, -8, -10, -11, -12, -12, -12, -11, -10, -9, -8, -6, -4, 0, 0" },
+        { "Low hop arc", "hopArcLow", "0, -2, -3, -4, -5, -6, -6, -6, -5, -5, -4, -3, -2, 0, 0, 0" },
+      }
+      for _, row in ipairs(arcRows) do
+        local label, key, default = row[1], row[2], row[3]
+        advRow(label, function(fx, fy_, fw, fh_)
+          local Steps = require("StepCounters")
+          local cur = Steps.get(S, key, default)
+          if type(cur) ~= "string" then cur = default end
+          local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+          local list = Steps.arcList(v)
+          local same = list and table.concat(list, ", ") == table.concat(Steps.arcList(default), ", ")
+          if same or not list then v = default end
+          if v ~= cur then Steps.set(S, App, key, v, default) end
+        end)
+      end
+      advRow("Berry blink", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "berryBlink", 2)) or 2
+        local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_berry_blink", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "berryBlink", v, 2) end
+      end)
+      advRow("Berry sparkle", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "berrySparkle", 64)) or 64
+        local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_berry_sparkle", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "berrySparkle", v, 64) end
+      end)
+      advRow("Emote hop", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "emoteHop", -5)) or -5
+        local v = math.max(-128, math.min(127, math.floor(RegList.num(App, "pl_emote_hop", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "emoteHop", v, -5) end
+      end)
+      advRow("Emote gravity", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "emoteGravity", 1)) or 1
+        local v = math.max(-128, math.min(127, math.floor(RegList.num(App, "pl_emote_grav", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "emoteGravity", v, 1) end
+      end)
+      advRow("Mark gap", function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, "markGap", 8)) or 8
+        local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_mark_gap", fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, "markGap", v, 8) end
+      end)
+    end
+  else
+    advRow("Walk frames", function(fx, fy_, fw, fh_)
+      local cur = tonumber(Player.worldField(S, "stepFrames", 16)) or 16
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g1_walk", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Player.setWorld(S, "stepFrames", v, 16, App) end
+    end)
+    advRow("Bike frames", function(fx, fy_, fw, fh_)
+      local cur = tonumber(Player.worldField(S, "bikeStepFrames", 8)) or 8
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g1_bike", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Player.setWorld(S, "bikeStepFrames", v, 8, App) end
+    end)
+    advRow("Turn frames", function(fx, fy_, fw, fh_)
+      local cur = tonumber(Player.worldField(S, "turnFrames", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_turn", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Player.setWorld(S, "turnFrames", v, 4, App) end
+    end)
+    advRow("Touch turn", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "touchTurn", 8)) or 8
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_touch", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "touchTurn", v, 8) end
+    end)
+    advRow("Walk loop", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "loopFrames", 2)) or 2
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g1_loop", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "loopFrames", v, 2) end
+    end)
+    advRow("Spin cadence", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "spinIter", 6)) or 6
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g1_spin", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "spinIter", v, 6) end
+    end)
+    advRow("Ledge lift", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "hopPeak", 10)) or 10
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_hop", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "hopPeak", v, 10) end
+    end)
+    advRow("Surf bob cycle", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "bobPeriod", 32)) or 32
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g1_bob", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "bobPeriod", v, 32) end
+    end)
+    advRow("Surf bob pose", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "bobHalf", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_bob_half", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "bobHalf", v, 16) end
+    end)
+    advRow("Surf bob drop", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "bobPixels", 1)) or 1
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_bob_px", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "bobPixels", v, 1) end
+    end)
+    advRow("Hole drop", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "holeSink", 8)) or 8
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_hole", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "holeSink", v, 8) end
+    end)
+    advRow("Walk cycle", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "walkCycle", 16)) or 16
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g1_cycle", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "walkCycle", v, 16) end
+    end)
+    advRow("Leg up from", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "legFrom", 4)) or 4
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_leg_from", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "legFrom", v, 4) end
+    end)
+    advRow("Leg up to", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "legTo", 12)) or 12
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_leg_to", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "legTo", v, 12) end
+    end)
+    advRow("Spin lift", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "spinRise", 16)) or 16
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_rise", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "spinRise", v, 16) end
+    end)
+    advRow("Warp lift", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "warpLift", 24)) or 24
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_warp", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "warpLift", v, 24) end
+    end)
+    advRow("Warp frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "warpFrames", 64)) or 64
+      local v = math.max(1, math.min(255, math.floor(RegList.num(App, "pl_g1_warp_frames", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "warpFrames", v, 64) end
+    end)
+    local g1Travel = {
+      { "Fly fade", "g1FlyFade", 4, 0, 255 },
+      { "Fly flap", "g1FlyFlap", 8, 0, 255 },
+      { "Fly beat", "g1FlyBeat", 40, 0, 255 },
+      { "Fly step", "g1FlyStep", 3, 1, 255 },
+      { "Teleport out", "g1TeleportOut", 135, 0, 65535 },
+      { "Pad out", "g1PadOut", 15, 0, 255 },
+      { "Teleport in", "g1TeleportIn", 43, 0, 255 },
+      { "Pad in", "g1PadIn", 18, 0, 255 },
+      { "Drop steps", "g1DropSteps", 6, 0, 255 },
+      { "Hole spin", "g1HoleIn", 15, 0, 255 },
+      { "Rise at", "g1InPlace", 16, 0, 255 },
+      { "Ship keep", "g1ShipKeep", 16, 0, 255 },
+      { "Ship sail", "g1Sail", 128, 0, 255 },
+      { "Ship step", "g1SailStep", 8, 0, 255 },
+      { "Smoke every", "g1SmokeEvery", 16, 0, 255 },
+      { "Smoke x", "g1SmokeX", 64, 0, 255 },
+      { "Smoke y", "g1SmokeY", 20, 0, 255 },
+      { "Smoke drift", "g1SmokeDrift", 2, -128, 127 },
+      { "Ship x", "g1ShipX", 5, 0, 255 },
+      { "Ship y", "g1ShipY", 1, 0, 255 },
+      { "Ship wide", "g1ShipW", 4, 0, 255 },
+      { "Ship tall", "g1ShipH", 2, 0, 255 },
+      { "Ghost pad", "g1GhostPad", 16, 0, 255 },
+      { "Heal screen", "g1HealMonX", 44, 0, 255 },
+      { "Heal height", "g1HealMonY", 20, 0, 255 },
+      { "Heal anchor", "g1HealAnchor", 64, 0, 255 },
+      { "Heal flip", "g1HealFlip", 8, 0, 255 },
+      { "Heal ball", "g1HealBall", 30, 0, 255 },
+      { "Heal flash", "g1HealFlash", 10, 0, 255 },
+      { "Heal flashes", "g1HealFlashes", 8, 0, 255 },
+      { "Delay", "g1Delay", 3, 0, 255 },
+      { "Fade from black", "g1FadeBlack", 32, 0, 255 },
+      { "Fade to white", "g1OutWhite", 24, 0, 255 },
+      { "Fade from white", "g1InWhite", 24, 0, 255 },
+      { "Warp out", "g1WarpOut", 32, 0, 255 },
+      { "Warp in", "g1WarpIn", 0, 0, 255 },
+      { "Battle return", "g1BattleReturn", 10, 0, 255 },
+      { "Hole wait", "g1HoleWait", 50, 0, 255 },
+      { "Text scroll", "g1Scroll", 10, 0, 255 },
+      { "Text wait", "g1TextWait", 3, 0, 255 },
+      { "Page clear", "g1PageClear", 20, 0, 255 },
+      { "Yes or no", "g1YesNo", 15, 0, 255 },
+      { "Slide in", "g1Slide", 72, 0, 255 },
+      { "Slide step", "g1SlidePx", 2, 0, 255 },
+      { "Trainer gap", "g1TrainerGap", 20, 0, 255 },
+      { "Send out", "g1SendOut", 40, 0, 255 },
+      { "Move start", "g1MovePre", 3, 0, 255 },
+      { "Move end", "g1MoveOff", 30, 0, 255 },
+      { "Miss wait", "g1Miss", 30, 0, 255 },
+      { "Substitute", "g1Substitute", 50, 0, 255 },
+      { "Shake up", "g1ShakeV", 48, 0, 255 },
+      { "Shake hard", "g1ShakeHeavy", 72, 0, 255 },
+      { "Shake slow", "g1ShakeSlow", 48, 0, 255 },
+      { "Shake light", "g1ShakeLight", 18, 0, 255 },
+      { "Shake late", "g1ShakeSlow2", 24, 0, 255 },
+      { "Blink", "g1Blink", 60, 0, 255 },
+      { "Faint", "g1Faint", 14, 0, 255 },
+      { "Faint step", "g1FaintStep", 4, 0, 255 },
+      { "Switch wait", "g1Switch", 50, 0, 255 },
+      { "Crit text", "g1CritText", 20, 0, 255 },
+      { "HP bar", "g1HpBar", 48, 1, 255 },
+      { "HP pixel", "g1HpPixel", 2, 0, 255 },
+      { "HP step", "g1HpStep", 1, 0, 255 },
+      { "Fade step", "g1FadeStep", 8, 1, 255 },
+      { "White flash", "g1Flash", 7, 0, 255 },
+    }
+    for _, row in ipairs(g1Travel) do
+      local label, key, default, minV, maxV = row[1], row[2], row[3], row[4], row[5]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local cur = tonumber(Steps.get(S, key, default)) or default
+        local v = math.max(minV, math.min(maxV, math.floor(RegList.num(App, "pl_" .. key, fx, fy_, 100 * s, fh_, cur))))
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local g1Holds = {
+      { "Teleport holds", "g1OutHolds", "G1_OUT_HOLDS" },
+      { "Pad holds", "g1PadHolds", "G1_PAD_HOLDS" },
+      { "Arrive holds", "g1InHolds", "G1_IN_HOLDS" },
+      { "Pad in holds", "g1PadInHolds", "G1_PAD_IN_HOLDS" },
+      { "Hole holds", "g1HoleHolds", "G1_HOLE_HOLDS" },
+      { "Ship water", "g1ShipWater", "G1_SHIP_WATER" },
+    }
+    for _, row in ipairs(g1Holds) do
+      local label, key, which = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local list = Steps.holdList(v)
+        local same = list and table.concat(list, ", ") == table.concat(Steps.holdList(default), ", ")
+        if same or not list then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Rod", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local default = Steps.G1_ROD
+      local cur = Steps.get(S, "g1Rod", default)
+      if type(cur) ~= "string" then cur = default end
+      local v = RegList.field(App, "pl_g1Rod", fx, fy_, fw, fh_, cur, default)
+      local function flat(text)
+        local rows = Steps.rodList(text) or {}
+        local parts = {}
+        for i = 1, #rows do
+          local row = rows[i]
+          parts[#parts + 1] = row.dx .. "," .. row.dy .. "," .. row.tile .. "," .. (row.flip and 1 or 0)
+        end
+        return table.concat(parts, ",")
+      end
+      if not Steps.rodList(v) or flat(v) == flat(default) then v = default end
+      if v ~= cur then Steps.set(S, App, "g1Rod", v, default) end
+    end)
+    advRow("Heal balls", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local default = Steps.G1_HEAL_BALLS
+      local cur = Steps.get(S, "g1HealBalls", default)
+      if type(cur) ~= "string" then cur = default end
+      local v = RegList.field(App, "pl_g1HealBalls", fx, fy_, fw, fh_, cur, default)
+      local function flat(text)
+        local rows = Steps.tripleList(text) or {}
+        local parts = {}
+        for i = 1, #rows do
+          parts[i] = rows[i][1] .. "," .. rows[i][2] .. "," .. (rows[i][3] and 1 or 0)
+        end
+        return table.concat(parts, ",")
+      end
+      if not Steps.tripleList(v) or flat(v) == flat(default) then v = default end
+      if v ~= cur then Steps.set(S, App, "g1HealBalls", v, default) end
+    end)
+    local g1Shades = {
+      { "DMG flash", "g1HealDmg", "G1_HEAL_DMG" },
+      { "Color flash", "g1HealGbc", "G1_HEAL_GBC" },
+      { "Lit shades", "g1HealLit", "G1_HEAL_LIT" },
+      { "Dim shades", "g1HealDim", "G1_HEAL_DIM" },
+    }
+    for _, row in ipairs(g1Shades) do
+      local label, key, which = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local function flat(text)
+          local list = Steps.holdList(text) or {}
+          if #list < 4 then return "" end
+          local parts = {}
+          for i = 1, 4 do
+            local n = list[i]
+            if n > 3 then n = 3 end
+            parts[i] = tostring(n)
+          end
+          return table.concat(parts, ",")
+        end
+        if flat(v) == "" or flat(v) == flat(default) then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    local g1Fly = {
+      { "Fly out", "g1FlyOut", "G1_FLY_OUT" },
+      { "Fly away", "g1FlyAway", "G1_FLY_AWAY" },
+      { "Fly in", "g1FlyIn", "G1_FLY_IN" },
+      { "Fly anchor", "g1FlyAnchor", "G1_FLY_ANCHOR" },
+      { "Fly land", "g1FlyLand", "G1_FLY_LAND" },
+    }
+    for _, row in ipairs(g1Fly) do
+      local label, key, which = row[1], row[2], row[3]
+      advRow(label, function(fx, fy_, fw, fh_)
+        local Steps = require("StepCounters")
+        local default = Steps[which]
+        local cur = Steps.get(S, key, default)
+        if type(cur) ~= "string" then cur = default end
+        local v = RegList.field(App, "pl_" .. key, fx, fy_, fw, fh_, cur, default)
+        local function flat(text)
+          local pairs = Steps.pairList(text) or {}
+          local parts = {}
+          for i = 1, #pairs do parts[#parts + 1] = pairs[i][1] .. "," .. pairs[i][2] end
+          return table.concat(parts, ",")
+        end
+        if not Steps.pairList(v) or flat(v) == flat(default) then v = default end
+        if v ~= cur then Steps.set(S, App, key, v, default) end
+      end)
+    end
+    advRow("Sight origin X", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "sightX", 64)) or 64
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_sight_x", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "sightX", v, 64) end
+    end)
+    advRow("Sight origin Y", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "sightY", 60)) or 60
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_sight_y", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "sightY", v, 60) end
+    end)
+    advRow("Sight left", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "sightLeft", -4)) or -4
+      local v = math.max(-128, math.min(127, math.floor(RegList.num(App, "pl_sight_left", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "sightLeft", v, -4) end
+    end)
+    advRow("Sight right", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "sightRight", 5)) or 5
+      local v = math.max(-128, math.min(127, math.floor(RegList.num(App, "pl_sight_right", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "sightRight", v, 5) end
+    end)
+    advRow("Sight up", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "sightUp", -4)) or -4
+      local v = math.max(-128, math.min(127, math.floor(RegList.num(App, "pl_sight_up", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "sightUp", v, -4) end
+    end)
+    advRow("Sight down", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "sightDown", 4)) or 4
+      local v = math.max(-128, math.min(127, math.floor(RegList.num(App, "pl_sight_down", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "sightDown", v, 4) end
+    end)
+    advRow("Notice pause", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "emoteFrames", 60)) or 60
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_emote", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "emoteFrames", v, 60) end
+    end)
+    advRow("Approach gap", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "approachGap", 1)) or 1
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_g1_approach", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "approachGap", v, 1) end
+    end)
+    advRow("NPC step frames", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "npcStep", 32)) or 32
+      local v = math.max(0, math.min(255, math.floor(RegList.num(App, "pl_npc_step_g1", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "npcStep", v, 32) end
+    end)
+    advRow("Wander from", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "wanderLo", 30)) or 30
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_g1_wander_lo", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "wanderLo", v, 30) end
+    end)
+    advRow("Wander to", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "wanderHi", 180)) or 180
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_g1_wander_hi", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "wanderHi", v, 180) end
+    end)
+    advRow("Turn chance", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "turnOdds", 50)) or 50
+      local v = math.max(0, math.min(100, math.floor(RegList.num(App, "pl_g1_turn_odds", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "turnOdds", v, 50) end
+    end)
+    advRow("First pause from", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "spawnLo", 30)) or 30
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_g1_spawn_lo", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "spawnLo", v, 30) end
+    end)
+    advRow("First pause to", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "spawnHi", 120)) or 120
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_g1_spawn_hi", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "spawnHi", v, 120) end
+    end)
+    advRow("Stay pause from", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "stayLo", 1)) or 1
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_g1_stay_lo", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "stayLo", v, 1) end
+    end)
+    advRow("Stay pause to", function(fx, fy_, fw, fh_)
+      local Steps = require("StepCounters")
+      local cur = tonumber(Steps.get(S, "stayHi", 128)) or 128
+      local v = math.max(0, math.min(65535, math.floor(RegList.num(App, "pl_g1_stay_hi", fx, fy_, 100 * s, fh_, cur))))
+      if v ~= cur then Steps.set(S, App, "stayHi", v, 128) end
+    end)
+  end
   advRow("HM moves", function(fx, fy_, fw, fh_)
     local cur = joinCsvIds(Player.constField(S, "hmMoves"))
     local v = RegList.field(App, "pl_const_hm", fx, fy_, fw, fh_, cur, "CUT, FLY, SURF")

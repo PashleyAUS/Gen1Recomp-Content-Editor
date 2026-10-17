@@ -74,6 +74,8 @@ local MODES_GEN2 = {
     tip = "Town Map + Pokégear arts, landmarks, and regions" },
   { id = "badges", label = "Badges",
     tip = "Trainer card badge / leader sheet paths" },
+  { id = "train", label = "Magnet Train",
+    tip = "Scenery strip and train tilemap for the Magnet Train ride" },
   { id = "scripts", label = "Scripts",
     tip = "Open or copy every UI Lua screen into this mod" },
 }
@@ -2969,6 +2971,13 @@ local function drawMinigames(S, x, y, w, h, App)
   fy = UiPreview.draw(S, "minigames", viewX, fy, viewW, s)
 
   local kind = S.uiMinigame or "slots"
+  if kind == "slots" then
+    fy = require("SlotPayouts").draw(S, viewX, fy, viewW, App)
+    fy = require("SlotBets").draw(S, viewX, fy, viewW, App)
+    fy = require("SlotLuck").draw(S, viewX, fy, viewW, App)
+    fy = require("SlotBias").draw(S, viewX, fy, viewW, App)
+    fy = require("SlotStreak").draw(S, viewX, fy, viewW, App)
+  end
 
   if gen2 and kind ~= "unown" then
     Kit.text("small", "Music id", viewX, fy + 6 * s, PAL.caption)
@@ -3011,6 +3020,7 @@ local function drawMinigames(S, x, y, w, h, App)
       function(p) setMenuGfxPath(S, "slots", "actors", p, App) end,
       "Optional actors sheet (overrides sheet 3 for Golem/Chansey)")
   elseif gen2 and kind == "cardflip" then
+    fy = require("CardFlipRules").draw(S, viewX, fy, viewW, App)
     Kit.caption(viewX, fy, "PROMPTS")
     fy = fy + 22 * s
     Kit.text("micro", "One line per row. Blank restores the vanilla line.",
@@ -3231,6 +3241,9 @@ function Ui.draw(S, x, y, w, h, App)
   if S.uiMode == "theme" and Generation.isGen2(S) then
     S.uiMode = "title"
   end
+  if S.uiMode == "train" and not Generation.isGen2(S) then
+    S.uiMode = "title"
+  end
   if S.uiMode == "elm" then
     S.uiMode = "oak"
   end
@@ -3259,6 +3272,8 @@ function Ui.draw(S, x, y, w, h, App)
     drawStrings(S, x, modeY, w, bh, App)
   elseif mode == "townmap" then
     drawTownMap(S, x, modeY, w, bh, App)
+  elseif mode == "train" then
+    require("Gen2MagnetTrain").draw(S, x, modeY, w, bh, App)
   elseif mode == "scripts" then
     UiScripts.draw(S, x, modeY, w, bh, App)
   else

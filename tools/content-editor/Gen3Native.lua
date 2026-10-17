@@ -2,10 +2,32 @@ local M={}
 -- Shared Pokemon/item records only imply native content during Gen 3 export.
 -- Save validation for older games must check the Gen 3-specific fields alone.
 function M.used(p, includeShared)
+  if type(p.constants) == "table" and (p.constants.moneyCap ~= nil or p.constants.coinCap ~= nil) then return true end
+  if type(p.encounterGrace) == "table" and next(p.encounterGrace) then return true end
+  if type(p.whiteout) == "table" and next(p.whiteout) then return true end
+  if type(p.poisonField) == "table" and next(p.poisonField) then return true end
+  if type(p.encounterRate) == "table" and next(p.encounterRate) then return true end
+  if type(p.encounterSlots) == "table" and next(p.encounterSlots) then return true end
+  if type(p.wildOdds) == "table" and next(p.wildOdds) then return true end
+  if type(p.stepCounters) == "table" and next(p.stepCounters) then return true end
+  if type(p.slotPayouts) == "table" and next(p.slotPayouts) then return true end
+  if type(p.slotBets) == "table" and next(p.slotBets) then return true end
+  if type(p.frlgSlotBias) == "table" and next(p.frlgSlotBias) then return true end
+  if type(p.rseSlotLuck) == "table" and next(p.rseSlotLuck) then return true end
+  if type(p.gen3Pickup) == "table" and next(p.gen3Pickup) then return true end
+  if type(p.pyramidRules) == "table" and next(p.pyramidRules) then return true end
+  if type(p.frontierRules) == "table" and next(p.frontierRules) then return true end
+  if type(p.frontierIv) == "table" and next(p.frontierIv) then return true end
+  if type(p.rouletteRules) == "table" and next(p.rouletteRules) then return true end
+  if type(p.gen3Blender) == "table" and next(p.gen3Blender) then return true end
+  if type(p.berryCrush) == "table" and next(p.berryCrush) then return true end
+  if type(p.dodrioRules) == "table" and next(p.dodrioRules) then return true end
+  if type(p.jumpRules) == "table" and next(p.jumpRules) then return true end
+  if type(p.lotteryOdds) == "table" and next(p.lotteryOdds) then return true end
   if next(p.gen3BattlePositions or {}) then return true end
   if (includeShared ~= false and next(p.pokemon or {})) or next((p.gen3 or {}).pokemon or {}) then return true end
   if p.gen3Screens or p.gen3Roamers or p.gen3Fame or next(p.gen3DexText or {}) or require("Gen3Berries").used(p) then return true end
-  return next(p.gen3Forms or {}) or p.gen3Fly or next(p.gen3OakScene or {}) or next(p.gen3Oak or {}) or p.gen3BirchScene or p.gen3Breeding or next(p.gen3Behaviors or {}) or next(p.gen3TrainerMusic or {}) or (includeShared ~= false and next(p.items or {})) or next(p.gen3Help or {}) or next(p.gen3Trades or {}) or next(p.gen3Effects or {}) or next(p.gen3BattleRules or {}) or require("Gen3Workbench").used(p) or next(p.gen3Animations or {}) or next(p.gen3Assets or {}) or next(p.gen3Audio or {})
+  return next(p.gen3Forms or {}) or p.gen3Fly or next(p.gen3OakScene or {}) or next(p.gen3Oak or {}) or p.gen3BirchScene or p.gen3Breeding or next(p.gen3Behaviors or {}) or next(p.gen3TrainerMusic or {}) or (includeShared ~= false and next(p.items or {})) or next(p.gen3Help or {}) or next(p.gen3Trades or {}) or next(p.gen3Effects or {}) or next(p.gen3BattleRules or {}) or next(p.gen3ClassMoney or {}) or next(p.flailRules or {}) or next(p.magnitudeBands or {}) or next(p.lowKickBands or {}) or next(p.gen3MovePower or {}) or next(p.gen3Heal or {}) or next(p.gen3Hits or {}) or next(p.gen3Residual or {}) or next(p.gen3Special or {}) or next(p.gen3Locks or {}) or next(p.gen3Switch or {}) or next(p.gen3Flee or {}) or next(p.gen3Spikes or {}) or next(p.gen3Formula or {}) or next(p.gen3Accuracy or {}) or next(p.gen3StatCalc or {}) or next(p.gen3CatchMath or {}) or next(p.gen3Effort or {}) or next(p.gen3Friendship or {}) or next(p.gen3Pp or {}) or next(p.gen3Revive or {}) or next(p.gen3PpRestore or {}) or next(p.gen3Repel or {}) or next(p.gen3Vitamin or {}) or next(p.gen3HerbHeal or {}) or next(p.gen3HealHp or {}) or next(p.gen3XItem or {}) or p.sellRules or p.gen3Hatch or next(p.gen3BallBonus or {}) or next(p.gen3StatStages or {}) or next(p.gen3AccStages or {}) or require("Gen3Workbench").used(p) or next(p.gen3Animations or {}) or next(p.gen3Assets or {}) or next(p.gen3Audio or {})
 end
 function M.emit(p,encode,out)
   require("Gen3TeachyTv").emit(p,encode,out)
@@ -36,9 +58,63 @@ function M.emit(p,encode,out)
   require("Gen3Birch").emit(p,encode,out)
   require("Gen3Workbench").emit(p,encode,out)
   require("Gen3BattleRules").emit(p,encode,out)
+  require("PickupItems").emit(p,encode,out)
+  require("PyramidRules").emit(p,encode,out)
+  require("FrontierRules").emit(p,encode,out)
+  require("FrontierIv").emit(p,encode,out)
+  require("Gen3BattleRules").emitClasses(p,encode,out)
+  require("Gen3BattleRules").emitFlail(p,encode,out)
+  require("Gen3BattleRules").emitMagnitude(p,encode,out)
+  require("Gen3BattleRules").emitLowKick(p,encode,out)
+  require("Gen3BattleRules").emitMoves(p,encode,out)
+  require("Gen3BattleRules").emitHeal(p,encode,out)
+  require("Gen3BattleRules").emitHits(p,encode,out)
+  require("Gen3BattleRules").emitResiduals(p,encode,out)
+  require("Gen3BattleRules").emitSpecial(p,encode,out)
+  require("Gen3BattleRules").emitLocks(p,encode,out)
+  require("Gen3BattleRules").emitSwitch(p,encode,out)
+  require("Gen3BattleRules").emitFlee(p,encode,out)
+  require("Gen3BattleRules").emitSpikes(p,encode,out)
+  require("Gen3BattleRules").emitFormula(p,encode,out)
+  require("Gen3BattleRules").emitAccuracy(p,encode,out)
+  require("Gen3BattleRules").emitStatCalc(p,encode,out)
+  require("Gen3BattleRules").emitCatchMath(p,encode,out)
+  require("Gen3BattleRules").emitEffort(p,encode,out)
+  require("Gen3BattleRules").emitFriendship(p,encode,out)
+  require("Gen3BattleRules").emitPp(p,encode,out)
+  require("Gen3BattleRules").emitRevive(p,encode,out)
+  require("Gen3BattleRules").emitPpRestore(p,encode,out)
+  require("Gen3BattleRules").emitRepel(p,encode,out)
+  require("Gen3BattleRules").emitVitamin(p,encode,out)
+  require("Gen3BattleRules").emitHerbHeal(p,encode,out)
+  require("Gen3BattleRules").emitHealHp(p,encode,out)
+  require("Gen3BattleRules").emitXItem(p,encode,out)
+  require("Gen3BattleRules").emitSell(p,encode,out)
+  require("MoneyCaps").emit(p,encode,out)
+  require("EncounterGrace").emit(p,encode,out)
+  require("Whiteout").emit(p,encode,out)
+  require("PoisonField").emit(p,encode,out)
+  require("EncounterRate").emit(p,encode,out)
+  require("EncounterSlots").emit(p,encode,out)
+  require("WildOdds").emit(p,encode,out)
+  require("StepCounters").emit(p,encode,out)
+  require("SlotPayouts").emit(p,encode,out)
+  require("SlotBets").emit(p,encode,out)
+  require("FrlgSlotBias").emit(p,encode,out)
+  require("RseSlotLuck").emit(p,encode,out)
+  require("RouletteRules").emit(p,encode,out)
+  require("BlenderRules").emit(p,encode,out)
+  require("BlenderOpponents").emit(p,encode,out)
+  require("BerryCrushRules").emit(p,encode,out)
+  require("DodrioRules").emit(p,encode,out)
+  require("JumpRules").emit(p,encode,out)
+  require("LotteryOdds").emit(p,encode,out)
+  require("Gen3BattleRules").emitBalls(p,encode,out)
+  require("Gen3BattleRules").emitStages(p,encode,out)
   require("Gen3Effects").emit(p,encode,out)
   require("Gen3TrainerMusic").emit(p,encode,out)
   require("Gen3Breeding").emit(p,encode,out)
+  require("Gen3Breeding").emitHatch(p,encode,out)
   require("Gen3Behaviors").emit(p,encode,out)
   require("Gen3Trades").emit(p,encode,out)
   for id,value in pairs(p.gen3Animations or {}) do

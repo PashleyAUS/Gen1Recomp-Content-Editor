@@ -1,11 +1,11 @@
 -- GAME PATCHES tab: switches for features a mod adds on top of the game
 -- (nothing in the engine is changed; each one is generated into main.lua).
--- FireRed / LeafGreen / Emerald: the real time clock (day and night,
--- Gen3DayNight); on FireRed / LeafGreen with its encounter tables as a
--- setting of it, Emerald Maps (Gen3EmLink) and Kanto Region
--- (Gen3KantoRegion). Emerald: FireRed Maps (Gen3FrLink), Hoenn Region
--- (Gen3HoennRegion), the Physical/Special split (Gen3Split) and the System
--- Clock (Gen3SystemClock).
+-- FireRed / LeafGreen / Ruby / Sapphire / Emerald: the real time clock
+-- (day and night, Gen3DayNight) and the Physical/Special split (Gen3Split).
+-- FireRed / LeafGreen also get encounter tables as a setting of the clock,
+-- Emerald Maps (Gen3EmLink) and Kanto Region (Gen3KantoRegion). Emerald:
+-- FireRed Maps (Gen3FrLink) and Hoenn Region (Gen3HoennRegion). Ruby,
+-- Sapphire, and Emerald: the System Clock (Gen3SystemClock).
 --
 -- Each patch is a title, one line under it and an Off / On switch; what it
 -- does in detail opens in a pop-up (Description).
@@ -382,7 +382,7 @@ M.PATCHES = {
     },
   },
   {
-    id = "systemClock", emerald = true, title = "System Clock", subtitle = "The bedroom clock is set from the PC's clock",
+    id = "systemClock", rse = true, title = "System Clock", subtitle = "The bedroom clock is set from the PC's clock",
     isOn = function(S) return require("Gen3SystemClock").enabled(S.project) end,
     setOn = function(S, on) return require("Gen3SystemClock").setEnabled(S.project, on) end,
     status = { on = "System clock on", off = "System clock off" },
@@ -512,7 +512,7 @@ M.PATCHES = {
     },
   },
   {
-    id = "split", emerald = true, title = "Physical/Special Split", subtitle = "Moves are Physical or Special by themselves, as in Gen 4",
+    id = "split", title = "Physical/Special Split", subtitle = "Moves are Physical or Special by themselves, as in Gen 4",
     isOn = function(S) return require("Gen3Split").enabled(S.project) end,
     setOn = function(S, on) return require("Gen3Split").setEnabled(S.project, on) end,
     status = { on = "Physical/Special split on", off = "Physical/Special split off" },
@@ -611,8 +611,14 @@ function M.draw(S, x, y, w, h, App)
   local Pane = require("FormPane")
   local first, view = Pane.begin(S, "gamePatchesScroll", x, y, cw + Kit.scrollbarSize() + 4 * s, top + h - y)
   local cy = first
+  local rse = require("Generation").isRse(S)
   for _, patch in ipairs(M.PATCHES) do
-    if (patch.id~="clean" or kanto(S) or emerald(S)) and (kanto(S) or not patch.kanto) and (emerald(S) or not patch.emerald) then cy = patchCard(S, App, patch, x, cy, cw) end
+    if (patch.id ~= "clean" or kanto(S) or emerald(S))
+        and (kanto(S) or not patch.kanto)
+        and (emerald(S) or not patch.emerald)
+        and (rse or not patch.rse) then
+      cy = patchCard(S, App, patch, x, cy, cw)
+    end
   end
   Pane.finish(S, "gamePatchesScroll", first, cy, view)
   Kit.blockClicks = blocked

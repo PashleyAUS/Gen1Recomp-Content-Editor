@@ -4,7 +4,9 @@ function M.install(mod)
     local Natives=require("src.core.game3.scripting.natives")
     -- Binding again later would drop the replacement.
     Natives.ensureBound()
-    local id=require("src.core.game3.constants.emerald.specials").byName.StartWallClock
+    local session=require("src.core.game3.runtime").getSession()
+    local id=require("src.core.game3.constants").active(session):special("StartWallClock")
+    assert(id, "This game has no bedroom clock")
     Natives.ALLOW["special:"..id]=function()
       local Rtc=require("src.core.game3.rtc")
       local session=require("src.core.game3.runtime").getSession()

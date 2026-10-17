@@ -10,6 +10,12 @@ local function run(name, fn)
 end
 
 local game, haveFr, haveEm = "emerald", false, false
+package.loaded["src.core.GameVersion"] = {
+  layout = function(id)
+    if id == "ruby" or id == "sapphire" or id == "emerald" then return "rse" end
+    return "frlg"
+  end,
+}
 package.loaded["Generation"] = { id = function() return game end }
 package.loaded["Gen3FrLink"] = { NAME = "FireRed", editor = function() return haveFr and { read = function(p) return "fr:" .. p end } or nil end }
 package.loaded["Gen3EmLink"] = { NAME = "Emerald", editor = function() return haveEm and { read = function(p) return "em:" .. p end } or nil end }
@@ -17,10 +23,15 @@ for _, m in ipairs({ "Kit", "Gen3Resources", "ChoicePicker" }) do package.loaded
 local U = require("Gen3UiContent")
 local function ids(list) local t = {} for _, a in ipairs(list) do t[#t + 1] = a.id end return table.concat(t, ",") end
 
-run("Emerald without the FireRed import: Hoenn only, view only", function()
-  game, haveFr = "emerald", false
-  local a = U.townArts({})
-  assert(ids(a) == "hoenn" and not a[1].editable and not a[1].source)
+run("Ruby, Sapphire, and Emerald: the Hoenn Town Map is editable at 512 x 512", function()
+  haveFr = false
+  for _, id in ipairs({ "ruby", "sapphire", "emerald" }) do
+    game = id
+    local a = U.townArts({})
+    assert(ids(a) == "hoenn" and a[1].editable and not a[1].source, id)
+    local w, h = U.townMapSize(a[1])
+    assert(w == 512 and h == 512, id)
+  end
 end)
 
 run("Emerald with the FireRed import: Kanto and Sevii pictures from that import", function()

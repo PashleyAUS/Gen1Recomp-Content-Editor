@@ -2817,7 +2817,7 @@ local function drawHooks(S, x, y, w, h, App)
     footerH - 10 * s, s, function(step) addStep(step) end)
 end
 
--- ---- Gold Pokegear phone contacts ----
+-- ---- Gen 2 Pokégear phone contacts ----
 
 local function phoneContactOrder(S)
   local c = S.data and (S.data.gen2Constants or S.data.constants)
@@ -2859,8 +2859,11 @@ local function drawPhone(S, x, y, w, h, App)
   local s = Kit.scale
   State.ensureProjectFields(S.project)
   S.project.phoneContacts = S.project.phoneContacts or {}
+  local oddsY = require("PhoneOdds").draw(S, x, y, w, App)
+  local used = oddsY - y
+  y = oddsY
   Kit.caption(x, y, "PHONE CONTACTS")
-  Kit.text("micro", "Pokegear book — Save emits phone_contacts:patch",
+  Kit.text("micro", "Pokégear book. Save writes the contact list.",
     x + 160 * s, y + 4 * s, PAL.faint)
 
   local order = phoneContactOrder(S)
@@ -2870,7 +2873,7 @@ local function drawPhone(S, x, y, w, h, App)
       ids[#ids + 1] = id
     end
   end
-  local formX, formW, listY, listH, shown = RegList.drawList(S, App, x, y + 22 * s, w, h - 22 * s,
+  local formX, formW, listY, listH, shown = RegList.drawList(S, App, x, y + 22 * s, w, h - used - 22 * s,
     "CONTACTS", ids, {
       queryKey = "eventPhoneQuery",
       offsetKey = "eventPhoneOffset",
@@ -2885,7 +2888,7 @@ local function drawPhone(S, x, y, w, h, App)
   local rec, index, owned = phoneResolved(S, id)
   if not id or not rec then
     Kit.emptyBox(formX, listY, formW, listH,
-      "No phone contacts (import Gold/Silver ROM cache)")
+      "No phone contacts (import a Gen 2 ROM cache)")
     return
   end
 

@@ -10,6 +10,14 @@ function M.validate(row,generation)
     local v=row[key];assert(type(v)=="number" and v%1==0 and v>=min and v<=max,"Safari "..key.." must be "..min.." to "..max)
   end
   integer("balls",1,99);integer("steps",1,65533)
+  local function optional(key,min,max)
+    if row[key]~=nil then integer(key,min,max) end
+  end
+  optional("baitDiv",1,16);optional("rockMult",0,16);optional("factorLo",0,255);optional("factorHi",0,255)
+  optional("fleeAbove",0,255);optional("eatingDiv",1,16);optional("angryMult",0,16)
+  optional("baitFloorAt",0,255);optional("baitFloor",0,255);optional("rockCap",0,255)
+  optional("counterAdd",0,16);optional("counterSpan",1,16);optional("counterCap",0,16)
+  optional("fleeScale",0,255);optional("yellowBallPrice",1,9999);optional("yellowFreeNags",1,99)
   if generation==1 then
     integer("fee",0,999999);integer("exitX",0,255);integer("exitY",0,255)
     assert(type(row.exitMap)=="string" and row.exitMap~="","Choose a Safari exit map")
@@ -38,9 +46,37 @@ function M.draw(S,x,y,w,h,App)
   end
   if gen==1 then number("fee","Entry price") end
   number("balls","Safari Balls (1-99)");number("steps","Steps inside the zone")
+  local function battle(key,label,default,minV,maxV)
+    K.caption(x,y,label)
+    local cur=row[key];if cur==nil then cur=default end
+    local v=math.floor(L.num(App,"safari/"..key,x+240*s,y,150*s,30*s,cur))
+    if v<minV then v=minV end;if v>maxV then v=maxV end
+    if v~=cur then row[key]=v==default and nil or v;App.markDirty() end
+    y=y+45*s
+  end
+  K.caption(x,y,"Battle");y=y+28*s
+  battle("baitDiv","Bait catch divisor",2,1,16)
+  battle("rockMult","Rock catch multiplier",2,0,16)
+  if gen==1 then
+    battle("factorLo","Factor roll low",1,0,255)
+    battle("factorHi","Factor roll high",5,0,255)
+    battle("fleeAbove","Flee above Speed",127,0,255)
+    battle("eatingDiv","Eating flee divisor",4,1,16)
+    battle("angryMult","Angry flee multiplier",2,0,16)
+  else
+    battle("baitFloorAt","Bait catch floor at or below",2,0,255)
+    battle("baitFloor","Bait catch floor",3,0,255)
+    battle("rockCap","Rock catch cap",20,0,255)
+    battle("counterAdd","Bait and Rock turn add",2,0,16)
+    battle("counterSpan","Bait and Rock turn count",5,1,16)
+    battle("counterCap","Bait and Rock turn cap",6,0,16)
+    battle("fleeScale","Flee chance scale",5,0,255)
+  end
   if gen==1 then
     if require("Generation").id(S)=="yellow" then
       if K.button(x,y,330*s,30*s,row.yellowDiscount and "Discounted entry: on" or "Discounted entry: off",{}) then row.yellowDiscount=not row.yellowDiscount;App.markDirty() end;y=y+44*s
+      battle("yellowBallPrice","Discount ball price",23,1,9999)
+      battle("yellowFreeNags","Free entry after refusals",3,1,99)
       K.caption(x,y,"Yellow can admit players with reduced funds or no money.");y=y+35*s
     end
     local maps=L.mergeIds(S.project.maps or {},S.data.maps or {});local labels={}

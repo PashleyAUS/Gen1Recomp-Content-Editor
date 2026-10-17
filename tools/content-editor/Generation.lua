@@ -72,6 +72,32 @@ function Generation.isGen3(S)
   return Generation.num(S) == 3
 end
 
+-- Version id of an editor state, a project (`game` / `version`), or a string.
+function Generation.versionId(S)
+  if type(S) == "string" then return S:lower() end
+  if type(S) == "table" then
+    if S.version then return Generation.id(S) end
+    if S.game then return tostring(S.game):lower() end
+  end
+  return Generation.id(S)
+end
+
+function Generation.isGen3Id(id)
+  id = tostring(id or ""):lower()
+  return id == "firered" or id == "leafgreen" or id == "ruby"
+    or id == "sapphire" or id == "emerald"
+end
+
+-- Ruby, Sapphire, and Emerald share Hoenn data: berries, contests, credits.
+function Generation.isRseId(id)
+  id = tostring(id or ""):lower()
+  return id == "ruby" or id == "sapphire" or id == "emerald"
+end
+
+function Generation.isRse(S)
+  return Generation.isRseId(Generation.versionId(S))
+end
+
 -- Gen 3 map prefixes come from the selected runtime profile (FR_, EM_, RU_, SA_).
 function Generation.gen3MapPrefix(S)
   return require("src.core.game3.profile").of(Generation.id(S)).map.enginePrefix
@@ -309,6 +335,7 @@ function Generation.bindGoldData(data)
   alias("roofs", "gen2Roofs")
   alias("menu_gfx", "gen2MenuGfx")
   alias("diploma", "gen2Diploma")
+  alias("trade", "gen2Trade")
   alias("title", "gen2Title")
   alias("intro", "gen2Intro")
   alias("oakSpeech", "gen2OakSpeech")
@@ -317,6 +344,8 @@ function Generation.bindGoldData(data)
   alias("events", "gen2EventTables")
   alias("std_scripts", "gen2StdScripts")
   alias("initial_events", "gen2InitialEvents")
+  -- field.lua is the Magnet Train tilemaps (and the rest of the field stub).
+  alias("field", "gen2Field")
   return data
 end
 

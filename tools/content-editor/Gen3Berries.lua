@@ -1,4 +1,5 @@
--- Emerald berry flavors (what the Berry Blender makes) and Pokeblock names.
+-- Ruby, Sapphire, and Emerald berry flavors (what the Berry Blender makes)
+-- and Pokeblock names.
 -- Exported through Gen3Native, which patches berries/berries.lua on read.
 local M={}
 M.PATH="data/generated/gba/berries/berries.lua"
@@ -20,7 +21,8 @@ end
 function M.used(p) return next((p.gen3Berries or {}).flavors or {})~=nil or next((p.gen3Berries or {}).names or {})~=nil end
 function M.validate(p)
   if not M.used(p) then return end
-  assert((p.game or p.version)=="emerald","Berry flavors and Pokeblock names need Emerald")
+  assert(require("Generation").isRseId(p.game or p.version),
+    "Berry flavors and Pokeblock names need Ruby, Sapphire, or Emerald")
   for index,row in pairs(p.gen3Berries.flavors or {}) do
     assert(type(index)=="number" and index%1==0 and index>=0,"Invalid berry number")
     for _,key in ipairs(M.FIELDS) do
@@ -32,7 +34,7 @@ function M.validate(p)
   end
 end
 function M.draw(S,item,App,x,y,w,fh,s)
-  if require("Generation").id(S)~="emerald" then return y end
+  if not require("Generation").isRse(S) then return y end
   local Kit,PAL=require("Kit"),require("Theme").PAL
   local index,base=M.indexOf(S,item)
   local store=S.project.gen3Berries or {}

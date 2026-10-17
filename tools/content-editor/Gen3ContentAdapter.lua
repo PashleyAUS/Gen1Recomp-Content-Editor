@@ -12,7 +12,7 @@ function M.prepare(S)
     if not base then
       base=copy(require("Gen3").catalog(S.data,name))
       if name=="pokemon" then for _,rec in pairs(base) do rec.trueColor=true end end
-      if name=="moves" and require("Generation").id(S)=="emerald" then require("Gen3Split").applyDefaults(base) end
+      if name=="moves" and require("Generation").isGen3(S) then require("Gen3Split").applyDefaults(base) end
       S.data._gen3EditorContent[name]=base
     end
     -- GAME PATCHES > FireRed Maps > Import region: Kanto's wild Pokemon.

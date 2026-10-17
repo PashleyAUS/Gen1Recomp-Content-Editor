@@ -12,7 +12,7 @@ function M.townArts(S)
     for _,k in ipairs(M.townMapKeys) do add(k,M.townMapNames[k],"data/generated/gba/region_map/"..k.."_map.png",source,editable) end
   end
   if require("src.core.GameVersion").layout(require("Generation").id(S))=="rse" then
-    add("hoenn","Hoenn","data/generated/gba/rse/region_map/map.png",nil,false)
+    add("hoenn","Hoenn","data/generated/gba/rse/region_map/map.png",nil,true)
     local fr=require("Gen3FrLink")
     if fr.editor() then sevii(setmetatable({NAME=fr.NAME or "FireRed",read=function(p) return fr.editor().read(p) end},{}),false) end
   else
@@ -21,6 +21,13 @@ function M.townArts(S)
     if em.editor() then add("hoenn","Hoenn","data/generated/gba/rse/region_map/map.png",{NAME=em.NAME or "Emerald",read=function(p) return em.editor().read(p) end},false) end
   end
   return out
+end
+
+-- The in-game picture size. Hoenn's map is the scrolling 512×512 sheet;
+-- Kanto and the Sevii pages are one 240×160 screen.
+function M.townMapSize(art)
+  if art and art.id=="hoenn" then return 512,512 end
+  return 240,160
 end
 local K=require("Kit")
 local R=require("Gen3Resources")
@@ -280,7 +287,9 @@ function M.draw(S,x,y,w,h,App,mode)
       local img=mapImage()
       if not img then return end
       love.graphics.setColor(1,1,1,1)
-      love.graphics.draw(img,love.graphics.newQuad(0,0,240,160,img:getWidth(),img:getHeight()),0,0)
+      local iw,ih=img:getWidth(),img:getHeight()
+      local fit=math.min(240/iw,160/ih)
+      love.graphics.draw(img,(240-iw*fit)/2,(160-ih*fit)/2,0,fit,fit)
     end)
     local game=require("src.core.GameVersion").VERSIONS[require("Generation").id(S)].label
     if art.source then
@@ -288,26 +297,28 @@ function M.draw(S,x,y,w,h,App,mode)
       K.caption(x,y+h-55*s,"View only: in the game this picture is that game's own Town Map.")
     elseif not art.editable then
       K.caption(x,y+h-78*s,art.label.." artwork is read from your imported "..game.." cache.")
-      K.caption(x,y+h-55*s,"View only: replacing the Emerald Town Map is not supported yet.")
+      K.caption(x,y+h-55*s,"View only: this picture belongs to the other game's Town Map.")
     else
+      local pw,ph=M.townMapSize(art)
       K.caption(x,y+h-78*s,"Original "..art.label.." artwork is read from your imported "..game.." cache.")
-      K.caption(x,y+h-55*s,art.id=="kanto" and "Kanto artwork is used by the in-game Town Map." or "Artwork editing only: in-game Sevii navigation and Fly destinations are not yet supported.")
+      K.caption(x,y+h-55*s,art.label.." artwork is used by the in-game Town Map. Import a "..pw.." x "..ph.." PNG.")
     end
     if art.editable then
-      if K.button(x,y+h-30*s,200*s,28*s,"Import 240 x 160 map PNG",{}) then
+      local pw,ph=M.townMapSize(art)
+      if K.button(x,y+h-30*s,220*s,28*s,"Import "..pw.." x "..ph.." map PNG",{}) then
         App.pickFile("Town Map image","PNG|*.png",function(path)
           local IO=require("ModIO");local bytes=IO.readText(path)
           local ok,img=pcall(function() return love.image.newImageData(love.filesystem.newFileData(bytes,"map.png")) end)
-          if not ok or img:getWidth()~=240 or img:getHeight()~=160 then S.status="Town Map must be 240 x 160 pixels";return end
+          if not ok or img:getWidth()~=pw or img:getHeight()~=ph then S.status="Town Map must be "..pw.." x "..ph.." pixels";return end
           IO.ensureDirectory(S.path.."/assets/gen3/region_map")
           local rel="assets/gen3/region_map/"..art.id.."_map.png";local saved,err=IO.writeText(S.path.."/"..rel,bytes)
           if not saved then S.status=tostring(err);return end
-          S.project.gen3Assets=S.project.gen3Assets or {};S.project.gen3Assets[key]={file=rel,width=240,height=160};App.markDirty()
+          S.project.gen3Assets=S.project.gen3Assets or {};S.project.gen3Assets[key]={file=rel,width=pw,height=ph};App.markDirty()
         end)
       end
-      if K.button(x+215*s,y+h-30*s,120*s,28*s,"Revert image",{}) then if S.project.gen3Assets then S.project.gen3Assets[key]=nil;App.markDirty() end end
+      if K.button(x+230*s,y+h-30*s,120*s,28*s,"Revert image",{}) then if S.project.gen3Assets then S.project.gen3Assets[key]=nil;App.markDirty() end end
     end
-    if K.button(x+(art.editable and 350*s or 0),y+h-30*s,120*s,28*s,"Export PNG",{}) then
+    if K.button(x+(art.editable and 360*s or 0),y+h-30*s,120*s,28*s,"Export PNG",{}) then
       local IO=require("ModIO");local dest=S.path.."/assets/gen3-export/region_map/"..art.id.."_map.png"
       IO.ensureDirectory(dest:match("^(.*)/"))
       local bytes=bytesOf()

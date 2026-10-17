@@ -74,6 +74,24 @@ local BALL_MULTIPLIER = {
   POKE_BALL = 1, SAFARI_BALL = 1.5, PARK_BALL = 1.5, FRIEND_BALL = 1,
 }
 
+local SPECIALTY_BOOST = {
+  LEVEL_BALL = { label = "Rung multiplier", default = 2 },
+  LURE_BALL = { label = "Fishing multiplier", default = 3 },
+  FAST_BALL = { label = "Boost multiplier", default = 4 },
+  MOON_BALL = { label = "Boost multiplier", default = 4 },
+  LOVE_BALL = { label = "Boost multiplier", default = 8 },
+}
+
+local FAST_BALL_VANILLA = "MAGNEMITE, GRIMER, TANGELA"
+
+local HEAVY_BANDS = {
+  { below = 4, bonus = -20, label = "Under 4" },
+  { below = 8, bonus = 0, label = "Under 8" },
+  { below = 12, bonus = 20, label = "Under 12" },
+  { below = 16, bonus = 30, label = "Under 16" },
+  { bonus = 40, label = "Heavier" },
+}
+
 local STONES = {
   FIRE_STONE = true, WATER_STONE = true, THUNDER_STONE = true,
   LEAF_STONE = true, MOON_STONE = true, SUN_STONE = true,
@@ -213,7 +231,9 @@ local function effectSummary(S, def)
   elseif tmpl == "status" then
     local cures = def.statusCures or STATUS_HEAL[def.id] or STATUSES
     return "cure " .. table.concat(cures, "/")
-  elseif tmpl == "revive" then return "revive 50% HP"
+  elseif tmpl == "revive" then
+    local div = S.project and S.project.reviveRules and S.project.reviveRules.div or 2
+    return "revive 1/" .. div .. " HP"
   elseif tmpl == "max_revive" then return "revive full HP"
   elseif tmpl == "ball" then return "ball"
   elseif tmpl == "stone" then return "evolution stone"
@@ -791,6 +811,22 @@ function Items.draw(S, x, y, w, h, App)
   Kit.text("micro", "→ " .. effectSummary(S, item), formX, fy, PAL.detail)
   fy = fy + 20 * s
 
+  local REPEL_DEFAULT = { REPEL = 100, SUPER_REPEL = 200, MAX_REPEL = 250 }
+  if REPEL_DEFAULT[item.id] then
+    local default = REPEL_DEFAULT[item.id]
+    local stored = S.project.repelSteps and S.project.repelSteps[item.id]
+    local cur = stored ~= nil and stored or default
+    row("Repel steps", function(fx, fy_, fw, fh_)
+      local v = math.floor(RegList.num(App, "it_repel", fx, fy_, 72 * s, fh_, cur))
+      v = math.max(0, math.min(999, v))
+      if v ~= cur then
+        S.project.repelSteps = S.project.repelSteps or {}
+        S.project.repelSteps[item.id] = v == default and nil or v
+        if next(S.project.repelSteps) == nil then S.project.repelSteps = nil end
+        App.markDirty()
+      end
+    end)
+  end
   if tmpl == "heal" then
     local cur = item.healAmount or HEAL_AMOUNT[item.id] or 20
     row("Heal amount", function(fx, fy_, fw, fh_)
@@ -819,7 +855,189 @@ function Items.draw(S, x, y, w, h, App)
     end
     fy = fy + fh + 8 * s
   elseif tmpl == "ball" then
-    if Generation.isGen2(S) then
+    if Generation.isGen2(S) and item.id == "HEAVY_BALL" then
+      Kit.text("micro",
+        "The dex weight becomes a high byte. The first cutoff above that byte sets the catch bonus. The cart subtracts 20 from the lightest and adds 40 to the heaviest.",
+        formX, fy, PAL.muted)
+      fy = fy + 36 * s
+      local bag = S.project.specialtyBalls and S.project.specialtyBalls.HEAVY_BALL
+      local function shown(i, key)
+        local rowBag = bag and bag.bands and bag.bands[i]
+        if rowBag and rowBag[key] ~= nil then return rowBag[key] end
+        return HEAVY_BANDS[i][key]
+      end
+      local function commit(i, key, value)
+        local bands = {}
+        local same = true
+        for j, vanilla in ipairs(HEAVY_BANDS) do
+          local below = shown(j, "below")
+          local bonus = shown(j, "bonus")
+          if j == i then
+            if key == "below" then below = value else bonus = value end
+          end
+          if vanilla.below ~= nil and below ~= vanilla.below then same = false end
+          if bonus ~= vanilla.bonus then same = false end
+          bands[j] = vanilla.below ~= nil and { below = below, bonus = bonus } or { bonus = bonus }
+        end
+        State.ensureProjectFields(S.project)
+        S.project.specialtyBalls = S.project.specialtyBalls or {}
+        local divs = bag and bag.divs
+        if same and not divs then
+          S.project.specialtyBalls.HEAVY_BALL = nil
+        else
+          local rowBag = {}
+          if not same then rowBag.bands = bands end
+          if divs then rowBag.divs = divs end
+          S.project.specialtyBalls.HEAVY_BALL = next(rowBag) and rowBag or nil
+        end
+        if next(S.project.specialtyBalls) == nil then S.project.specialtyBalls = nil end
+        App.markDirty()
+      end
+      local DIVS = {
+        { "Weight divided by", 2 },
+        { "That result divided by", 16 },
+        { "That result divided by", 2 },
+        { "High byte divided by", 256 },
+      }
+      local function shownDiv(i)
+        local n = bag and bag.divs and bag.divs[i]
+        if n == nil then return DIVS[i][2] end
+        return n
+      end
+      local function commitDiv(i, value)
+        local divs = {}
+        local sameDiv = true
+        for j = 1, 4 do
+          local n = j == i and value or shownDiv(j)
+          if n ~= DIVS[j][2] then sameDiv = false end
+          divs[j] = n
+        end
+        local bands = bag and bag.bands
+        State.ensureProjectFields(S.project)
+        S.project.specialtyBalls = S.project.specialtyBalls or {}
+        if sameDiv and not bands then
+          S.project.specialtyBalls.HEAVY_BALL = nil
+        else
+          local rowBag = {}
+          if bands then rowBag.bands = bands end
+          if not sameDiv then rowBag.divs = divs end
+          S.project.specialtyBalls.HEAVY_BALL = next(rowBag) and rowBag or nil
+        end
+        if next(S.project.specialtyBalls) == nil then S.project.specialtyBalls = nil end
+        App.markDirty()
+      end
+      for i, spec in ipairs(DIVS) do
+        Kit.text("small", spec[1], formX, fy + 6 * s, PAL.caption)
+        local v = math.floor(tonumber(field(App, "it_hv_d" .. i, formX + labelW, fy, 80 * s, fh,
+          tostring(shownDiv(i)), tostring(spec[2]))) or spec[2])
+        v = math.max(1, math.min(65535, v))
+        if v ~= shownDiv(i) then commitDiv(i, v) end
+        fy = fy + fh + 8 * s
+      end
+      for i, vanilla in ipairs(HEAVY_BANDS) do
+        Kit.text("small", vanilla.label, formX, fy + 6 * s, PAL.caption)
+        if vanilla.below ~= nil then
+          local below = math.floor(tonumber(field(App, "it_hv_b" .. i, formX + labelW, fy, 56 * s, fh,
+            tostring(shown(i, "below")), tostring(vanilla.below))) or vanilla.below)
+          below = math.max(0, math.min(255, below))
+          if below ~= shown(i, "below") then commit(i, "below", below) end
+        end
+        local bonusX = vanilla.below ~= nil and (formX + labelW + 64 * s) or (formX + labelW)
+        local bonus = math.floor(tonumber(field(App, "it_hv_n" .. i, bonusX, fy, 64 * s, fh,
+          tostring(shown(i, "bonus")), tostring(vanilla.bonus))) or vanilla.bonus)
+        bonus = math.max(-255, math.min(255, bonus))
+        if bonus ~= shown(i, "bonus") then commit(i, "bonus", bonus) end
+        fy = fy + fh + 8 * s
+      end
+    elseif Generation.isGen2(S) and SPECIALTY_BOOST[item.id] then
+      local spec = SPECIALTY_BOOST[item.id]
+      local bag = S.project.specialtyBalls and S.project.specialtyBalls[item.id]
+      row(spec.label, function(fx, fy_, fw, fh_)
+        local cur = bag and bag.mult
+        if cur == nil then cur = spec.default end
+        local v = math.floor(tonumber(field(App, "it_spec", fx, fy_, 80 * s, fh_,
+          tostring(cur), tostring(spec.default))) or spec.default)
+        v = math.max(0, math.min(255, v))
+        if v ~= cur then
+          State.ensureProjectFields(S.project)
+          S.project.specialtyBalls = S.project.specialtyBalls or {}
+          local rowBag = S.project.specialtyBalls[item.id] or {}
+          rowBag.mult = v == spec.default and nil or v
+          if rowBag.mult == nil and rowBag.species == nil and rowBag.divs == nil then
+            S.project.specialtyBalls[item.id] = nil
+          else
+            S.project.specialtyBalls[item.id] = rowBag
+          end
+          if next(S.project.specialtyBalls) == nil then S.project.specialtyBalls = nil end
+          App.markDirty()
+        end
+      end)
+      if item.id == "LEVEL_BALL" then
+        local DIVS = {
+          { "Below half, divide level by", 2 },
+          { "Below a quarter, divide level by", 4 },
+        }
+        local function shownDiv(i)
+          local n = bag and bag.divs and bag.divs[i]
+          if n == nil then return DIVS[i][2] end
+          return n
+        end
+        for i, specDiv in ipairs(DIVS) do
+          Kit.text("small", specDiv[1], formX, fy + 6 * s, PAL.caption)
+          local v = math.floor(tonumber(field(App, "it_lv_d" .. i, formX + labelW, fy, 80 * s, fh,
+            tostring(shownDiv(i)), tostring(specDiv[2]))) or specDiv[2])
+          v = math.max(1, math.min(255, v))
+          if v ~= shownDiv(i) then
+            local divs = {}
+            local sameDiv = true
+            for j = 1, 2 do
+              local n = j == i and v or shownDiv(j)
+              if n ~= DIVS[j][2] then sameDiv = false end
+              divs[j] = n
+            end
+            State.ensureProjectFields(S.project)
+            S.project.specialtyBalls = S.project.specialtyBalls or {}
+            local rowBag = S.project.specialtyBalls.LEVEL_BALL or {}
+            rowBag.divs = sameDiv and nil or divs
+            if rowBag.mult == nil and rowBag.divs == nil then
+              S.project.specialtyBalls.LEVEL_BALL = nil
+            else
+              S.project.specialtyBalls.LEVEL_BALL = rowBag
+            end
+            if next(S.project.specialtyBalls) == nil then S.project.specialtyBalls = nil end
+            App.markDirty()
+          end
+          fy = fy + fh + 8 * s
+        end
+      end
+      if item.id == "FAST_BALL" then
+        local shown = bag and bag.species and table.concat(bag.species, ", ") or FAST_BALL_VANILLA
+        Kit.text("small", "Boosted species", formX, fy + 6 * s, PAL.caption)
+        local text = Kit.textfield("it_fast_species", formX + labelW, fy, formW - labelW, fh, shown, FAST_BALL_VANILLA)
+        if text ~= shown then
+          local species = {}
+          for name in tostring(text):gmatch("[^,%s]+") do
+            species[#species + 1] = name:upper()
+          end
+          State.ensureProjectFields(S.project)
+          S.project.specialtyBalls = S.project.specialtyBalls or {}
+          local rowBag = S.project.specialtyBalls[item.id] or {}
+          local vanilla = text:upper():gsub("%s+", " ") == FAST_BALL_VANILLA:upper()
+          rowBag.species = vanilla and nil or species
+          if rowBag.mult == nil and rowBag.species == nil then
+            S.project.specialtyBalls[item.id] = nil
+          else
+            S.project.specialtyBalls[item.id] = rowBag
+          end
+          if next(S.project.specialtyBalls) == nil then S.project.specialtyBalls = nil end
+          App.markDirty()
+        end
+        fy = fy + fh + 8 * s
+        Kit.text("micro", "Comma-separated species. An empty list boosts nobody. The cart list is Magnemite, Grimer, and Tangela.",
+          formX, fy, PAL.muted)
+        fy = fy + 28 * s
+      end
+    elseif Generation.isGen2(S) then
       row("Multiplier", function(fx, fy_, fw, fh_)
         local cur = item.ballMultiplier
         if cur == nil then cur = BALL_MULTIPLIER[item.id] or 1 end
@@ -897,6 +1115,22 @@ function Items.draw(S, x, y, w, h, App)
         App.markDirty()
       end
     end)
+    local function vitaminKnob(label, key, default, maxV, id)
+      local stored = S.project.vitaminRules and S.project.vitaminRules[key]
+      local cur = stored ~= nil and stored or default
+      row(label, function(fx, fy_, fw, fh_)
+        local v = math.floor(RegList.num(App, id, fx, fy_, 90 * s, fh_, cur))
+        v = math.max(0, math.min(maxV, v))
+        if v ~= cur then
+          S.project.vitaminRules = S.project.vitaminRules or {}
+          S.project.vitaminRules[key] = v == default and nil or v
+          if next(S.project.vitaminRules) == nil then S.project.vitaminRules = nil end
+          App.markDirty()
+        end
+      end)
+    end
+    vitaminKnob("Stat exp gained", "gain", 2560, 65535, "it_vit_gain")
+    vitaminKnob("Stops at", "cap", 25600, 65535, "it_vit_cap")
   elseif tmpl == "x_item" then
     row("Battle stat", function(fx, fy_, fw, fh_)
       local stats = Generation.isGen2(S) and X_STATS_GEN2 or X_STATS
@@ -909,19 +1143,50 @@ function Items.draw(S, x, y, w, h, App)
         App.markDirty()
       end
     end)
+    if item.id ~= "X_ACCURACY" then
+      local stored = S.project.xItem and S.project.xItem.stages
+      local cur = stored ~= nil and stored or 1
+      row("Stages raised", function(fx, fy_, fw, fh_)
+        local v = math.floor(RegList.num(App, "it_x_stage", fx, fy_, 72 * s, fh_, cur))
+        v = math.max(0, math.min(6, v))
+        if v ~= cur then
+          S.project.xItem = v == 1 and nil or { stages = v }
+          App.markDirty()
+        end
+      end)
+    end
   elseif tmpl == "pp_restore" then
     row("Fill", function(fx, fy_, fw, fh_)
       local full = item.ppFull
       if full == nil then
         full = item.id == "MAX_ETHER" or item.id == "MAX_ELIXER"
       end
-      if Kit.chip(fx, fy_, 90 * s, fh_, full and "MAX PP" or "+10 PP", full, PAL.blue) then
+      if Kit.chip(fx, fy_, 90 * s, fh_, full and "MAX PP" or ("+" .. ((S.project.ppRestore and S.project.ppRestore[item.id]) or (item.id == "MYSTERYBERRY" and 5 or 10)) .. " PP"), full, PAL.blue) then
         item = mutate()
         item.effectTemplate = "pp_restore"
         item.ppFull = not full
         App.markDirty()
       end
     end)
+    local fullNow = item.ppFull
+    if fullNow == nil then
+      fullNow = item.id == "MAX_ETHER" or item.id == "MAX_ELIXER"
+    end
+    if not fullNow then
+      local default = item.id == "MYSTERYBERRY" and 5 or 10
+      local stored = S.project.ppRestore and S.project.ppRestore[item.id]
+      local cur = stored ~= nil and stored or default
+      row("PP restored", function(fx, fy_, fw, fh_)
+        local v = math.floor(RegList.num(App, "it_pp_amt", fx, fy_, 72 * s, fh_, cur))
+        v = math.max(0, math.min(63, v))
+        if v ~= cur then
+          S.project.ppRestore = S.project.ppRestore or {}
+          S.project.ppRestore[item.id] = v == default and nil or v
+          if next(S.project.ppRestore) == nil then S.project.ppRestore = nil end
+          App.markDirty()
+        end
+      end)
+    end
     row("Moves", function(fx, fy_, fw, fh_)
       local all = item.ppAllMoves
       if all == nil then
@@ -992,8 +1257,22 @@ function Items.draw(S, x, y, w, h, App)
         item.effect = v
       end
     end)
+  elseif tmpl == "revive" then
+    Kit.text("micro", "A Revive stands the Pokémon up with max HP divided by this number. The cart uses 2.",
+      formX, fy, PAL.muted)
+    fy = fy + 22 * s
+    local cur = S.project.reviveRules and S.project.reviveRules.div or 2
+    row("HP divisor", function(fx, fy_, fw, fh_)
+      local v = math.floor(RegList.num(App, "it_revive_div", fx, fy_, 72 * s, fh_, cur))
+      v = math.max(1, math.min(16, v))
+      if v ~= cur then
+        if v == 2 then S.project.reviveRules = nil
+        else S.project.reviveRules = { div = v } end
+        App.markDirty()
+      end
+    end)
   elseif tmpl == "max_heal" or tmpl == "full_restore"
-      or tmpl == "revive" or tmpl == "max_revive"
+      or tmpl == "max_revive"
       or tmpl == "rare_candy" or tmpl == "pp_up" or tmpl == "flute" then
     Kit.text("micro", "Save installs a mod item_effect that replaces vanilla use.",
       formX, fy, PAL.muted)

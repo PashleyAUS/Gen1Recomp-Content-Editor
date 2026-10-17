@@ -1588,7 +1588,7 @@ local function drawEvolutions(S, mon, mutate, App, formX, fy, formW, fh, s)
   if Generation.isGen3(S) then
     methods={}
     for _,id in ipairs(require("src.mods.Schemas").gen3View.EVOLUTIONS) do methods[#methods+1]=id end
-    if Generation.id(S)=="emerald" then for _,id in ipairs(require("Gen3ContestEvo").EXTRA) do methods[#methods+1]=id end end
+    if Generation.isRse(S) then for _,id in ipairs(require("Gen3ContestEvo").EXTRA) do methods[#methods+1]=id end end
   end
   local intoKey = gen2 and "into" or "species"
   Kit.text("micro",

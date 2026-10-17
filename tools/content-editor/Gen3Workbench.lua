@@ -15,28 +15,57 @@ function M.prepare(S)
   end
   S.data.type_chart=S.data._g3TypeChart
 end
+function M.decorationCatalog(S)
+  if S.data._g3DecorCatalog then return S.data._g3DecorCatalog end
+  local C=require("src.core.game3.constants").of(require("Generation").id(S))
+  local rev=C.decorations.byId.DECOR_ or {}
+  local byId,ids={},{}
+  for id,name in pairs(rev) do
+    if name~="DECOR_NONE" then byId[id]=name;ids[#ids+1]=name end
+  end
+  table.sort(ids,function(a,b) return (C.decorations.byName[a] or 0)<(C.decorations.byName[b] or 0) end)
+  local labels={};for _,name in ipairs(ids) do labels[name]=name:gsub("^DECOR_",""):gsub("_"," ") end
+  S.data._g3DecorCatalog={byId=byId,ids=ids,labels=labels}
+  return S.data._g3DecorCatalog
+end
+local function decorMart(rec)
+  return rec.kind=="decorations" or rec.martType=="DECOR" or rec.martType=="DECOR2"
+end
 function M.shops(S)
   M.prepare(S)
   local pack=require("Gen3Resources").readTable(S.data,"data/generated/gba/scripts/marts.lua")
   local items={};for id,item in pairs(S.data.items or {}) do items[item.index]=id end
+  local rse=require("Generation").isRse(S)
   if not S.data._g3ShopLocations then
     local usage={};local maps=require("Gen3Labels").scriptMaps(S)
     for script,rows in pairs(require("Gen3").catalog(S.data,"map_scripts")) do
-      for _,row in ipairs(rows) do if row.op=="pokemart" then
-        local key=row.items or row.ptr or row[1];usage[key]=usage[key] or {}
-        for map in pairs(maps[script] or {}) do usage[key][require("Gen3Labels").map(map)]=true end
-      end end
+      for _,row in ipairs(rows) do
+        if row.op=="pokemart" or (rse and (row.op=="pokemartdecoration" or row.op=="pokemartdecoration2")) then
+          local key=row.items or row.ptr or row[1];usage[key]=usage[key] or {}
+          for map in pairs(maps[script] or {}) do usage[key][require("Gen3Labels").map(map)]=true end
+        end
+      end
     end
     S.data._g3ShopLocations=usage
   end
   local keys,rows={},{}
   for _,rec in pairs(pack.marts or {}) do
+    local decor=decorMart(rec)
     local key=rec.key or tostring(rec.ptr)
-    if not rows[key] then
-      local stock={};for i,id in ipairs(rec.items or {}) do stock[i]=items[id] or tostring(id) end
+    if not (decor and not rse) and not rows[key] then
+      local stock={}
+      if decor then
+        local cat=M.decorationCatalog(S)
+        for i,id in ipairs(rec.items or {}) do stock[i]=cat.byId[id] or tostring(id) end
+      else
+        for i,id in ipairs(rec.items or {}) do stock[i]=items[id] or tostring(id) end
+      end
       local edit=(S.project.marts or {})[key]
+      if type(edit)=="table" and edit.items then edit=edit.items end
       local locations=require("RegList").sortedKeys(S.data._g3ShopLocations[key] or {})
-      rows[key]={key=key,label=#locations>0 and table.concat(locations," / ") or key,textId=key,mart=edit or stock,base=stock,ptr=rec.ptr,owned=edit~=nil,kind="list"}
+      local label=#locations>0 and table.concat(locations," / ") or key
+      if decor then label="Decorations · "..label end
+      rows[key]={key=key,label=label,textId=key,mart=edit or stock,base=stock,ptr=rec.ptr,owned=edit~=nil,kind=decor and "decorations" or "list",martType=rec.martType}
       keys[#keys+1]=key
     end
   end
@@ -57,6 +86,7 @@ function M.emit(p,encode,out)
     assert(typeIds[a] and typeIds[d] and (mult==0 or mult==5 or mult==10 or mult==20),"Invalid type matchup")
   end
   out[#out+1]="  local workbench="..encode({boot=p.boot or {},shops=p.marts or {},types=p.types or {},matchups=p.type_matchups or {},typeIds=typeIds})
+  out[#out+1]="  local DecorMart=(function()\n"..assert(love.filesystem.read("tools/content-editor/Gen3DecorMart.lua")).."\nend)()"
   out[#out+1]=M.source
 end
 M.source=[=[
@@ -112,12 +142,14 @@ M.source=[=[
     local items,rec=proceed(key)
     local stock=workbench.shops[tostring(key)] or (rec and workbench.shops[rec.key])
     if not stock then return items,rec end
-    local output={}
-    for i,id in ipairs(stock) do
+    local output,nextRec=DecorMart.apply(stock,rec,function(id)
       local item=mod.content.items:get(id)
-      output[i]=assert((item and item.index) or tonumber(id),"Unknown shop item "..id)
-    end
-    return output,rec
+      return item and item.index
+    end,function(id)
+      local names=require("src.core.game3.constants").active():raw("decorations").byName
+      return names and names[id]
+    end)
+    return output,nextRec or rec
   end)
   if not Types._editorWorkbench then
     Types._editorWorkbench=true

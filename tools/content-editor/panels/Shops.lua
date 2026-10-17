@@ -269,6 +269,10 @@ local function drawGen2Form(S, App, formX, listY, formW, listH, key, rec, items)
     Kit.text("micro",
       string.format("%d row(s)  |  Save: shop stock override BARGAIN", #(rec.mart or {})),
       viewX, fy, PAL.detail)
+  elseif rec.kind == "decorations" then
+    Kit.text("micro",
+      string.format("%d decoration(s)  |  Save: decoration shop stock", #(rec.mart or {})),
+      viewX, fy, PAL.detail)
   else
     Kit.text("micro",
       string.format("%d item(s)  |  %d script ref(s)  |  Save: shop stock override",
@@ -287,7 +291,8 @@ local function drawGen2Form(S, App, formX, listY, formW, listH, key, rec, items)
   end
 
   local mart = rec.mart or {}
-  Kit.text("micro", rec.kind == "bargain" and "Bargain stock" or "Stock",
+  Kit.text("micro", rec.kind == "bargain" and "Bargain stock"
+      or (rec.kind == "decorations" and "Decorations" or "Stock"),
     viewX, fy, PAL.caption)
   fy = fy + 18 * s
 
@@ -333,6 +338,40 @@ local function drawGen2Form(S, App, formX, listY, formW, listH, key, rec, items)
         onPick = function(id)
           local e = ensureGen2Shop(S, key, App)
           e[#e + 1] = { item = id, price = 1000 }
+          App.markDirty()
+        end,
+      })
+    end
+  elseif rec.kind == "decorations" then
+    local cat = require("Gen3Workbench").decorationCatalog(S)
+    local Choice = require("ChoicePicker")
+    for mi, decorId in ipairs(mart) do
+      local slot = mi
+      Choice.field(S, {
+        x = viewX, y = fy, w = viewW - 44 * s, h = fh,
+        current = decorId, ids = cat.ids, labels = cat.labels, title = "DECORATION",
+        onPick = function(id)
+          local e = ensureGen2Shop(S, key, App)
+          e[slot] = id
+          App.markDirty()
+        end,
+      })
+      if Kit.button(viewX + viewW - 36 * s, fy, 32 * s, fh, "X",
+          { kind = "danger", font = "small" }) then
+        local e = ensureGen2Shop(S, key, App)
+        table.remove(e, slot)
+        App.markDirty()
+        break
+      end
+      fy = fy + fh + 6 * s
+    end
+    if Kit.button(viewX, fy, 180 * s, fh, "+ Add decoration", { kind = "good" }) then
+      ensureGen2Shop(S, key, App)
+      Choice.open(S, {
+        ids = cat.ids, labels = cat.labels, title = "ADD DECORATION",
+        onPick = function(id)
+          local e = ensureGen2Shop(S, key, App)
+          e[#e + 1] = id
           App.markDirty()
         end,
       })
@@ -394,7 +433,21 @@ function Shops.draw(S, x, y, w, h, App)
     return
   end
   State.ensureProjectFields(S.project)
+  local stored = S.project.sellRules and S.project.sellRules.div
+  local cur = stored == nil and 2 or stored
+  Kit.text("small", "Sell divisor", x, y + 6 * s, PAL.caption)
+  local v = math.floor(RegList.num(App, "shop_sell_div", x + 200 * s, y, 72 * s, 28 * s, cur))
+  v = math.max(1, math.min(16, v))
+  if v ~= cur then
+    S.project.sellRules = v == 2 and nil or { div = v }
+    App.markDirty()
+  end
+  y = y + 36 * s
+  h = h - 36 * s
   if Generation.isGen2(S) then
+    local nextY = require("CoinOffers").draw(S, x, y, w, App)
+    h = h - (nextY - y)
+    y = nextY
     S.project.marts = S.project.marts or {}
   end
 

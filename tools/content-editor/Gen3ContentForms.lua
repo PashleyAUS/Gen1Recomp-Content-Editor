@@ -170,7 +170,131 @@ function M.items(S,item,mutate,App,x,y,w,fh,s)
     table.sort(ids);return ids
   end
   F.choice(S,"pocket","Pocket",choices("pocket"))
-  F.choice(S,"fieldUse","Use outside battle",choices("fieldUse"),{none="Cannot use from the Bag",heal="Medicine (healing / status)",status="Cure status",revive="Revive fainted Pokemon",pp="Restore move PP",evo="Evolution item",level="Raise level",tm="Teach a move",repel="Repel wild Pokemon"});F.text("description","Description")
+  F.choice(S,"fieldUse","Use outside battle",choices("fieldUse"),{none="Cannot use from the Bag",heal="Medicine (healing / status)",status="Cure status",revive="Revive fainted Pokemon",pp="Restore move PP",evo="Evolution item",level="Raise level",tm="Teach a move",repel="Repel wild Pokemon"})
+  local xIds = { X_ATTACK = true, X_DEFEND = true, X_SPEED = true, X_SPECIAL = true, [75] = true, [76] = true, [77] = true, [79] = true }
+  if xIds[item.id] or xIds[item.index] then
+    F.row("Stages raised", function(xx, yy, ww)
+      local cur = S.project.gen3XItem and S.project.gen3XItem.stages or 1
+      local n = math.floor(require("RegList").num(App, "g3_x_stage", xx, yy, ww, fh, cur))
+      n = math.max(0, math.min(6, n))
+      if n ~= cur then
+        S.project.gen3XItem = n == 1 and nil or { stages = n }
+        App.markDirty()
+      end
+    end)
+  end
+  local herbHp = { ENERGY_POWDER = 50, ENERGY_ROOT = 200, [30] = 50, [31] = 200 }
+  local herbNum = ({ ENERGY_POWDER = 30, ENERGY_ROOT = 31 })[item.id]
+  if herbNum == nil and (item.index == 30 or item.index == 31) then herbNum = item.index end
+  if herbNum then
+    F.row("HP restored", function(xx, yy, ww)
+      local default = herbHp[herbNum]
+      local stored = S.project.gen3HerbHeal and S.project.gen3HerbHeal[herbNum]
+      local cur = stored ~= nil and stored or default
+      local n = math.floor(require("RegList").num(App, "g3_herb_hp", xx, yy, ww, fh, cur))
+      n = math.max(0, math.min(9999, n))
+      if n ~= cur then
+        S.project.gen3HerbHeal = S.project.gen3HerbHeal or {}
+        S.project.gen3HerbHeal[herbNum] = n == default and nil or n
+        if next(S.project.gen3HerbHeal) == nil then S.project.gen3HerbHeal = nil end
+        App.markDirty()
+      end
+    end)
+  end
+  local healHp = {
+    POTION = 20, SUPER_POTION = 50, HYPER_POTION = 200, MAX_POTION = 9999,
+    FRESH_WATER = 50, SODA_POP = 60, LEMONADE = 80, MOOMOO_MILK = 100,
+    ORAN_BERRY = 10, SITRUS_BERRY = 30,
+    [13] = 20, [22] = 50, [21] = 200, [20] = 9999,
+    [26] = 50, [27] = 60, [28] = 80, [29] = 100, [139] = 10, [142] = 30,
+  }
+  local healNum = ({
+    POTION = 13, SUPER_POTION = 22, HYPER_POTION = 21, MAX_POTION = 20,
+    FRESH_WATER = 26, SODA_POP = 27, LEMONADE = 28, MOOMOO_MILK = 29,
+    ORAN_BERRY = 139, SITRUS_BERRY = 142,
+  })[item.id]
+  if healNum == nil and healHp[item.index] then healNum = item.index end
+  if healNum then
+    F.row("HP restored", function(xx, yy, ww)
+      local default = healHp[healNum]
+      local stored = S.project.gen3HealHp and S.project.gen3HealHp[healNum]
+      local cur = stored ~= nil and stored or default
+      local n = math.floor(require("RegList").num(App, "g3_heal_hp", xx, yy, ww, fh, cur))
+      n = math.max(0, math.min(9999, n))
+      if n ~= cur then
+        S.project.gen3HealHp = S.project.gen3HealHp or {}
+        S.project.gen3HealHp[healNum] = n == default and nil or n
+        if next(S.project.gen3HealHp) == nil then S.project.gen3HealHp = nil end
+        App.markDirty()
+      end
+    end)
+  end
+  if item.fieldUse == "vitamin" then
+    F.row("Effort gained", function(xx, yy, ww)
+      local cur = S.project.gen3Vitamin and S.project.gen3Vitamin.gain or 10
+      local n = math.floor(require("RegList").num(App, "g3_vitamin", xx, yy, ww, fh, cur))
+      n = math.max(0, math.min(255, n))
+      if n ~= cur then
+        S.project.gen3Vitamin = n == 10 and nil or { gain = n }
+        App.markDirty()
+      end
+    end)
+  end
+  if item.fieldUse == "repel" then
+    F.row("Repel steps", function(xx, yy, ww)
+      local defaults = { REPEL = 100, SUPER_REPEL = 200, MAX_REPEL = 250, [86] = 100, [83] = 200, [84] = 250 }
+      local id = item.id
+      local stored = S.project.gen3Repel and (S.project.gen3Repel[id] or S.project.gen3Repel[item.index])
+      local cur = stored
+      if cur == nil then cur = defaults[id] or defaults[item.index] or 100 end
+      local n = math.floor(require("RegList").num(App, "g3_repel", xx, yy, ww, fh, cur))
+      n = math.max(0, math.min(999, n))
+      if n ~= cur then
+        S.project.gen3Repel = S.project.gen3Repel or {}
+        local vanilla = defaults[id] or defaults[item.index] or 100
+        local function put(key)
+          if key == nil then return end
+          S.project.gen3Repel[key] = n == vanilla and nil or n
+        end
+        put(id)
+        put(item.index)
+        if next(S.project.gen3Repel) == nil then S.project.gen3Repel = nil end
+        App.markDirty()
+      end
+    end)
+  end
+  if item.fieldUse == "pp" then
+    F.row("PP restored", function(xx, yy, ww)
+      local id = item.id
+      local stored = S.project.gen3PpRestore and (S.project.gen3PpRestore[id] or S.project.gen3PpRestore[item.index])
+      local cur = stored ~= nil and stored or 10
+      local n = math.floor(require("RegList").num(App, "g3_pp_restore", xx, yy, ww, fh, cur))
+      n = math.max(0, math.min(63, n))
+      if n ~= cur then
+        S.project.gen3PpRestore = S.project.gen3PpRestore or {}
+        local function put(key)
+          if key == nil then return end
+          S.project.gen3PpRestore[key] = n == 10 and nil or n
+        end
+        put(id)
+        put(item.index)
+        if next(S.project.gen3PpRestore) == nil then S.project.gen3PpRestore = nil end
+        App.markDirty()
+      end
+    end)
+  end
+  if item.fieldUse == "revive" then
+    F.row("Half-revive divisor", function(xx, yy, ww)
+      local cur = S.project.gen3Revive and S.project.gen3Revive.div or 2
+      local n = math.floor(require("RegList").num(App, "g3_revive_div", xx, yy, ww, fh, cur))
+      n = math.max(1, math.min(16, n))
+      if n ~= cur then
+        S.project.gen3Revive = n == 2 and nil or { div = n }
+        App.markDirty()
+      end
+    end)
+  end
+  F.text("description","Description")
   local held={["0"]="None"}
   for name,id in pairs(require("src.core.game3.battle.held_items").HOLD) do held[tostring(id)]=name:gsub("_"," ") end
   F.enum(S,"holdEffect","When held",held)

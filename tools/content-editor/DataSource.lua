@@ -349,6 +349,7 @@ local GOLD_EXTRAS = {
   { file = "landmarks", keys = { "landmarks", "gen2Landmarks" } },
   { file = "menu_gfx", keys = { "menu_gfx", "gen2MenuGfx" } },
   { file = "diploma", keys = { "diploma", "gen2Diploma" } },
+  { file = "trade", keys = { "trade", "gen2Trade" } },
   { file = "pokedex", keys = { "pokedex", "gen2Pokedex" } },
 }
 

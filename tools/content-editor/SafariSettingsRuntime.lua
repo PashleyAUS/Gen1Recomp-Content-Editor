@@ -24,18 +24,48 @@ function M.join(row,game,ow,done)
       if money>=row.fee then game.save.money=money-row.fee;start(row.balls,row.fee);return end
       if row.yellowDiscount and require("src.core.GameVersion").isYellow() then
         if money>0 then
-          local balls=math.min(math.max(1,row.balls-1),math.floor(money/23)+1)
+          local price=math.max(1,math.floor(tonumber(row.yellowBallPrice) or 23))
+          local balls=math.min(math.max(1,row.balls-1),math.floor(money/price)+1)
           game.save.money=0;start(balls,money);return
         end
         local nags=game.save.safariNags or 0;game.save.safariNags=nags+1
-        if nags>=3 then start(1,0);return end
+        local needed=math.max(1,math.floor(tonumber(row.yellowFreeNags) or 3))
+        if nags>=needed then start(1,0);return end
       end
       back("You don't have enough money.")
     end))
   end)
 end
+function M.applyBattle(row,generation)
+  if type(row)~="table" then return end
+  local function set(target,key,field)
+    if row[key]~=nil then target[field]=row[key] end
+  end
+  if generation==1 then
+    local Battle=require("src.battle.BattleState")
+    set(Battle,"baitDiv","SAFARI_BAIT_DIV")
+    set(Battle,"rockMult","SAFARI_ROCK_MULT")
+    set(Battle,"factorLo","SAFARI_FACTOR_LO")
+    set(Battle,"factorHi","SAFARI_FACTOR_HI")
+    set(Battle,"fleeAbove","SAFARI_FLEE_ABOVE")
+    set(Battle,"eatingDiv","SAFARI_EATING_DIV")
+    set(Battle,"angryMult","SAFARI_ANGRY_MULT")
+  elseif generation==3 then
+    local Safari=require("src.core.game3.battle.rules").safari
+    set(Safari,"baitDiv","BAIT_DIV")
+    set(Safari,"rockMult","ROCK_MULT")
+    set(Safari,"baitFloorAt","BAIT_FLOOR_AT")
+    set(Safari,"baitFloor","BAIT_FLOOR")
+    set(Safari,"rockCap","ROCK_CAP")
+    set(Safari,"counterAdd","COUNTER_ADD")
+    set(Safari,"counterSpan","COUNTER_SPAN")
+    set(Safari,"counterCap","COUNTER_CAP")
+    set(Safari,"fleeScale","FLEE_SCALE")
+  end
+end
 function M.install(mod,row,generation)
   if mod.generation~=generation then return end
+  M.applyBattle(row,generation)
   local Runtime=require("src.mods.Runtime")
   if generation==3 then
     local Safari=require("src.core.game3.safari")

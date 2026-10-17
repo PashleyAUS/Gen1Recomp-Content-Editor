@@ -383,9 +383,14 @@ function M.choiceData(S,kind,current)
   end)
   return ids,labels
 end
-function M.help(step)
+function M.help(step, S)
   local op=step.op
-  if op=="pokemartdecoration" or op=="pokemartdecoration2" then return "Decoration shops are not supported by the current game. These settings are saved, but the shop will not open." end
+  if op=="pokemartdecoration" or op=="pokemartdecoration2" then
+    if S and require("Generation").isRse(S) then
+      return "Opens this decoration shop. The list is the decorations it sells."
+    end
+    return "FireRed and LeafGreen have no decoration shop. These settings are saved, but the shop will not open."
+  end
   if op=="setfieldeffectargument" then return "The current game does not use this effect setting. You can save it, but changing it will not change the effect yet." end
   if op=="special" or op=="specialvar" then
     local id=op=="special" and (step.id or step[1]) or step[2]
@@ -404,7 +409,7 @@ function M.help(step)
 end
 function M.draw(S,key,step,x,y,w,changed)
   local K=require("Kit");local s=K.scale;local color=require("Theme").PAL.text
-  local help=M.help(step)
+  local help=M.help(step, S)
   K.text("small",K.ellipsize("small",help,w),x,y,color);K.offerTooltip(x,y,w,24*s,help);y=y+30*s
   local fields=M.fields(step)
   if #fields==0 then K.text("small","This action always does the same thing. You can remove it or replace it with another action.",x,y,color);return true,y+30*s end
@@ -418,6 +423,8 @@ function M.draw(S,key,step,x,y,w,changed)
       end)
     elseif field.choices=="dialogue" then
       y=require("Gen3ActionContent").drawDialogue(S,key.."/"..tostring(field.key),old,x,y,w,pick)
+    elseif (step.op=="pokemartdecoration" or step.op=="pokemartdecoration2") and require("Generation").isRse(S) and field.key=="ptr" then
+      y=require("Gen3ActionContent").drawDecorShop(S,key,old,x,y,w,pick)
     elseif field.choices=="shop" then
       y=require("Gen3ActionContent").drawShop(S,key,old,x,y,w,pick)
     elseif field.choices=="item" then

@@ -41,6 +41,53 @@ function M.saveShop(S,stock,pick)
   local id=base..n
   S.project.marts[id]=copy(stock);S.project.gen3Workbench=true;pick(id)
 end
+function M.decorStock(S,key)
+  local edit=(S.project.marts or {})[tostring(key)]
+  if type(edit)=="table" and type(edit.items)=="table" then return copy(edit.items), edit.martType or "DECOR" end
+  S.data._g3ActionMarts=S.data._g3ActionMarts or require("Gen3Resources").readTable(S.data,"data/generated/gba/scripts/marts.lua")
+  local n=type(key)=="number" and key or tonumber(key) or tonumber(tostring(key):match("^g3:(%x+)$"),16)
+  for _,rec in pairs(S.data._g3ActionMarts.marts or {}) do
+    if rec.key==key or (n and rec.ptr==n) then
+      local override=(S.project.marts or {})[rec.key]
+      if type(override)=="table" and not override.items then return copy(override), rec.martType or "DECOR" end
+      local cat=require("Gen3Workbench").decorationCatalog(S)
+      local stock={}
+      for _,index in ipairs(rec.items or {}) do stock[#stock+1]=cat.byId[index] or tostring(index) end
+      return stock, rec.martType or "DECOR"
+    end
+  end
+  return nil, "DECOR"
+end
+function M.saveDecorShop(S,stock,martType,pick)
+  S.project.marts=S.project.marts or {}
+  local base="EditorDecorShop_"..tostring(S.project.id):gsub("[^%w_]","_").."_";local n=1
+  while S.project.marts[base..n] do n=n+1 end
+  local id=base..n
+  S.project.marts[id]={items=copy(stock),martType=martType or "DECOR",kind="decorations"}
+  S.project.gen3Workbench=true
+  pick(id)
+end
+function M.drawDecorShop(S,key,old,x,y,w,pick)
+  local K=require("Kit");local s=K.scale;local Choice=require("ChoicePicker")
+  local stock,martType=M.decorStock(S,old)
+  local note=stock and "Decorations sold by this action. Other shops keep their own inventory." or "The original inventory is unavailable. Add decorations to create one for this action."
+  K.text("small",K.ellipsize("small",note,w),x,y,require("Theme").PAL.text);K.offerTooltip(x,y,w,24*s,note);y=y+28*s
+  stock=stock or {}
+  local cat=require("Gen3Workbench").decorationCatalog(S)
+  for i,id in ipairs(stock) do
+    Choice.field(S,{x=x,y=y,w=w-85*s,h=29*s,current=id,ids=cat.ids,labels=cat.labels,title="DECORATION",onPick=function(value)
+      local rows=copy(stock);rows[i]=value;M.saveDecorShop(S,rows,martType,pick)
+    end})
+    if K.button(x+w-77*s,y,77*s,29*s,"Remove",{}) then
+      local rows=copy(stock);table.remove(rows,i);M.saveDecorShop(S,rows,martType,pick);return y+40*s
+    end
+    y=y+36*s
+  end
+  Choice.field(S,{x=x,y=y,w=w,h=29*s,current="",emptyLabel="Add a decoration to sell",ids=cat.ids,labels=cat.labels,title="ADD DECORATION",onPick=function(id)
+    local rows=copy(stock);rows[#rows+1]=id;M.saveDecorShop(S,rows,martType,pick)
+  end})
+  return y+36*s
+end
 function M.drawShop(S,key,old,x,y,w,pick)
   local K=require("Kit");local s=K.scale;local P=require("ItemPicker")
   local stock=M.shop(S,old)

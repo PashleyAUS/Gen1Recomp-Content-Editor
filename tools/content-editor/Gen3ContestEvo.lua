@@ -1,9 +1,10 @@
--- Emerald evolutions by contest condition. The runtime only knows EVO_BEAUTY,
+-- Ruby, Sapphire, and Emerald evolutions by contest condition. The runtime
+-- only knows EVO_BEAUTY,
 -- so the other four export as EVO_BEAUTY plus a condition table.
 local M={}
 M.METHODS={EVO_COOL="cool",EVO_BEAUTY="beauty",EVO_CUTE="cute",EVO_CLEVER="smart",EVO_TOUGH="tough"}
 M.EXTRA={"EVO_COOL","EVO_CUTE","EVO_CLEVER","EVO_TOUGH"}
-function M.enabled(p) return (p.game or p.version)=="emerald" end
+function M.enabled(p) return require("Generation").isRseId(p.game or p.version) end
 function M.compile(p)
   local rows={}
   for id,rec in pairs((p.gen3 or {}).pokemon or {}) do
@@ -11,7 +12,7 @@ function M.compile(p)
       local condition=M.METHODS[evo.method]
       if condition then evo.level,evo.item=nil,nil end
       if condition and evo.method~="EVO_BEAUTY" then
-        assert(M.enabled(p),"Contest condition evolutions need Emerald: "..id)
+        assert(M.enabled(p),"Contest condition evolutions need Ruby, Sapphire, or Emerald: "..id)
         assert(evo.species,"Choose the species "..id.." evolves into")
         evo.method="EVO_BEAUTY"
         rows[#rows+1]={from=id,into=evo.species,param=evo.param or 0,condition=condition}

@@ -1,4 +1,5 @@
--- Emerald end credits: 5-line pages from the imported credits_rse manifest.
+-- Ruby, Sapphire, and Emerald end credits: 5-line pages from the imported
+-- credits_rse manifest.
 local M={}
 local Copy=require("src.mods.Merge").deepCopy
 M.MANIFEST="data/generated/gba/credits_rse/manifest.lua"

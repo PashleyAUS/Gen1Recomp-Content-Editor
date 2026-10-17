@@ -71,7 +71,12 @@ function M.install(mod,rows)
   for _,name in ipairs({"show","close","handleInput","draw","currentLocationName"}) do bridge(Region,name,"editor.gen3.fly."..name) end
   local active,index=nil,1
   local visited=trackVisits(mod,Field)
-  local function selectRow() local row=active and active[index];if row then Region.cursorX=row.mapX;Region.cursorY=row.mapY end end
+  local function selectRow()
+    local row=active and active[index]
+    if not row then return end
+    Region.cursorX=row.mapX;Region.cursorY=row.mapY
+    if Region.selectRegion then Region.selectRegion(row.region or 0) end
+  end
   mod.hooks:wrap("editor.gen3.fly.show",function(proceed,opts) active=nil;return proceed(opts) end)
   mod.hooks:wrap("editor.gen3.fly.close",function(proceed,...) active=nil;return proceed(...) end)
   mod.hooks:wrap("editor.gen3.fly",function(proceed,payload)
@@ -103,9 +108,12 @@ function M.install(mod,rows)
   mod.hooks:wrap("editor.gen3.fly.draw",function(proceed)
     proceed();if not active then return end
     love.graphics.push("all")
+    local page=Region.currentRegion and Region.currentRegion() or 0
     for i,row in ipairs(active) do
-      love.graphics.setColor(i==index and 1 or .2,1,.2,1)
-      love.graphics.rectangle("line",36+row.mapX*8,24+row.mapY*8,8,8)
+      if (row.region or 0)==page then
+        love.graphics.setColor(i==index and 1 or .2,1,.2,1)
+        love.graphics.rectangle("line",36+row.mapX*8,24+row.mapY*8,8,8)
+      end
     end
     love.graphics.setColor(.12,.22,.18,1);love.graphics.rectangle("fill",0,144,240,16)
     require("src.ui.game3.frlg_font").draw("D-PAD: SELECT  A: FLY  B: BACK",4,146,{color={1,1,1,1},small=true})

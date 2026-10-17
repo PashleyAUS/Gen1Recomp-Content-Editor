@@ -57,6 +57,7 @@ local GEN2_NESTS = {
   { id = "slots", label = "Slots", nest = "slots" },
   { id = "cardFlip", label = "Card flip", nest = "cardFlip" },
   { id = "diploma", label = "Diploma", diploma = true },
+  { id = "trade", label = "Trade", trade = true },
 }
 
 local GEN1_NESTS = {
@@ -145,6 +146,10 @@ local function diplomaData(S)
   return S.data and (S.data.gen2Diploma or S.data.diploma) or {}
 end
 
+local function tradeData(S)
+  return S.data and (S.data.gen2Trade or S.data.trade) or {}
+end
+
 local function fieldData(S)
   return (S.data and S.data.field) or {}
 end
@@ -175,6 +180,11 @@ local function groupsFor(S)
       if spec.diploma then
         local d = diplomaData(S)
         if type(d) == "table" and type(d.image) == "string" then
+          groups[#groups + 1] = spec
+        end
+      elseif spec.trade then
+        local d = tradeData(S)
+        if type(d) == "table" and hasImages(d) then
           groups[#groups + 1] = spec
         end
       elseif spec.id == "naming" then
@@ -226,6 +236,7 @@ local function groupsFor(S)
 end
 
 local function groupSource(S, spec)
+  if spec.trade then return tradeData(S) end
   if spec.diploma then return diplomaData(S) end
   if Generation.isGen2(S) then
     local gfx = menuGfx(S)
@@ -243,6 +254,10 @@ end
 
 local function projectBucket(S, spec)
   State.ensureProjectFields(S.project)
+  if spec.trade then
+    S.project.tradeGfx = S.project.tradeGfx or {}
+    return S.project.tradeGfx
+  end
   if spec.diploma then
     S.project.diploma = S.project.diploma or {}
     return S.project.diploma
@@ -253,7 +268,7 @@ end
 
 local function projectBranch(S, spec)
   local root = projectBucket(S, spec)
-  if spec.diploma then return root end
+  if spec.diploma or spec.trade then return root end
   if spec.id == "naming" then return root end
   if spec.nest then
     return type(root[spec.nest]) == "table" and root[spec.nest] or nil
@@ -282,7 +297,7 @@ end
 local function effPath(S, spec, keys)
   local proj = projectBucket(S, spec)
   local fromP
-  if spec.diploma then
+  if spec.diploma or spec.trade then
     fromP = walkKeys(proj, keys)
   elseif spec.nest then
     fromP = walkKeys(proj[spec.nest], keys)
@@ -319,7 +334,9 @@ end
 
 local function clearGroup(S, spec, App)
   local root = projectBucket(S, spec)
-  if spec.diploma then
+  if spec.trade then
+    S.project.tradeGfx = {}
+  elseif spec.diploma then
     S.project.diploma = {}
   elseif spec.id == "naming" then
     for _, k in ipairs(NAMING_KEYS) do root[k] = nil end
@@ -423,7 +440,9 @@ function UiMenus.draw(S, x, y, w, h, App)
   Kit.caption(viewX, fy, spec.label:upper())
   fy = fy + 22 * s
   Kit.text("micro", Generation.isGen2(S)
-      and (spec.diploma
+      and (spec.trade
+        and "Sheets → data.gen2Trade (Save merges on mods.loaded). Use the same PNG size as the original."
+        or spec.diploma
         and "Sheet → data.gen2Diploma (Save merges on mods.loaded)"
         or "Sheets → data.gen2MenuGfx (Save merges on mods.loaded)")
       or "Sheets → field." .. tostring(spec.nest or spec.id) .. " (Save patches field)",

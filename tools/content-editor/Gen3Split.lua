@@ -1,4 +1,4 @@
--- GAME PATCHES > Physical/Special split (Emerald): each move is Physical or
+-- GAME PATCHES > Physical/Special split (every Gen 3 game): each move is Physical or
 -- Special by itself, as in Gen 4, instead of by its type.
 local M={}
 -- Gen 4 categories of the Gen 3 moves whose type says otherwise.
@@ -28,7 +28,8 @@ function M.applyDefaults(moves)
 end
 function M.emit(p,encode,out)
   if not M.enabled(p) then return end
-  assert((p.game or p.version)=="emerald","The Physical/Special split needs Emerald")
+  assert(require("Generation").isGen3Id(p.game or p.version),
+    "The Physical/Special split needs a Gen 3 game")
   local moves={}
   for id,rec in pairs((p.gen3 or {}).moves or {}) do
     if rec.category~=nil then moves[id]=rec.category end

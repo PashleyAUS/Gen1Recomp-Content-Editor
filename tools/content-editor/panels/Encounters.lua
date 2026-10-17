@@ -387,6 +387,140 @@ local function drawSpecial(S, App, x, y, w, h)
   end
 end
 
+local function drawContest(S, App, x, y, w, h)
+  local s = Kit.scale
+  local fy, view, viewX, viewW = RegList.beginForm(S, x, y, w, h,
+    "encountersContestScroll", "contest", 12 * s)
+  local contentTop = fy
+  local fh = 28 * s
+  local listBottom = y + h - 16 * s
+  Kit.caption(viewX, fy, "Bug-Catching Contest")
+  fy = fy + 22 * s
+  Kit.text("micro",
+    "Species the National Park rolls during the contest. Chance is that row's slice of 100. The last row (chance 255) is the fallthrough.",
+    viewX, fy, PAL.muted)
+  fy = fy + 36 * s
+  fy = EncounterEdit.drawBugContest(S, App, viewX - 10 * s, fy,
+    viewW + 10 * s, listBottom, fh, s) or fy
+  FormPane.finish(S, "encountersContestScroll", contentTop, fy, view)
+end
+
+local function drawRoamers(S, App, x, y, w, h)
+  local s = Kit.scale
+  local fy, view, viewX, viewW = RegList.beginForm(S, x, y, w, h,
+    "encountersRoamScroll", "roam", 12 * s)
+  local contentTop = fy
+  local fh = 28 * s
+  local listBottom = y + h - 16 * s
+  Kit.caption(viewX, fy, "Roaming beasts")
+  fy = fy + 22 * s
+  Kit.text("micro",
+    "Where each beast starts, and which routes it can walk to. Crystal's ROM starts two; Gold and Silver start three. Save uses the table you see.",
+    viewX, fy, PAL.muted)
+  fy = fy + 36 * s
+  fy = EncounterEdit.drawRoamers(S, App, viewX - 10 * s, fy,
+    viewW + 10 * s, listBottom, fh, s) or fy
+  FormPane.finish(S, "encountersRoamScroll", contentTop, fy, view)
+end
+
+local function drawSwarms(S, App, x, y, w, h)
+  local s = Kit.scale
+  local ids = EncounterEdit.swarmMapIds(S)
+  local formX, formW, listY, listH = RegList.drawList(S, App, x, y, w, h,
+    "SWARMS", ids, {
+      queryKey = "encountersSwarmQuery",
+      offsetKey = "encountersSwarmOffset",
+      selKey = "swarmMapId",
+      accent = PAL.green,
+      isOwned = function(id)
+        local g = S.project.swarmGrass and S.project.swarmGrass[id]
+        local wtr = S.project.swarmWater and S.project.swarmWater[id]
+        return type(g) == "table" or g == false or type(wtr) == "table" or wtr == false
+      end,
+      filter = function(id, q)
+        return id:lower():find(q:lower(), 1, true) ~= nil
+      end,
+      footerLabel = "+ Map",
+      onFooter = function()
+        S.swarmAdding = true
+      end,
+    })
+  local fy, view, viewX, viewW = RegList.beginForm(S, formX, listY, formW, listH,
+    "encountersSwarmScroll", tostring(S.swarmMapId or "swarm"), 12 * s)
+  local contentTop = fy
+  local fh = 28 * s
+  local listBottom = listY + listH - 16 * s
+  if S.swarmAdding then
+    Kit.caption(viewX, fy, "New swarm map")
+    fy = fy + 22 * s
+    local typed = field(App, "swarm_new_map", viewX, fy, viewW - 100 * s, fh, "", "ROUTE_29")
+      :upper():gsub("%s+", "_"):gsub("[^%w_]", "")
+    if Kit.button(viewX + viewW - 92 * s, fy, 80 * s, fh, "Add", { kind = "accent" })
+        and typed ~= "" then
+      EncounterEdit.ensureSwarm(S, typed, "grass")
+      S.swarmMapId = typed
+      S.swarmAdding = false
+      App.markDirty()
+    end
+    fy = fy + fh + 12 * s
+  end
+  fy = EncounterEdit.drawFishSwarms(S, App, viewX - 10 * s, fy,
+    viewW + 10 * s, listBottom, fh, s) or fy
+  Kit.text("micro",
+    "Used instead of the map's own grass or water while that swarm is active.",
+    viewX, fy, PAL.muted)
+  fy = fy + 20 * s
+  fy = EncounterEdit.drawSwarm(S, S.swarmMapId, App, viewX - 10 * s, fy,
+    viewW + 10 * s, listBottom, fh, s) or fy
+  FormPane.finish(S, "encountersSwarmScroll", contentTop, fy, view)
+end
+
+local function drawTimeFish(S, App, x, y, w, h)
+  local s = Kit.scale
+  local fy, view, viewX, viewW = RegList.beginForm(S, x, y, w, h,
+    "encountersTimeFishScroll", "timefish", 12 * s)
+  local contentTop = fy
+  local fh = 28 * s
+  local listBottom = y + h - 16 * s
+  Kit.caption(viewX, fy, "Time-of-day fishing")
+  fy = fy + 22 * s
+  fy = EncounterEdit.drawTimeFish(S, App, viewX - 10 * s, fy,
+    viewW + 10 * s, listBottom, fh, s) or fy
+  FormPane.finish(S, "encountersTimeFishScroll", contentTop, fy, view)
+end
+
+local function drawFlee(S, App, x, y, w, h)
+  local s = Kit.scale
+  local fy, view, viewX, viewW = RegList.beginForm(S, x, y, w, h,
+    "encountersFleeScroll", "flee", 12 * s)
+  local contentTop = fy
+  local fh = 28 * s
+  local listBottom = y + h - 16 * s
+  Kit.caption(viewX, fy, "Wild flee lists")
+  fy = fy + 22 * s
+  Kit.text("micro",
+    "Who runs from a wild battle, and how often. Crystal's always-flee list leaves out Suicune. Save uses the lists you change.",
+    viewX, fy, PAL.muted)
+  fy = fy + 36 * s
+  fy = EncounterEdit.drawFlee(S, App, viewX - 10 * s, fy,
+    viewW + 10 * s, listBottom, fh, s) or fy
+  FormPane.finish(S, "encountersFleeScroll", contentTop, fy, view)
+end
+
+local function drawAsleep(S, App, x, y, w, h)
+  local s = Kit.scale
+  local fy, view, viewX, viewW = RegList.beginForm(S, x, y, w, h,
+    "encountersAsleepScroll", "asleep", 12 * s)
+  local contentTop = fy
+  local fh = 28 * s
+  local listBottom = y + h - 16 * s
+  Kit.caption(viewX, fy, "Sleeping tree Pokémon")
+  fy = fy + 22 * s
+  fy = EncounterEdit.drawAsleep(S, App, viewX - 10 * s, fy,
+    viewW + 10 * s, listBottom, fh, s) or fy
+  FormPane.finish(S, "encountersAsleepScroll", contentTop, fy, view)
+end
+
 function Encounters.draw(S, x, y, w, h, App)
   if Generation.isGen3(S) and S.project then return require("Gen3EncounterForms").draw(S,x,y,w,h,App) end
   local s = Kit.scale
@@ -396,14 +530,69 @@ function Encounters.draw(S, x, y, w, h, App)
   end
   State.ensureProjectFields(S.project)
 
-  local modeY = RegList.modeChips(S, "encountersMode", {
+  local modes = {
     { id = "wild", label = "Wild", tip = "Grass / water / fishing tables" },
     { id = "special", label = "Special", tip = "Custom gift or battle with DVs & moves" },
-  }, x, y, s)
+  }
+  if Generation.isGen2(S) then
+    modes[#modes + 1] = {
+      id = "contest", label = "Contest",
+      tip = "Bug-Catching Contest species, chances, and levels",
+    }
+    modes[#modes + 1] = {
+      id = "roam", label = "Roamers",
+      tip = "Roaming beasts and the routes they walk",
+    }
+    modes[#modes + 1] = {
+      id = "swarm", label = "Swarms",
+      tip = "Grass and water tables used while a swarm is active",
+    }
+    modes[#modes + 1] = {
+      id = "timefish", label = "Time fish",
+      tip = "Day and night species for fishing slots that change with the clock",
+    }
+    modes[#modes + 1] = {
+      id = "flee", label = "Flee",
+      tip = "Wild Pokémon that always, often, or sometimes run from battle",
+    }
+  elseif S.encountersMode == "contest" or S.encountersMode == "roam"
+      or S.encountersMode == "swarm" or S.encountersMode == "asleep"
+      or S.encountersMode == "timefish" or S.encountersMode == "flee" then
+    S.encountersMode = "wild"
+  end
+  if Generation.isCrystal(S) then
+    modes[#modes + 1] = {
+      id = "asleep", label = "Asleep",
+      tip = "Headbutt species that are asleep at each time of day",
+    }
+  elseif S.encountersMode == "asleep" then
+    S.encountersMode = "wild"
+  end
+
+  local top = y
+  y = require("EncounterGrace").draw(S, x, y, w, App)
+  y = require("EncounterRate").draw(S, x, y, w, App)
+  y = require("EncounterSlots").draw(S, x, y, w, App)
+  y = require("WildOdds").draw(S, x, y, w, App)
+  y = require("Gen2Clock").draw(S, x, y, w, App)
+  h = h - (y - top)
+  local modeY = RegList.modeChips(S, "encountersMode", modes, x, y, s)
 
   local bodyY = modeY + 4 * s
   local bodyH = h - (bodyY - y)
-  if S.encountersMode == "special" then
+  if S.encountersMode == "contest" then
+    drawContest(S, App, x, bodyY, w, bodyH)
+  elseif S.encountersMode == "roam" then
+    drawRoamers(S, App, x, bodyY, w, bodyH)
+  elseif S.encountersMode == "swarm" then
+    drawSwarms(S, App, x, bodyY, w, bodyH)
+  elseif S.encountersMode == "timefish" then
+    drawTimeFish(S, App, x, bodyY, w, bodyH)
+  elseif S.encountersMode == "asleep" then
+    drawAsleep(S, App, x, bodyY, w, bodyH)
+  elseif S.encountersMode == "flee" then
+    drawFlee(S, App, x, bodyY, w, bodyH)
+  elseif S.encountersMode == "special" then
     drawSpecial(S, App, x, bodyY, w, bodyH)
   else
     drawWild(S, App, x, bodyY, w, bodyH)

@@ -4,21 +4,38 @@ local function readRegionMap(S,name)
   local path="data/generated/gba/region_map/"..name
   return assert(load(assert(S.data._gen3Read(path),"Missing "..path),"@"..path,"t",{}))()
 end
--- Kanto Fly destinations (outdoor arrival tiles, not whiteout rooms); the
--- town map cell is the section's top-left corner.
+-- FireRed and LeafGreen Fly destinations (outdoor arrival tiles, not
+-- whiteout rooms). Kanto is page 0; the three Sevii Town Map pages follow.
+-- The marker cell is the section's top-left corner on that page.
+local function townPage(layouts,mapsec,sevii)
+  if not sevii or mapsec<sevii then return 0 end
+  local lists=layouts.seviiMapsecs or {}
+  local zero=lists[0]~=nil
+  for r=0,2 do
+    for _,m in ipairs((zero and lists[r] or lists[r+1]) or {}) do
+      if m==mapsec then return r+1 end
+    end
+  end
+  error("Town Map page is missing for mapsec "..mapsec)
+end
 function M.defaults(S)
   local sections=readRegionMap(S,"map_sections.lua").sections
   local corners=readRegionMap(S,"section_geometry.lua").topLeft
+  local layouts=readRegionMap(S,"layouts.lua")
   local sevii;for id,sec in pairs(sections) do if sec.id=="MAPSEC_ONE_ISLAND" then sevii=id end end
   local rows={}
   for _,dest in pairs(readRegionMap(S,"fly_destinations.lua").fly_destinations) do
-    if dest.mapsec<sevii then rows[#rows+1]=dest end
+    dest.region=townPage(layouts,dest.mapsec,sevii)
+    rows[#rows+1]=dest
   end
-  table.sort(rows,function(a,b) return a.healLocation<b.healLocation end)
+  table.sort(rows,function(a,b)
+    if a.region~=b.region then return a.region<b.region end
+    return a.healLocation<b.healLocation
+  end)
   local result={}
   for _,dest in ipairs(rows) do
     local corner=assert(corners[dest.mapsec],"No town map cell for mapsec "..dest.mapsec)
-    result[#result+1]={name=sections[dest.mapsec].name,map=dest.map,x=dest.x,y=dest.y,mapX=corner[1],mapY=corner[2],unlock="visited",enabled=true}
+    result[#result+1]={name=sections[dest.mapsec].name,map=dest.map,x=dest.x,y=dest.y,mapX=corner[1],mapY=corner[2],region=dest.region,unlock="visited",enabled=true}
   end
   return result
 end
@@ -61,6 +78,7 @@ function M.validate(rows)
       assert(type(r.map)=="string" and r.map~="","Choose a landing map")
       for _,key in ipairs({"x","y","mapX","mapY"}) do assert(type(r[key])=="number" and r[key]>=0 and r[key]%1==0,"Fly coordinates must be whole, non-negative numbers") end
       assert(r.mapX<=21 and r.mapY<=14,"Fly marker is outside the Town Map")
+      assert(r.region==nil or (type(r.region)=="number" and r.region>=0 and r.region<=3 and r.region%1==0),"Choose a Town Map page")
     end
     assert(r.unlock=="visited" or r.unlock=="always" or r.unlock=="flag","Choose when Fly becomes available")
     if r.unlock=="flag" then assert(type(r.flag)=="number" and r.flag>0 and r.flag%1==0,"Choose a valid unlock flag") end
@@ -85,7 +103,7 @@ function M.draw(S,x,y,w,h,App)
       if not section then S.status="Every Town Map section already has a Fly destination";return end
       rows[#rows+1]={name=data.labels[section],section=section,map=not hasOriginal(section) and data.warps[section] or nil,x=0,y=0,unlock="always",enabled=true}
     else
-      rows[#rows+1]={name="New destination",map="FR_PALLET_TOWN",x=6,y=8,mapX=4,mapY=11,unlock="visited",enabled=true}
+      rows[#rows+1]={name="New destination",map="FR_PALLET_TOWN",x=6,y=8,mapX=4,mapY=11,region=0,unlock="visited",enabled=true}
     end
     S.g3FlyIndex=#rows;App.markDirty()
   end
@@ -121,7 +139,12 @@ function M.draw(S,x,y,w,h,App)
     local flags,names={},{};for id,name in pairs(require("src.core.game3.scripting.flags").forVersion(game).NAMES or {}) do if type(id)=="number" and id>0 then flags[#flags+1]=id;names[id]=name:gsub("^FLAG_",""):gsub("_"," ") end end;table.sort(flags)
     choice("Story flag","flag",flags,names)
   end
-  if not emerald then number("Town Map column","mapX",21);number("Town Map row","mapY",14) end
+  if not emerald then
+    K.caption(x,y,"Town Map page")
+    C.field(S,{x=x+160*s,y=y,w=w-170*s,h=fh,current=tostring(r.region or 0),ids={"0","1","2","3"},labels={["0"]="Kanto",["1"]="Sevii Islands 1-3",["2"]="Sevii Islands 4-5",["3"]="Sevii Islands 6-7"},title="Town Map page",onPick=function(id) r.region=tonumber(id);App.markDirty() end})
+    y=y+40*s
+    number("Town Map column","mapX",21);number("Town Map row","mapY",14)
+  end
   if K.button(x,y,180*s,fh,r.enabled==false and "Enable destination" or "Disable destination",{}) then r.enabled=r.enabled==false;App.markDirty() end
   if K.button(x+190*s,y,180*s,fh,"Remove destination",{kind="danger"}) then table.remove(rows,S.g3FlyIndex);App.markDirty() end
   y=y+42*s;K.caption(x,y,"Tiles start at 0. Choose a clear outdoor tile. Fly still requires the "..(emerald and "Feather" or "Thunder").." Badge.")

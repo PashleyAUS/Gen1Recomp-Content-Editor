@@ -3411,11 +3411,81 @@ function ModWriter.emitMain(project, baseData, derivedModId)
         "water", emitTableLiteral(gen2Water, 1))
       out[#out + 1] = ""
     end
-    -- Gold fishing groups + headbutt trees / Rock Smash rocks.
-    if next(project.fishGroups or {}) then
+    -- Gen 2 fishing groups. A time-of-day edit also rewrites the day/night
+    -- pair stored on every rod slot that points at that group, because the
+    -- battle lookup uses the slot's pair before the shared table.
+    local function copyFishRows(rows)
+      local outRows = {}
+      for i, row in ipairs(rows or {}) do
+        local slot = {}
+        if type(row) == "table" then
+          for key, value in pairs(row) do
+            if type(value) == "table" then
+              slot[key] = { species = value.species, level = value.level }
+            else
+              slot[key] = value
+            end
+          end
+        end
+        outRows[i] = slot
+      end
+      return outRows
+    end
+    local function copyFishGroup(group)
+      local copy = {}
+      if type(group) ~= "table" then return copy end
+      for key, value in pairs(group) do
+        if key == "old" or key == "good" or key == "super" then
+          copy[key] = copyFishRows(value)
+        else
+          copy[key] = value
+        end
+      end
+      return copy
+    end
+    local fishGroups = {}
+    for id, group in pairs(project.fishGroups or {}) do
+      fishGroups[id] = copyFishGroup(group)
+    end
+    local timeEdits = project.timeFishGroups
+    if type(timeEdits) == "table" and next(timeEdits) then
+      local root = baseData and (baseData.gen2Encounters or baseData.encounters) or {}
+      local vanilla = (type(root) == "table" and root.fishGroups) or {}
+      for id, group in pairs(vanilla) do
+        if fishGroups[id] == nil then fishGroups[id] = copyFishGroup(group) end
+      end
+      local function edited(index)
+        return timeEdits[index] or timeEdits[tostring(index)]
+      end
+      local drop = {}
+      for id, group in pairs(fishGroups) do
+        local used = project.fishGroups and project.fishGroups[id] ~= nil
+        for _, rod in ipairs({ "old", "good", "super" }) do
+          for _, row in ipairs(group[rod] or {}) do
+            local tg = edited(row.timeGroup)
+            if type(tg) == "table" then
+              if type(tg.day) == "table" then
+                row.day = { species = tg.day.species, level = tg.day.level }
+              end
+              if type(tg.nite) == "table" then
+                row.nite = { species = tg.nite.species, level = tg.nite.level }
+              end
+              used = true
+            end
+          end
+        end
+        if not used then drop[#drop + 1] = id end
+      end
+      for _, id in ipairs(drop) do fishGroups[id] = nil end
       out[#out + 1] = string.format(
         "  mod.content.encounters:patch(%q, %s)",
-        "fishGroups", emitTableLiteral(project.fishGroups, 1))
+        "timeFishGroups", emitTableLiteral(timeEdits, 1))
+      out[#out + 1] = ""
+    end
+    if next(fishGroups) then
+      out[#out + 1] = string.format(
+        "  mod.content.encounters:patch(%q, %s)",
+        "fishGroups", emitTableLiteral(fishGroups, 1))
       out[#out + 1] = ""
     end
     if next(project.treeSets or {}) then
@@ -3434,6 +3504,125 @@ function ModWriter.emitMain(project, baseData, derivedModId)
       out[#out + 1] = string.format(
         "  mod.content.encounters:patch(%q, %s)",
         "rocks", emitTableLiteral(project.rocks, 1))
+      out[#out + 1] = ""
+    end
+    -- Gen 2 Bug-Catching Contest. override replaces the list; patch would
+    -- append rows onto the vanilla pool.
+    if type(project.bugContest) == "table" and #project.bugContest > 0 then
+      out[#out + 1] = string.format(
+        "  mod.content.encounters:override(%q, %s)",
+        "bugContest", emitTableLiteral(project.bugContest, 1))
+      out[#out + 1] = ""
+    end
+    if type(project.bugContestRules) == "table"
+        or (type(project.bugContestants) == "table" and #project.bugContestants > 0) then
+      out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "    local BugContest = require(\"src.core.gen2.BugContest\")"
+      if type(project.bugContestRules) == "table" then
+        local balls = math.max(1, math.min(99, tonumber(project.bugContestRules.balls) or 20))
+        local minutes = math.max(1, math.min(99, tonumber(project.bugContestRules.minutes) or 20))
+        out[#out + 1] = string.format("    BugContest.BALLS = %d", balls)
+        out[#out + 1] = string.format("    BugContest.MINUTES = %d", minutes)
+        local scoreFields = {
+          { "hpMult", "HP_MULT", 0, 255 },
+          { "statAdd", "STAT_ADD", 0, 255 },
+          { "itemBonus", "ITEM_BONUS", 0, 255 },
+          { "hpDiv", "HP_DIV", 0, 256 },
+          { "scoreBump", "SCORE_BUMP", 0, 256 },
+          { "dvDef", "DV_DEF", 0, 255 },
+          { "dvAtk", "DV_ATK", 0, 255 },
+          { "dvSpc", "DV_SPC", 0, 255 },
+          { "dvSpd", "DV_SPD", 0, 255 },
+          { "tallRate", "ENCOUNTER_RATE_SUPER_TALL", 0, 256 },
+          { "grassRate", "ENCOUNTER_RATE_GRASS", 0, 256 },
+          { "chooseLimit", "CHOOSE_LIMIT", 1, 256 },
+          { "chooseDiv", "CHOOSE_DIV", 1, 256 },
+        }
+        for _, row in ipairs(scoreFields) do
+          local n = tonumber(project.bugContestRules[row[1]])
+          if n ~= nil then
+            n = math.max(row[3], math.min(row[4], math.floor(n)))
+            out[#out + 1] = string.format("    BugContest.%s = %d", row[2], n)
+          end
+        end
+      end
+      if type(project.bugContestants) == "table" and #project.bugContestants > 0 then
+        out[#out + 1] = "    BugContest.CONTESTANTS = "
+          .. emitTableLiteral(project.bugContestants, 2)
+      end
+      out[#out + 1] = "  end)"
+      out[#out + 1] = ""
+    end
+    -- Gen 2 roaming beasts. Same override: the lists are ordered, and a
+    -- patch would append onto the vanilla roster and route table.
+    if type(project.roamMons) == "table" and #project.roamMons > 0 then
+      out[#out + 1] = string.format(
+        "  mod.content.encounters:override(%q, %s)",
+        "roamMons", emitTableLiteral(project.roamMons, 1))
+      out[#out + 1] = ""
+    end
+    if type(project.roamMaps) == "table" and #project.roamMaps > 0 then
+      out[#out + 1] = string.format(
+        "  mod.content.encounters:override(%q, %s)",
+        "roamMaps", emitTableLiteral(project.roamMaps, 1))
+      out[#out + 1] = ""
+    end
+    -- Swarm rows merge by map. false removes a vanilla row.
+    local function emitSwarm(key, bucket)
+      if type(bucket) ~= "table" then return end
+      local data, deletes = {}, {}
+      for mapId, row in pairs(bucket) do
+        if row == false then deletes[#deletes + 1] = mapId
+        elseif type(row) == "table" then data[mapId] = row end
+      end
+      if next(data) then
+        out[#out + 1] = string.format(
+          "  mod.content.encounters:patch(%q, %s)",
+          key, emitTableLiteral(data, 1))
+        out[#out + 1] = ""
+      end
+      table.sort(deletes)
+      for _, mapId in ipairs(deletes) do
+        out[#out + 1] = string.format(
+          "  mod.content.encounters:patch(%q, { [%q] = mod.DELETE })",
+          key, mapId)
+        out[#out + 1] = ""
+      end
+    end
+    emitSwarm("swarmGrass", project.swarmGrass)
+    emitSwarm("swarmWater", project.swarmWater)
+    if type(project.fishSwarmGroups) == "table" then
+      local swaps = {}
+      for _, row in ipairs(project.fishSwarmGroups) do
+        if type(row) == "table" then
+          local flag = math.floor(tonumber(row.flag) or -1)
+          local from = type(row.from) == "string" and row.from or ""
+          local to = type(row.to) == "string" and row.to or ""
+          if flag >= 0 and flag <= 255 and from ~= "" and to ~= "" then
+            swaps[flag] = swaps[flag] or {}
+            swaps[flag][from] = to
+          end
+        end
+      end
+      out[#out + 1] = string.format(
+        "  mod.content.encounters:override(%q, %s)",
+        "fishSwarmGroups", emitTableLiteral(swaps, 1))
+      out[#out + 1] = ""
+    end
+    if Generation.isCrystal({ version = project.game or project.version })
+        and type(project.treeMonsAsleep) == "table"
+        and next(project.treeMonsAsleep) then
+      out[#out + 1] = string.format(
+        "  mod.content.encounters:patch(%q, %s)",
+        "treeMonsAsleep", emitTableLiteral(project.treeMonsAsleep, 1))
+      out[#out + 1] = ""
+    end
+    if Generation.isCrystal({ version = project.game or project.version })
+        and tonumber(project.treeSleepTurns) then
+      local turns = math.max(0, math.min(255, math.floor(tonumber(project.treeSleepTurns))))
+      out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "    require(\"src.battle.gen2.Encounter\").TREEMON_SLEEP_TURNS = " .. turns
+      out[#out + 1] = "  end)"
       out[#out + 1] = ""
     end
   end
@@ -3606,7 +3795,18 @@ function ModWriter.emitMain(project, baseData, derivedModId)
     end
   end
 
-  -- Gold Poké Mart shelves live on data.gen2Marts.lists (1-based, mart id 0..33).
+  if type(project.sellRules) == "table" and project.sellRules.div ~= nil then
+    local div = math.floor(tonumber(project.sellRules.div) or 2)
+    if div < 1 then div = 1 end
+    if div > 16 then div = 16 end
+    local target = gen2 and "src.ui.gen2.MartMenu" or "src.ui.ShopMenu"
+    out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "    require(\"" .. target .. "\").SELL_DIV = " .. div
+    out[#out + 1] = "  end)"
+    out[#out + 1] = ""
+  end
+
+  -- Gen 2 Poké Mart shelves live on data.gen2Marts.lists (1-based, mart id 0..33).
   -- There is no mod.content.marts registry.
   if gen2 then
     local MART_ORDER = {
@@ -4327,6 +4527,32 @@ function ModWriter.emitMain(project, baseData, derivedModId)
     end
     out[#out + 1] = ""
   end
+  if gen2 and constants.levelCap ~= nil then
+    local cap = math.max(1, math.min(100, math.floor(tonumber(constants.levelCap) or 100)))
+    out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "    require(\"src.battle.gen2.Mon\").MAX_LEVEL = " .. cap
+    out[#out + 1] = "  end)"
+    out[#out + 1] = ""
+  end
+  require("MoneyCaps").emit(project, nil, out)
+  require("EncounterGrace").emit(project, nil, out)
+  require("Whiteout").emit(project, nil, out)
+  require("PoisonField").emit(project, nil, out)
+  require("EncounterRate").emit(project, nil, out)
+  require("EncounterSlots").emit(project, nil, out)
+  require("WildOdds").emit(project, nil, out)
+  require("Gen2Clock").emit(project, nil, out)
+  require("StepCounters").emit(project, nil, out)
+  require("PhoneOdds").emit(project, nil, out)
+  require("SlotPayouts").emit(project, nil, out)
+  require("SlotBets").emit(project, nil, out)
+  require("SlotLuck").emit(project, nil, out)
+  require("SlotBias").emit(project, nil, out)
+  require("SlotStreak").emit(project, nil, out)
+  require("CardFlipRules").emit(project, nil, out)
+  require("LotteryOdds").emit(project, nil, out)
+  require("CoinOffers").emit(project, nil, out)
+  require("PrizeShop").emit(project, nil, out)
 
   -- Boot screens + UI field buckets.
   -- Gen1: field.boot / field.title / intro / theme / townMap.
@@ -4624,6 +4850,44 @@ function ModWriter.emitMain(project, baseData, derivedModId)
         out[#out + 1] = "        d = {}; data.gen2Diploma = d; data.diploma = d"
         out[#out + 1] = "      end"
         out[#out + 1] = "      merge(d, _dip)"
+        out[#out + 1] = "    end)"
+        out[#out + 1] = "  end"
+        out[#out + 1] = ""
+      end
+    end
+
+    if gen2 then
+      require("Gen2MagnetTrain").emit(project, function(v)
+        return emitTableLiteral(v, 4)
+      end, out)
+    end
+
+    if gen2 and type(project.tradeGfx) == "table" and next(project.tradeGfx) then
+      local gfx = pruneEmpty(stripEditorFields(deepCopy(project.tradeGfx)))
+      if type(gfx) == "table" and next(gfx) then
+        local lit = rewriteModPaths(emitTableLiteral(gfx, 2))
+        out[#out + 1] = "  -- Gen 2 trade animation sheets (data.gen2Trade)"
+        out[#out + 1] = "  do"
+        out[#out + 1] = "    local _trade = " .. lit
+        out[#out + 1] = "    local function merge(dst, src)"
+        out[#out + 1] = "      for k, v in pairs(src) do"
+        out[#out + 1] = "        if type(v) == \"table\" and type(dst[k]) == \"table\" then"
+        out[#out + 1] = "          merge(dst[k], v)"
+        out[#out + 1] = "        else"
+        out[#out + 1] = "          dst[k] = v"
+        out[#out + 1] = "        end"
+        out[#out + 1] = "      end"
+        out[#out + 1] = "    end"
+        out[#out + 1] = "    mod.events:on(\"mods.loaded\", function(ev)"
+        out[#out + 1] = "      local data = ev and ev.data"
+        out[#out + 1] = "      if type(data) ~= \"table\" then return end"
+        out[#out + 1] = "      local gfx = data.gen2Trade or data.trade"
+        out[#out + 1] = "      if type(gfx) ~= \"table\" then"
+        out[#out + 1] = "        gfx = {}; data.gen2Trade = gfx; data.trade = gfx"
+        out[#out + 1] = "      end"
+        out[#out + 1] = "      merge(gfx, _trade)"
+        out[#out + 1] = "      data.gen2Trade = gfx"
+        out[#out + 1] = "      data.trade = gfx"
         out[#out + 1] = "    end)"
         out[#out + 1] = "  end"
         out[#out + 1] = ""
@@ -5479,8 +5743,8 @@ function ModWriter.emitMain(project, baseData, derivedModId)
     end
   end
 
-  -- Gold shiny encounter rate (denominator).  Engine reads data.shinyRate in
-  -- Mon.rollEncounterDVs; unset keeps cart DV-pattern odds (~1/8192).
+  -- Gen 2 shiny encounter rate (denominator). Mon.rollEncounterDVs reads
+  -- data.shinyRate; unset keeps the cart DV-pattern odds (~1/8192).
   if gen2 and tonumber(project.shinyRate) and tonumber(project.shinyRate) >= 1 then
     local rate = math.floor(tonumber(project.shinyRate))
     out[#out + 1] = "  -- Shiny encounter rate (1 / N; Mon.rollEncounterDVs)"
@@ -5494,7 +5758,1119 @@ function ModWriter.emitMain(project, baseData, derivedModId)
     out[#out + 1] = ""
   end
 
-  -- Gold Day-Care / breeding knobs (data.breeding → Breeding.knobs).
+  -- Gen 2 wild flee lists (data.fleeMons, read by Battle:tryEnemyFlee).
+  if gen2 and type(project.fleeMons) == "table" and next(project.fleeMons) then
+    local flee = {}
+    for _, key in ipairs({ "always", "often", "sometimes" }) do
+      if type(project.fleeMons[key]) == "table" then
+        local list = {}
+        for _, id in ipairs(project.fleeMons[key]) do
+          if type(id) == "string" and id ~= "" then list[#list + 1] = id end
+        end
+        flee[key] = list
+      end
+    end
+    local oftenRoll = tonumber(project.fleeMons.oftenRoll)
+    local sometimesRoll = tonumber(project.fleeMons.sometimesRoll)
+    if oftenRoll then flee.oftenRoll = math.max(0, math.min(256, math.floor(oftenRoll))) end
+    if sometimesRoll then
+      flee.sometimesRoll = math.max(0, math.min(256, math.floor(sometimesRoll)))
+    end
+    if next(flee) then
+      out[#out + 1] = "  -- Wild flee lists (Battle:tryEnemyFlee)"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local fleeMons = " .. emitTableLiteral(flee, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function(ev)"
+      out[#out + 1] = "      local data = ev and ev.data"
+      out[#out + 1] = "      if type(data) == \"table\" then data.fleeMons = fleeMons end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  -- Gen 2 friendship (Happiness.CHANGES and the thresholds the battle reads).
+  if gen2 and type(project.happiness) == "table" and next(project.happiness) then
+    local happiness = {}
+    local function byte(key)
+      local n = tonumber(project.happiness[key])
+      if not n then return end
+      n = math.floor(n)
+      if n < 0 then n = 0 end
+      if n > 255 then n = 255 end
+      happiness[key] = n
+    end
+    byte("base")
+    byte("friendBall")
+    byte("toEvolve")
+    byte("threshold1")
+    byte("threshold2")
+    local stepGain = tonumber(project.happiness.stepGain)
+    if stepGain ~= nil then
+      stepGain = math.floor(stepGain)
+      if stepGain < -255 then stepGain = -255 end
+      if stepGain > 255 then stepGain = 255 end
+      happiness.stepGain = stepGain
+    end
+    local stepSkip = tonumber(project.happiness.stepSkip)
+    if stepSkip ~= nil then
+      stepSkip = math.floor(stepSkip)
+      if stepSkip < 0 then stepSkip = 0 end
+      if stepSkip > 255 then stepSkip = 255 end
+      happiness.stepSkip = stepSkip
+    end
+    if type(project.happiness.changes) == "table" then
+      local changes = {}
+      for i, row in ipairs(project.happiness.changes) do
+        if type(row) == "table" then
+          local function cell(n)
+            n = math.floor(tonumber(n) or 0)
+            if n < -255 then return -255 end
+            if n > 255 then return 255 end
+            return n
+          end
+          changes[i] = { cell(row[1]), cell(row[2]), cell(row[3]) }
+        end
+      end
+      if #changes > 0 then happiness.changes = changes end
+    end
+    if next(happiness) then
+      out[#out + 1] = "  -- Friendship amounts (Happiness.change / step / evolve)"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local happiness = " .. emitTableLiteral(happiness, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Happiness = require(\"src.core.gen2.Happiness\")"
+      out[#out + 1] = "      local Evolution = require(\"src.core.gen2.Evolution\")"
+      out[#out + 1] = "      local Catching = require(\"src.battle.gen2.Catching\")"
+      out[#out + 1] = "      if happiness.base ~= nil then Happiness.BASE = happiness.base end"
+      out[#out + 1] = "      if happiness.friendBall ~= nil then"
+      out[#out + 1] = "        Happiness.FRIEND_BALL = happiness.friendBall"
+      out[#out + 1] = "        Catching.FRIEND_BALL_HAPPINESS = happiness.friendBall"
+      out[#out + 1] = "      end"
+      out[#out + 1] = "      if happiness.toEvolve ~= nil then"
+      out[#out + 1] = "        Happiness.TO_EVOLVE = happiness.toEvolve"
+      out[#out + 1] = "        Evolution.HAPPINESS_TO_EVOLVE = happiness.toEvolve"
+      out[#out + 1] = "      end"
+      out[#out + 1] = "      if happiness.threshold1 ~= nil then Happiness.THRESHOLD_1 = happiness.threshold1 end"
+      out[#out + 1] = "      if happiness.threshold2 ~= nil then Happiness.THRESHOLD_2 = happiness.threshold2 end"
+      out[#out + 1] = "      if happiness.stepGain ~= nil then Happiness.STEP_GAIN = happiness.stepGain end"
+      out[#out + 1] = "      if happiness.stepSkip ~= nil then Happiness.STEP_SKIP = happiness.stepSkip end"
+      out[#out + 1] = "      if type(happiness.changes) == \"table\" then"
+      out[#out + 1] = "        for i, row in ipairs(happiness.changes) do"
+      out[#out + 1] = "          Happiness.CHANGES[i] = { row[1], row[2], row[3] }"
+      out[#out + 1] = "        end"
+      out[#out + 1] = "      end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  -- Gen 2 critical-hit ladder and damage roll (Damage.criticalChance / calc).
+  if type(project.hitRules) == "table" then
+    local bag = project.hitRules
+    local function take(key, minV, maxV)
+      local n = tonumber(bag[key])
+      if n == nil then return nil end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local function hitList()
+      if type(bag.multiHit) ~= "table" then return nil end
+      local list = {}
+      for i, n in ipairs(bag.multiHit) do
+        n = math.floor(tonumber(n) or 2)
+        if n < 1 then n = 1 end
+        if n > 16 then n = 16 end
+        list[i] = n
+      end
+      if #list == 0 then return nil end
+      return "{ " .. table.concat(list, ", ") .. " }"
+    end
+    local hits = hitList()
+    if not gen2 then
+      local lines = {}
+      if hits then lines[#lines + 1] = "    MoveEffects.MULTI_HIT = " .. hits end
+      local double = take("doubleHits", 1, 16)
+      if double ~= nil then lines[#lines + 1] = "    MoveEffects.DOUBLE_HITS = " .. double end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Hit counts"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local MoveEffects = require(\"src.battle.MoveEffects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    else
+      local lines = {}
+      if hits then lines[#lines + 1] = "      Effects.MULTI_HIT = " .. hits end
+      local double = take("doubleHits", 1, 16)
+      if double ~= nil then
+        lines[#lines + 1] = "      Effects.HIT_COUNTS.EFFECT_DOUBLE_HIT = " .. double
+        lines[#lines + 1] = "      Effects.HIT_COUNTS.EFFECT_POISON_MULTI_HIT = " .. double
+      end
+      local triple = take("tripleHits", 1, 16)
+      if triple ~= nil then lines[#lines + 1] = "      Effects.HIT_COUNTS.EFFECT_TRIPLE_KICK = " .. triple end
+      local perish = take("perish", 1, 16)
+      if perish ~= nil then lines[#lines + 1] = "      Effects.PERISH_TURNS = " .. perish end
+      local encoreMin = take("encoreMin", 0, 16)
+      if encoreMin ~= nil then lines[#lines + 1] = "      Effects.ENCORE_MIN = " .. encoreMin end
+      local encoreSpan = take("encoreSpan", 1, 16)
+      if encoreSpan ~= nil then lines[#lines + 1] = "      Effects.ENCORE_SPAN = " .. encoreSpan end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Hit counts"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local Effects = require(\"src.battle.gen2.Effects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    end
+  end
+
+  if type(project.xItem) == "table" and project.xItem.stages ~= nil then
+    local n = math.floor(tonumber(project.xItem.stages) or 1)
+    if n < 0 then n = 0 end
+    if n > 6 then n = 6 end
+    local path = gen2 and "src.battle.gen2.Battle" or "src.inventory.ItemEffects"
+    local owner = gen2 and "Battle" or "ItemEffects"
+    out[#out + 1] = "  -- X items"
+    out[#out + 1] = "  do"
+    out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "      local " .. owner .. " = require(\"" .. path .. "\")"
+    out[#out + 1] = "      " .. owner .. ".X_STAGE = " .. n
+    out[#out + 1] = "    end)"
+    out[#out + 1] = "  end"
+    out[#out + 1] = ""
+  end
+
+  if type(project.vitaminRules) == "table" then
+    local function take(key, maxV)
+      local n = project.vitaminRules[key]
+      if n == nil then return nil end
+      n = math.floor(tonumber(n) or 0)
+      if n < 0 then n = 0 end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local gain = take("gain", 65535)
+    local cap = take("cap", 65535)
+    if gain ~= nil or cap ~= nil then
+      local path = gen2 and "src.core.gen2.ItemEffects" or "src.inventory.ItemEffects"
+      out[#out + 1] = "  -- Vitamins"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local ItemEffects = require(\"" .. path .. "\")"
+      if gain ~= nil then out[#out + 1] = "      ItemEffects.VITAMIN_GAIN = " .. gain end
+      if cap ~= nil then out[#out + 1] = "      ItemEffects.VITAMIN_CAP = " .. cap end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if type(project.repelSteps) == "table" then
+    local allowed = { REPEL = true, SUPER_REPEL = true, MAX_REPEL = true }
+    local lines = {}
+    for id, amount in pairs(project.repelSteps) do
+      if allowed[id] then
+        local n = math.floor(tonumber(amount) or 0)
+        if n < 0 then n = 0 end
+        if n > 999 then n = 999 end
+        local field = gen2 and "World.REPEL_STEPS." or "ItemEffects.REPEL_STEPS."
+        lines[#lines + 1] = "      " .. field .. id .. " = " .. n
+      end
+    end
+    if #lines > 0 then
+      local path = gen2 and "src.world.gen2.World" or "src.inventory.ItemEffects"
+      local owner = gen2 and "World" or "ItemEffects"
+      out[#out + 1] = "  -- Repel"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local " .. owner .. " = require(\"" .. path .. "\")"
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if type(project.ppRestore) == "table" then
+    local allowed = gen2
+      and { ETHER = true, ELIXER = true, MYSTERYBERRY = true }
+      or { ETHER = true, ELIXER = true }
+    local lines = {}
+    for id, amount in pairs(project.ppRestore) do
+      if allowed[id] then
+        local n = math.floor(tonumber(amount) or 0)
+        if n < 0 then n = 0 end
+        if n > 63 then n = 63 end
+        if gen2 then
+          lines[#lines + 1] = "      ItemEffects.RESTORE_PP." .. id .. ".amount = " .. n
+        else
+          lines[#lines + 1] = "      ItemEffects.PP_RESTORE." .. id .. " = " .. n
+        end
+      end
+    end
+    if #lines > 0 then
+      local path = gen2 and "src.core.gen2.ItemEffects" or "src.inventory.ItemEffects"
+      out[#out + 1] = "  -- PP restore"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local ItemEffects = require(\"" .. path .. "\")"
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if type(project.reviveRules) == "table" and project.reviveRules.div ~= nil then
+    local n = math.floor(tonumber(project.reviveRules.div) or 2)
+    if n < 1 then n = 1 end
+    if n > 16 then n = 16 end
+    local path = gen2 and "src.core.gen2.ItemEffects" or "src.inventory.ItemEffects"
+    out[#out + 1] = "  -- Revive"
+    out[#out + 1] = "  do"
+    out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "      local ItemEffects = require(\"" .. path .. "\")"
+    out[#out + 1] = "      ItemEffects.REVIVE_DIV = " .. n
+    out[#out + 1] = "    end)"
+    out[#out + 1] = "  end"
+    out[#out + 1] = ""
+  end
+
+  if type(project.ppRules) == "table" then
+    local pp = project.ppRules
+    local function take(key, minV, maxV)
+      local n = pp[key]
+      if n == nil then return nil end
+      n = math.floor(tonumber(n) or 0)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local owner = gen2 and "Mon" or "ItemEffects"
+    local lines = {}
+    local function set(field, key, minV, maxV)
+      local n = take(key, minV, maxV)
+      if n == nil then return end
+      lines[#lines + 1] = "      " .. owner .. "." .. field .. " = " .. n
+    end
+    set(gen2 and "PP_DIV" or "PP_DIV", "div", 1, 255)
+    if gen2 then set("PP_BONUS_CAP", "cap", 0, 63) end
+    set("PP_MAX_UPS", "maxUps", 0, 3)
+    if #lines > 0 then
+      local modPath = gen2 and "src.battle.gen2.Mon" or "src.inventory.ItemEffects"
+      out[#out + 1] = "  -- PP Up"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local " .. owner .. " = require(\"" .. modPath .. "\")"
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if type(project.effort) == "table" then
+    local e = project.effort
+    local function take(key, minV, maxV)
+      local n = e[key]
+      if n == nil then return nil end
+      n = math.floor(tonumber(n) or 0)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local lines = {}
+    local function set(field, key, minV, maxV)
+      local n = take(key, minV, maxV)
+      if n == nil then return end
+      lines[#lines + 1] = "      Target." .. field .. " = " .. n
+    end
+    set("MAX_STAT_EXP", "cap", 0, 65535)
+    if gen2 then
+      set("STAT_EXP_POKERUS", "pokerus", 0, 16)
+      set("STAT_EXP_SHARE_DIV", "shareDiv", 1, 16)
+    end
+    if #lines > 0 then
+      local owner = gen2 and "Mon" or "Stats"
+      local modPath = gen2 and "src.battle.gen2.Mon" or "src.pokemon.Stats"
+      out[#out + 1] = "  -- Effort"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local " .. owner .. " = require(\"" .. modPath .. "\")"
+      for _, line in ipairs(lines) do
+        out[#out + 1] = line:gsub("Target", owner)
+      end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if type(project.catchMath) == "table" then
+    local c = project.catchMath
+    local function take(key, minV, maxV)
+      local n = c[key]
+      if n == nil then return nil end
+      n = math.floor(tonumber(n) or 0)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local owner = gen2 and "Catching" or "Catching"
+    local lines = {}
+    local function set(field, key, minV, maxV)
+      local n = take(key, minV, maxV)
+      if n == nil then return end
+      lines[#lines + 1] = "      Catching." .. field .. " = " .. n
+    end
+    if gen2 then
+      set("HP_MAX_MULT", "maxMult", 0, 16)
+      set("HP_CUR_MULT", "curMult", 0, 16)
+      set("HP_OVERFLOW", "overflow", 1, 9999)
+      set("HP_SHIFT", "shift", 1, 255)
+      set("HP_LOW", "lowByte", 1, 9999)
+      set("CATCH_DICE", "catchDice", 1, 9999)
+    else
+      set("HP_DIV", "hpDiv", 1, 255)
+      set("HP_SCALE", "hpScale", 0, 255)
+      set("FACTOR_CAP", "factorCap", 0, 255)
+      set("WOBBLE_NUM", "wobbleNum", 0, 255)
+      set("WOBBLE_DEN", "wobbleDen", 1, 255)
+      set("SHAKE_BONUS", "shakeBonus", 0, 255)
+      set("SHAKE_1", "shake1", 0, 255)
+      set("SHAKE_2", "shake2", 0, 255)
+      set("SHAKE_3", "shake3", 0, 255)
+      set("CHECK_SPAN", "checkSpan", 1, 256)
+    end
+    if #lines > 0 then
+      local modPath = gen2 and "src.battle.gen2.Catching" or "src.battle.Catching"
+      out[#out + 1] = "  -- Catch formula"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local " .. owner .. " = require(\"" .. modPath .. "\")"
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  require("WobbleOdds").emit(project, nil, out)
+
+  if type(project.statCalc) == "table" then
+    local sc = project.statCalc
+    local function take(key, minV, maxV)
+      local n = sc[key]
+      if n == nil then return nil end
+      n = math.floor(tonumber(n) or 0)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local owner = gen2 and "Mon" or "Stats"
+    local lines = {}
+    local function set(field, key, minV, maxV)
+      local n = take(key, minV, maxV)
+      if n == nil then return end
+      lines[#lines + 1] = "      " .. owner .. "." .. field .. " = " .. n
+    end
+    set("BASE_MULT", "baseMult", 0, 16)
+    set("EV_DIV", "evDiv", 1, 255)
+    set("LEVEL_DEN", "levelDen", 1, 255)
+    set("STAT_ADD", "statAdd", 0, 255)
+    set("HP_ADD", "hpAdd", 0, 255)
+    set("HP_LEVEL", "hpLevel", 0, 16)
+    if gen2 then
+      set("DV_MULT", "dvMult", 0, 16)
+    else
+      set("EV_CAP", "evCap", 0, 255)
+    end
+    if #lines > 0 then
+      local modPath = gen2 and "src.battle.gen2.Mon" or "src.pokemon.Stats"
+      out[#out + 1] = "  -- Stat calculation"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local " .. owner .. " = require(\"" .. modPath .. "\")"
+      for _, line in ipairs(lines) do
+        out[#out + 1] = line
+      end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if type(project.accuracyRules) == "table" then
+    local a = project.accuracyRules
+    local function take(key, minV, maxV)
+      local n = a[key]
+      if n == nil then return nil end
+      n = math.floor(tonumber(n) or 0)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local lines = {}
+    local function set(field, key, minV, maxV)
+      local n = take(key, minV, maxV)
+      if n == nil then return end
+      lines[#lines + 1] = "      Damage." .. field .. " = " .. n
+    end
+    if gen2 then
+      set("HIT_MIN", "hitMin", 0, 255)
+      set("HIT_MAX", "hitMax", 0, 255)
+      set("HIT_SPAN", "hitSpan", 1, 256)
+      set("POWDER_NUM", "powderNum", 0, 255)
+      set("POWDER_DEN", "powderDen", 1, 256)
+    else
+      set("ACC_NUM", "accNum", 0, 255)
+      set("ACC_DEN", "accDen", 1, 255)
+      set("ACC_CAP", "accCap", 0, 255)
+      set("ACC_SPAN", "accSpan", 1, 256)
+    end
+    if #lines > 0 then
+      local modPath = gen2 and "src.battle.gen2.Damage" or "src.battle.Damage"
+      out[#out + 1] = "  -- Accuracy"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Damage = require(\"" .. modPath .. "\")"
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if type(project.formulaRules) == "table" then
+    local f = project.formulaRules
+    local function take(key, minV, maxV)
+      local n = f[key]
+      if n == nil then return nil end
+      n = math.floor(tonumber(n) or 0)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local lines = {}
+    local function set(field, key, minV, maxV)
+      local n = take(key, minV, maxV)
+      if n == nil then return end
+      lines[#lines + 1] = "      Damage." .. field .. " = " .. n
+    end
+    set("LEVEL_NUM", "levelNum", 0, 16)
+    set("LEVEL_DEN", "levelDen", 1, 255)
+    set("LEVEL_ADD", "levelAdd", 0, 255)
+    set("STAT_DIV", "statDiv", 1, 255)
+    set("MIN_DAMAGE", "minDamage", 0, 999)
+    set("MAX_DAMAGE", "maxDamage", 1, 9999)
+    if #lines > 0 then
+      local modPath = gen2 and "src.battle.gen2.Damage" or "src.battle.Damage"
+      out[#out + 1] = "  -- Damage formula"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Damage = require(\"" .. modPath .. "\")"
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if gen2 and type(project.spikesRules) == "table" and project.spikesRules.div ~= nil then
+    local div = math.floor(tonumber(project.spikesRules.div) or 8)
+    if div < 1 then div = 1 end
+    if div > 255 then div = 255 end
+    out[#out + 1] = "  -- Spikes"
+    out[#out + 1] = "  do"
+    out[#out + 1] = "    local div = " .. div
+    out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "      require(\"src.battle.gen2.Effects\").SPIKES_DIV = div"
+    out[#out + 1] = "    end)"
+    out[#out + 1] = "  end"
+    out[#out + 1] = ""
+  end
+
+  if type(project.fleeRules) == "table" then
+    local bag = project.fleeRules
+    local function take(key, minV, maxV)
+      local n = tonumber(bag[key])
+      if n == nil then return nil end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local fields = {
+      { key = "speedDiv", min = 1, max = 255, gen1 = "BattleState.FLEE_SPEED_DIV", gen2 = "Battle.FLEE_SPEED_DIV" },
+      { key = "num", min = 0, max = 999, gen1 = "BattleState.FLEE_NUM", gen2 = "Battle.FLEE_NUM" },
+      { key = "bonus", min = 0, max = 255, gen1 = "BattleState.FLEE_BONUS", gen2 = "Battle.FLEE_BONUS" },
+      { key = "cap", min = 2, max = 999, gen1 = "BattleState.FLEE_CAP", gen2 = "Battle.FLEE_CAP" },
+    }
+    local lines = {}
+    for _, row in ipairs(fields) do
+      local n = take(row.key, row.min, row.max)
+      if n ~= nil then
+        local field = gen2 and row.gen2 or row.gen1
+        lines[#lines + 1] = (gen2 and "      " or "    ") .. field .. " = " .. n
+      end
+    end
+    if #lines > 0 then
+      out[#out + 1] = "  -- Running from a wild battle"
+      out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+      if gen2 then
+        out[#out + 1] = "    local Battle = require(\"src.battle.gen2.Battle\")"
+      else
+        out[#out + 1] = "    local BattleState = require(\"src.battle.BattleState\")"
+      end
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "  end)"
+      out[#out + 1] = ""
+    end
+  end
+
+  if type(project.switchRules) == "table" then
+    local bag = project.switchRules
+    local function take(key, minV, maxV)
+      local n = tonumber(bag[key])
+      if n == nil then return nil end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local div = take("forceOutDiv", 1, 255)
+    local pp = take("transformPp", 0, 64)
+    if not gen2 then
+      local lines = {}
+      if div ~= nil then lines[#lines + 1] = "    MoveEffects.FORCE_OUT_DIV = " .. div end
+      if pp ~= nil then lines[#lines + 1] = "    MoveEffects.TRANSFORM_PP = " .. pp end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Forced switches"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local MoveEffects = require(\"src.battle.MoveEffects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    else
+      local lines = {}
+      if div ~= nil then lines[#lines + 1] = "      Effects.FORCE_OUT_DIV = " .. div end
+      if pp ~= nil then lines[#lines + 1] = "      Effects.TRANSFORM_PP = " .. pp end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Forced switches"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local Effects = require(\"src.battle.gen2.Effects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    end
+  end
+
+  if type(project.lockRules) == "table" then
+    local bag = project.lockRules
+    local function take(key, minV, maxV)
+      local n = tonumber(bag[key])
+      if n == nil then return nil end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    if not gen2 then
+      local fields = {
+        { key = "disableLo", min = 0, max = 16, field = "MoveEffects.DISABLE_LO" },
+        { key = "disableHi", min = 0, max = 16, field = "MoveEffects.DISABLE_HI" },
+        { key = "crashDamage", min = 0, max = 255, field = "MoveEffects.CRASH_DAMAGE" },
+      }
+      local lines = {}
+      for _, row in ipairs(fields) do
+        local n = take(row.key, row.min, row.max)
+        if n ~= nil then lines[#lines + 1] = "    " .. row.field .. " = " .. n end
+      end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Disable and crash damage"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local MoveEffects = require(\"src.battle.MoveEffects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    else
+      local fields = {
+        { key = "disableRoll", min = 1, max = 16, field = "Effects.DISABLE_ROLL" },
+        { key = "disableTries", min = 1, max = 16, field = "Effects.DISABLE_TRIES" },
+        { key = "disableAdd", min = 0, max = 16, field = "Effects.DISABLE_ADD" },
+        { key = "spiteMin", min = 0, max = 16, field = "Effects.SPITE_MIN" },
+        { key = "spiteSpan", min = 1, max = 16, field = "Effects.SPITE_SPAN" },
+      }
+      local lines = {}
+      for _, row in ipairs(fields) do
+        local n = take(row.key, row.min, row.max)
+        if n ~= nil then lines[#lines + 1] = "      " .. row.field .. " = " .. n end
+      end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Disable and Spite"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local Effects = require(\"src.battle.gen2.Effects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    end
+  end
+
+  if type(project.specialRules) == "table" then
+    local bag = project.specialRules
+    local function take(key, minV, maxV)
+      local n = tonumber(bag[key])
+      if n == nil then return nil end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    if not gen2 then
+      local fields = {
+        { key = "bideLo", min = 1, max = 16, field = "MoveEffects.BIDE_LO" },
+        { key = "bideHi", min = 1, max = 16, field = "MoveEffects.BIDE_HI" },
+        { key = "bideMult", min = 0, max = 16, field = "MoveEffects.BIDE_MULT" },
+      }
+      local lines = {}
+      for _, row in ipairs(fields) do
+        local n = take(row.key, row.min, row.max)
+        if n ~= nil then lines[#lines + 1] = "    " .. row.field .. " = " .. n end
+      end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Bide"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local MoveEffects = require(\"src.battle.MoveEffects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    else
+      local fields = {
+        { key = "protectStart", min = 0, max = 255, field = "Effects.PROTECT_START" },
+        { key = "protectDiv", min = 1, max = 16, field = "Effects.PROTECT_DIV" },
+        { key = "bideMin", min = 1, max = 16, field = "Effects.BIDE_MIN" },
+        { key = "bideSpan", min = 1, max = 16, field = "Effects.BIDE_SPAN" },
+        { key = "bideMult", min = 0, max = 16, field = "Effects.BIDE_MULT" },
+        { key = "ohkoScale", min = 0, max = 16, field = "Effects.OHKO_SCALE" },
+        { key = "ohkoCap", min = 0, max = 255, field = "Effects.OHKO_CAP" },
+      }
+      local lines = {}
+      for _, row in ipairs(fields) do
+        local n = take(row.key, row.min, row.max)
+        if n ~= nil then lines[#lines + 1] = "      " .. row.field .. " = " .. n end
+      end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Protect, Bide, and OHKO"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local Effects = require(\"src.battle.gen2.Effects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    end
+  end
+
+  if type(project.residualRules) == "table" then
+    local bag = project.residualRules
+    local function take(key, minV, maxV)
+      local n = tonumber(bag[key])
+      if n == nil then return nil end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    if not gen2 then
+      local lines = {}
+      if type(bag.trapTurns) == "table" then
+        local list = {}
+        for _, n in ipairs(bag.trapTurns) do
+          n = math.floor(tonumber(n) or 1)
+          if n < 0 then n = 0 end
+          if n > 16 then n = 16 end
+          list[#list + 1] = n
+        end
+        if #list > 0 then
+          lines[#lines + 1] = "    MoveEffects.TRAP_TURNS = { " .. table.concat(list, ", ") .. " }"
+        end
+      end
+      local lo = take("thrashLo", 0, 16)
+      if lo ~= nil then lines[#lines + 1] = "    MoveEffects.THRASH_LO = " .. lo end
+      local hi = take("thrashHi", 0, 16)
+      if hi ~= nil then lines[#lines + 1] = "    MoveEffects.THRASH_HI = " .. hi end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Residual turns"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local MoveEffects = require(\"src.battle.MoveEffects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    else
+      local fields = {
+        { key = "leechDiv", min = 1, max = 255, field = "Effects.LEECH_DIV" },
+        { key = "nightmareDiv", min = 1, max = 255, field = "Effects.NIGHTMARE_DIV" },
+        { key = "curseDiv", min = 1, max = 255, field = "Effects.CURSE_DIV" },
+        { key = "wrapDiv", min = 1, max = 255, field = "Effects.WRAP_DIV" },
+        { key = "wrapMin", min = 1, max = 16, field = "Effects.WRAP_MIN" },
+        { key = "wrapSpan", min = 1, max = 16, field = "Effects.WRAP_SPAN" },
+        { key = "leftoversDiv", min = 1, max = 255, field = "Effects.LEFTOVERS_DIV" },
+        { key = "berryDiv", min = 1, max = 255, field = "Effects.BERRY_HP_DIV" },
+      }
+      local lines = {}
+      for _, row in ipairs(fields) do
+        local n = take(row.key, row.min, row.max)
+        if n ~= nil then lines[#lines + 1] = "      " .. row.field .. " = " .. n end
+      end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Residual fractions"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local Effects = require(\"src.battle.gen2.Effects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    end
+  end
+
+  if type(project.healRules) == "table" then
+    local bag = project.healRules
+    local function take(key, minV, maxV)
+      local n = tonumber(bag[key])
+      if n == nil then return nil end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    if not gen2 then
+      local lines = {}
+      local recover = take("recoverDiv", 1, 16)
+      local sub = take("substituteDiv", 1, 16)
+      if recover ~= nil then lines[#lines + 1] = "    MoveEffects.HEAL_DIV = " .. recover end
+      if sub ~= nil then lines[#lines + 1] = "    MoveEffects.SUBSTITUTE_DIV = " .. sub end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Healing"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local MoveEffects = require(\"src.battle.MoveEffects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    else
+      local lines = {}
+      local recover = take("recoverDiv", 1, 16)
+      local sub = take("substituteDiv", 1, 16)
+      local counter = take("counterMult", 0, 16)
+      local belly = take("bellyDiv", 1, 16)
+      local curse = take("curseCost", 1, 16)
+      if recover ~= nil then lines[#lines + 1] = "      Effects.HEAL_DIV = " .. recover end
+      if sub ~= nil then lines[#lines + 1] = "      Effects.SUBSTITUTE_DIV = " .. sub end
+      if counter ~= nil then lines[#lines + 1] = "      Effects.COUNTER_MULT = " .. counter end
+      if belly ~= nil then lines[#lines + 1] = "      Effects.BELLY_DIV = " .. belly end
+      if curse ~= nil then lines[#lines + 1] = "      Effects.CURSE_COST_DIV = " .. curse end
+      if type(bag.bands) == "table" then
+        local parts = {}
+        for i = 1, 4 do
+          local row = bag.bands[i]
+          if type(row) == "table" then
+            local num = math.max(0, math.min(255, math.floor(tonumber(row.num) or 0)))
+            local den = math.max(1, math.min(255, math.floor(tonumber(row.den) or 1)))
+            parts[i] = num .. "/" .. den
+          end
+        end
+        if #parts == 4 then
+          lines[#lines + 1] = "      Effects.HEAL_MULTIPLIERS = { " .. table.concat(parts, ", ") .. " }"
+        end
+      end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Healing"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local Effects = require(\"src.battle.gen2.Effects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    end
+  end
+
+  if type(project.moveFormulas) == "table" then
+    local bag = project.moveFormulas
+    local function take(key, minV, maxV)
+      local n = tonumber(bag[key])
+      if n == nil then return nil end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      return n
+    end
+    local payDay = take("payDay", 0, 255)
+    if not gen2 then
+      local lines = {}
+      local function me(field, key, minV, maxV)
+        local n = take(key, minV, maxV)
+        if n ~= nil then lines[#lines + 1] = "    MoveEffects." .. field .. " = " .. n end
+      end
+      if payDay ~= nil then lines[#lines + 1] = "    MoveEffects.PAY_DAY_PER_LEVEL = " .. payDay end
+      me("SUPER_FANG_DIV", "superFangDiv", 1, 16)
+      me("PSYWAVE_NUM", "psywaveNum", 0, 255)
+      me("PSYWAVE_DEN", "psywaveDen", 1, 255)
+      me("RECOIL_DIV", "recoilDiv", 1, 16)
+      me("STRUGGLE_RECOIL_DIV", "struggleRecoilDiv", 1, 16)
+      me("DRAIN_DIV", "drainDiv", 1, 16)
+      local sonic = take("sonicBoom", 0, 255)
+      local rage = take("dragonRage", 0, 255)
+      if sonic ~= nil then lines[#lines + 1] = "    MoveEffects.FIXED_DAMAGE.SONICBOOM = " .. sonic end
+      if rage ~= nil then lines[#lines + 1] = "    MoveEffects.FIXED_DAMAGE.DRAGON_RAGE = " .. rage end
+      if #lines > 0 then
+        out[#out + 1] = "  -- Move formulas"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        out[#out + 1] = "    local MoveEffects = require(\"src.battle.MoveEffects\")"
+        for _, line in ipairs(lines) do out[#out + 1] = line end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    end
+    if gen2 then
+      local lines = {}
+      local function effect(field, key, minV, maxV)
+        local n = take(key, minV, maxV)
+        if n ~= nil then lines[#lines + 1] = "      Effects." .. field .. " = " .. n end
+      end
+      if payDay ~= nil then lines[#lines + 1] = "      Effects.PAY_DAY_PER_LEVEL = " .. payDay end
+      effect("SUPER_FANG_DIV", "superFangDiv", 1, 16)
+      effect("PSYWAVE_NUM", "psywaveNum", 0, 255)
+      effect("PSYWAVE_DEN", "psywaveDen", 1, 255)
+      effect("RECOIL_DIV", "recoilDiv", 1, 16)
+      effect("DRAIN_DIV", "drainDiv", 1, 16)
+      effect("RAMP_MULT", "rampMult", 0, 16)
+      effect("CURL_MULT", "curlMult", 0, 16)
+      effect("FUTURE_SIGHT_TURNS", "futureTurns", 1, 16)
+      local rollout = take("rolloutTurns", 1, 16)
+      local fury = take("furyCap", 1, 16)
+      if rollout ~= nil then lines[#lines + 1] = "      Effects.RAMPING.EFFECT_ROLLOUT = " .. rollout end
+      if fury ~= nil then lines[#lines + 1] = "      Effects.RAMPING.EFFECT_FURY_CUTTER = " .. fury end
+      local battleLines = {}
+      local function battle(field, key, minV, maxV)
+        local n = take(key, minV, maxV)
+        if n ~= nil then battleLines[#battleLines + 1] = "      Battle." .. field .. " = " .. n end
+      end
+      battle("HIDDEN_POWER_BASE", "hpBase", 0, 255)
+      battle("HIDDEN_POWER_BIT_SCALE", "hpScale", 0, 255)
+      battle("HIDDEN_POWER_DIV", "hpDiv", 1, 255)
+      if type(bag.types) == "table" then
+        local vanilla = {
+          "FIGHTING", "FLYING", "POISON", "GROUND", "ROCK", "BUG", "GHOST", "STEEL",
+          "FIRE", "WATER", "GRASS", "ELECTRIC", "PSYCHIC_TYPE", "ICE", "DRAGON", "DARK",
+        }
+        local names = {}
+        local changed = false
+        for i = 1, 16 do
+          local name = bag.types[i]
+          if type(name) ~= "string" or name == "" then name = vanilla[i] end
+          name = name:upper():gsub("[^%w_]", "")
+          if name == "" then name = vanilla[i] end
+          if name ~= vanilla[i] then changed = true end
+          names[i] = name
+        end
+        if changed then
+          battleLines[#battleLines + 1] = "      Battle.HIDDEN_POWER_TYPES = " .. emitTableLiteral(names, 3)
+        end
+      end
+      if #lines > 0 or #battleLines > 0 then
+        out[#out + 1] = "  -- Move formulas"
+        out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+        if #lines > 0 then
+          out[#out + 1] = "    local Effects = require(\"src.battle.gen2.Effects\")"
+          for _, line in ipairs(lines) do out[#out + 1] = line end
+        end
+        if #battleLines > 0 then
+          out[#out + 1] = "    local Battle = require(\"src.battle.gen2.Battle\")"
+          for _, line in ipairs(battleLines) do out[#out + 1] = line end
+        end
+        out[#out + 1] = "  end)"
+        out[#out + 1] = ""
+      end
+    end
+  end
+
+  if gen2 and type(project.magnitudeBands) == "table" and project.magnitudeBands[1] and project.magnitudeBands[1].at ~= nil then
+    local bands = {}
+    for i, band in ipairs(project.magnitudeBands) do
+      if type(band) == "table" then
+        bands[i] = {
+          math.max(0, math.min(255, math.floor(tonumber(band.at) or 0))),
+          math.max(0, math.min(255, math.floor(tonumber(band.power) or 0))),
+          math.max(0, math.min(255, math.floor(tonumber(band.number) or 0))),
+        }
+      end
+    end
+    if #bands > 0 then
+      out[#out + 1] = "  -- Magnitude roll"
+      out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "    local Effects = require(\"src.battle.gen2.Effects\")"
+      out[#out + 1] = "      Effects.MAGNITUDE_POWER = " .. emitTableLiteral(bands, 3)
+      out[#out + 1] = "  end)"
+      out[#out + 1] = ""
+    end
+  end
+
+  if gen2 and type(project.flailRules) == "table" then
+    local lines = {}
+    if project.flailRules.scale ~= nil then
+      local scale = math.max(0, math.min(255, math.floor(tonumber(project.flailRules.scale) or 48)))
+      lines[#lines + 1] = "      Effects.FLAIL_SCALE = " .. scale
+    end
+    if type(project.flailRules.bands) == "table" then
+      local bands = {}
+      for i, band in ipairs(project.flailRules.bands) do
+        if type(band) == "table" then
+          local power = math.max(0, math.min(255, math.floor(tonumber(band.power) or 0)))
+          if band.atMost ~= nil then
+            local atMost = math.max(0, math.min(255, math.floor(tonumber(band.atMost) or 0)))
+            bands[i] = { atMost = atMost, power = power }
+          else
+            bands[i] = { power = power }
+          end
+        end
+      end
+      if #bands > 0 then
+        lines[#lines + 1] = "      Effects.FLAIL_BANDS = " .. emitTableLiteral(bands, 3)
+      end
+    end
+    if #lines > 0 then
+      out[#out + 1] = "  -- Reversal power bands"
+      out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "    local Effects = require(\"src.battle.gen2.Effects\")"
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "  end)"
+      out[#out + 1] = ""
+    end
+  end
+
+  if gen2 and type(project.returnPower) == "table" then
+    local num = project.returnPower.num
+    local den = project.returnPower.den
+    if num ~= nil or den ~= nil then
+      if num ~= nil then
+        num = math.max(0, math.min(255, math.floor(tonumber(num) or 10)))
+      end
+      if den ~= nil then
+        den = math.max(1, math.min(255, math.floor(tonumber(den) or 25)))
+      end
+      out[#out + 1] = "  -- Return and Frustration power"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local returnPower = " .. emitTableLiteral({ num = num, den = den }, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Effects = require(\"src.battle.gen2.Effects\")"
+      out[#out + 1] = "      if returnPower.num ~= nil then Effects.RETURN_NUM = returnPower.num end"
+      out[#out + 1] = "      if returnPower.den ~= nil then Effects.RETURN_DEN = returnPower.den end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if not gen2 and type(project.battleCrit) == "table" and next(project.battleCrit) then
+    local crit = {}
+    local function take(key, minV, maxV)
+      local n = tonumber(project.battleCrit[key])
+      if n == nil then return end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      crit[key] = n
+    end
+    take("speedDiv", 1, 16)
+    take("plainShifts", 0, 16)
+    take("highShifts", 0, 16)
+    take("normalDiv", 1, 16)
+    take("focusShifts", 0, 16)
+    take("focusBugDiv", 1, 16)
+    take("levelMult", 1, 16)
+    if next(crit) then
+      out[#out + 1] = "  -- Gen 1 critical-hit shifts"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local battleCrit = " .. emitTableLiteral(crit, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Damage = require(\"src.battle.Damage\")"
+      out[#out + 1] = "      if battleCrit.speedDiv ~= nil then Damage.CRIT_SPEED_DIV = battleCrit.speedDiv end"
+      out[#out + 1] = "      if battleCrit.plainShifts ~= nil then Damage.CRIT_PLAIN_SHIFTS = battleCrit.plainShifts end"
+      out[#out + 1] = "      if battleCrit.highShifts ~= nil then Damage.CRIT_HIGH_SHIFTS = battleCrit.highShifts end"
+      out[#out + 1] = "      if battleCrit.normalDiv ~= nil then Damage.CRIT_NORMAL_DIV = battleCrit.normalDiv end"
+      out[#out + 1] = "      if battleCrit.focusShifts ~= nil then Damage.CRIT_FOCUS_SHIFTS = battleCrit.focusShifts end"
+      out[#out + 1] = "      if battleCrit.focusBugDiv ~= nil then Damage.CRIT_FOCUS_BUG_DIV = battleCrit.focusBugDiv end"
+      out[#out + 1] = "      if battleCrit.levelMult ~= nil then Damage.CRIT_LEVEL_MULT = battleCrit.levelMult end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if gen2 and type(project.battleCrit) == "table" and next(project.battleCrit) then
+    local crit = {}
+    local function clamp(key, minV, maxV)
+      local n = tonumber(project.battleCrit[key])
+      if not n then return end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      crit[key] = n
+    end
+    clamp("multiplier", 1, 16)
+    clamp("variationMin", 1, 100)
+    clamp("variationMax", 1, 100)
+    if type(project.battleCrit.chances) == "table" then
+      local chances = {}
+      for stage = 0, 6 do
+        local n = tonumber(project.battleCrit.chances[stage])
+        if n then
+          n = math.floor(n)
+          if n < 1 then n = 1 end
+          if n > 255 then n = 255 end
+          chances[stage] = n
+        end
+      end
+      if next(chances) then crit.chances = chances end
+    end
+    if crit.variationMin and crit.variationMax and crit.variationMax < crit.variationMin then
+      crit.variationMax = crit.variationMin
+    end
+    if next(crit) then
+      out[#out + 1] = "  -- Critical hits (Damage.criticalChance)"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local battleCrit = " .. emitTableLiteral(crit, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Damage = require(\"src.battle.gen2.Damage\")"
+      out[#out + 1] = "      if battleCrit.multiplier ~= nil then Damage.CRIT_MULTIPLIER = battleCrit.multiplier end"
+      out[#out + 1] = "      if battleCrit.variationMin ~= nil then Damage.MIN_VARIATION = battleCrit.variationMin end"
+      out[#out + 1] = "      if battleCrit.variationMax ~= nil then Damage.MAX_VARIATION = battleCrit.variationMax end"
+      out[#out + 1] = "      if Damage.MAX_VARIATION < Damage.MIN_VARIATION then"
+      out[#out + 1] = "        Damage.MAX_VARIATION = Damage.MIN_VARIATION"
+      out[#out + 1] = "      end"
+      out[#out + 1] = "      if type(battleCrit.chances) == \"table\" then"
+      out[#out + 1] = "        for stage, chance in pairs(battleCrit.chances) do"
+      out[#out + 1] = "          Damage.CRITICAL_CHANCES[stage] = chance"
+      out[#out + 1] = "        end"
+      out[#out + 1] = "      end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  -- Gen 2 Day-Care knobs (data.breeding, read by Breeding.knob).
   if gen2 and type(project.breeding) == "table" and next(project.breeding) then
     local lit = emitTableLiteral(project.breeding, 2)
     out[#out + 1] = "  -- Day-Care / breeding overrides (Breeding.knobs)"
@@ -5508,6 +6884,490 @@ function ModWriter.emitMain(project, baseData, derivedModId)
     out[#out + 1] = "    end)"
     out[#out + 1] = "  end"
     out[#out + 1] = ""
+  end
+
+  -- Gen 2 battle weather. Effects.weatherModifier reads these tables live.
+  if gen2 and type(project.weather) == "table" and next(project.weather) then
+    local weather = {}
+    local function take(key, minV, maxV)
+      local n = tonumber(project.weather[key])
+      if n == nil then return end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      weather[key] = n
+    end
+    take("turns", 1, 255)
+    take("sandstormFraction", 1, 255)
+    take("rainWater", 0, 1000)
+    take("rainFire", 0, 1000)
+    take("sunFire", 0, 1000)
+    take("sunWater", 0, 1000)
+    take("solarbeam", 0, 1000)
+    take("thunderRain", 0, 100)
+    take("thunderSun", 0, 100)
+    if next(weather) then
+      out[#out + 1] = "  -- Battle weather (Effects.weatherModifier)"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local weather = " .. emitTableLiteral(weather, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Effects = require(\"src.battle.gen2.Effects\")"
+      out[#out + 1] = "      local function ratio(percent) return percent / 100 end"
+      out[#out + 1] = "      if weather.turns ~= nil then Effects.WEATHER_TURNS = weather.turns end"
+      out[#out + 1] = "      if weather.sandstormFraction ~= nil then Effects.SANDSTORM_FRACTION = weather.sandstormFraction end"
+      out[#out + 1] = "      if weather.rainWater ~= nil then Effects.WEATHER_TYPE_MODIFIERS.rain.WATER = ratio(weather.rainWater) end"
+      out[#out + 1] = "      if weather.rainFire ~= nil then Effects.WEATHER_TYPE_MODIFIERS.rain.FIRE = ratio(weather.rainFire) end"
+      out[#out + 1] = "      if weather.sunFire ~= nil then Effects.WEATHER_TYPE_MODIFIERS.sun.FIRE = ratio(weather.sunFire) end"
+      out[#out + 1] = "      if weather.sunWater ~= nil then Effects.WEATHER_TYPE_MODIFIERS.sun.WATER = ratio(weather.sunWater) end"
+      out[#out + 1] = "      if weather.solarbeam ~= nil then Effects.WEATHER_MOVE_MODIFIERS.rain.EFFECT_SOLARBEAM = ratio(weather.solarbeam) end"
+      out[#out + 1] = "      if weather.thunderRain ~= nil then Effects.WEATHER_ACCURACY_OVERRIDES.rain.EFFECT_THUNDER = weather.thunderRain end"
+      out[#out + 1] = "      if weather.thunderSun ~= nil then Effects.WEATHER_ACCURACY_OVERRIDES.sun.EFFECT_THUNDER = weather.thunderSun end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  -- Gen 2 Pokerus. Spread, direction, and the new-infection gate are live.
+  if gen2 and type(project.pokerus) == "table" and next(project.pokerus) then
+    local pokerus = {}
+    local function take(key)
+      local n = tonumber(project.pokerus[key])
+      if n == nil then return end
+      n = math.floor(n)
+      if n < 0 then n = 0 end
+      if n > 256 then n = 256 end
+      pokerus[key] = n
+    end
+    take("spreadChance")
+    take("backwardChance")
+    take("contractThreshold")
+    if next(pokerus) then
+      out[#out + 1] = "  -- Pokerus odds (Pokerus.give)"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local pokerus = " .. emitTableLiteral(pokerus, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Pokerus = require(\"src.core.gen2.Pokerus\")"
+      out[#out + 1] = "      if pokerus.spreadChance ~= nil then Pokerus.SPREAD_CHANCE = pokerus.spreadChance end"
+      out[#out + 1] = "      if pokerus.backwardChance ~= nil then Pokerus.BACKWARD_CHANCE = pokerus.backwardChance end"
+      out[#out + 1] = "      if pokerus.contractThreshold ~= nil then Pokerus.CONTRACT_THRESHOLD = pokerus.contractThreshold end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  if gen2 and type(project.badgeBoost) == "table" and project.badgeBoost.divisor ~= nil then
+    local divisor = math.floor(tonumber(project.badgeBoost.divisor) or 8)
+    if divisor < 0 then divisor = 0 end
+    if divisor > 255 then divisor = 255 end
+    out[#out + 1] = "  -- Badge boost (Battle.boostStat, Damage.badgeTypeExtra)"
+    out[#out + 1] = "  do"
+    out[#out + 1] = "    local divisor = " .. divisor
+    out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "      require(\"src.battle.gen2.Battle\").BADGE_BOOST_DIVISOR = divisor"
+    out[#out + 1] = "      require(\"src.battle.gen2.Damage\").BADGE_TYPE_DIVISOR = divisor"
+    out[#out + 1] = "    end)"
+    out[#out + 1] = "  end"
+    out[#out + 1] = ""
+  end
+  if gen2 and type(project.obedience) == "table" then
+    local rows = {
+      { key = "none", default = 10 },
+      { key = "hive", default = 30 },
+      { key = "fog", default = 50 },
+      { key = "storm", default = 70 },
+    }
+    local lines = {}
+    for _, row in ipairs(rows) do
+      local n = project.obedience[row.key]
+      if n ~= nil then
+        n = math.max(0, math.min(100, math.floor(tonumber(n) or row.default)))
+        lines[#lines + 1] = "      Battle.OBEDIENCE_LEVELS." .. row.key .. " = " .. n
+      end
+    end
+    if #lines > 0 then
+      out[#out + 1] = "  -- Traded Pokémon obedience"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Battle = require(\"src.battle.gen2.Battle\")"
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+  if not gen2 and type(project.badgeBoosts) == "table" and #project.badgeBoosts > 0 then
+    out[#out + 1] = string.format(
+      "  mod.content.constants:override(%q, %s)",
+      "badgeBoosts", emitTableLiteral(project.badgeBoosts, 1))
+    out[#out + 1] = ""
+  end
+
+  if gen2 and type(project.screenRules) == "table" and project.screenRules.turns ~= nil then
+    local turns = math.floor(tonumber(project.screenRules.turns) or 5)
+    if turns < 1 then turns = 1 end
+    if turns > 255 then turns = 255 end
+    out[#out + 1] = "  -- Reflect, Light Screen, and Safeguard duration"
+    out[#out + 1] = "  do"
+    out[#out + 1] = "    local turns = " .. turns
+    out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "      require(\"src.battle.gen2.Battle\").SCREEN_TURNS = turns"
+    out[#out + 1] = "    end)"
+    out[#out + 1] = "  end"
+    out[#out + 1] = ""
+  end
+
+  if type(project.screenRules) == "table" and project.screenRules.mult ~= nil then
+    local mult = math.floor(tonumber(project.screenRules.mult) or 2)
+    if mult < 1 then mult = 1 end
+    if mult > 255 then mult = 255 end
+    local moduleName = gen2 and "src.battle.gen2.Damage" or "src.battle.Damage"
+    out[#out + 1] = "  -- Reflect and Light Screen"
+    out[#out + 1] = "  do"
+    out[#out + 1] = "    local mult = " .. mult
+    out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "      require(\"" .. moduleName .. "\").SCREEN_MULT = mult"
+    out[#out + 1] = "    end)"
+    out[#out + 1] = "  end"
+    out[#out + 1] = ""
+  end
+
+  if project.explodeDiv ~= nil then
+    local div = math.floor(tonumber(project.explodeDiv) or 2)
+    if div < 1 then div = 1 end
+    if div > 255 then div = 255 end
+    local moduleName = gen2 and "src.battle.gen2.Damage" or "src.battle.Damage"
+    out[#out + 1] = "  -- Self-Destruct and Explosion defense cut"
+    out[#out + 1] = "  do"
+    out[#out + 1] = "    local div = " .. div
+    out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "      require(\"" .. moduleName .. "\").EXPLOSION_DEF_DIV = div"
+    out[#out + 1] = "    end)"
+    out[#out + 1] = "  end"
+    out[#out + 1] = ""
+  end
+
+  if project.stabPercent ~= nil then
+    local percent = math.floor(tonumber(project.stabPercent) or 150)
+    if percent < 0 then percent = 0 end
+    if percent > 999 then percent = 999 end
+    local moduleName = gen2 and "src.battle.gen2.Damage" or "src.battle.Damage"
+    out[#out + 1] = "  -- Same-type attack bonus"
+    out[#out + 1] = "  do"
+    out[#out + 1] = "    local percent = " .. percent
+    out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+    out[#out + 1] = "      local Damage = require(\"" .. moduleName .. "\")"
+    out[#out + 1] = "      Damage.STAB_NUM = percent"
+    out[#out + 1] = "      Damage.STAB_DEN = 100"
+    out[#out + 1] = "    end)"
+    out[#out + 1] = "  end"
+    out[#out + 1] = ""
+  end
+
+  -- Status chip. Gen 1 reads Status.CHIP_DIVISOR. Gen 2 reads Battle fractions.
+  if type(project.ailments) == "table" and next(project.ailments) then
+    local ail = {}
+    local function take(key)
+      local n = tonumber(project.ailments[key])
+      if n == nil then return end
+      n = math.floor(n)
+      if n < 1 then n = 1 end
+      if n > 255 then n = 255 end
+      ail[key] = n
+    end
+    if gen2 then
+      take("burnFraction")
+      take("poisonFraction")
+      take("toxicFraction")
+      take("burnAttack")
+      take("paralysisSpeed")
+      take("paralysisSkip")
+      take("thaw")
+      take("rampageSpan")
+      take("sleepMin")
+      take("sleepSpan")
+      take("sleepTowerSpan")
+      take("restTurns")
+      take("napMin")
+      take("napSpan")
+    else
+      take("chip")
+      take("burnAttack")
+      take("paralysisSpeed")
+      take("sleepMin")
+      take("sleepSpan")
+      take("restTurns")
+    end
+    take("confusionMin")
+    take("confusionSpan")
+    local function takeRange(key, minV, maxV)
+      local n = tonumber(project.ailments[key])
+      if n == nil then return end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      ail[key] = n
+    end
+    takeRange("confusionHit", 0, 256)
+    takeRange("confusionPower", 0, 255)
+    if gen2 then takeRange("attractFail", 0, 256) end
+    if not gen2 then takeRange("paralysisFull", 0, 256) end
+    if next(ail) and not gen2 then
+      out[#out + 1] = "  -- Status damage (Status.CHIP_DIVISOR)"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local ailments = " .. emitTableLiteral(ail, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Status = require(\"src.battle.Status\")"
+      out[#out + 1] = "      if ailments.chip ~= nil then Status.CHIP_DIVISOR = ailments.chip end"
+      out[#out + 1] = "      if ailments.paralysisFull ~= nil then Status.PARALYSIS_THRESHOLD = ailments.paralysisFull end"
+      out[#out + 1] = "      if ailments.paralysisSpeed ~= nil then Status.PARALYSIS_SPEED_DIV = ailments.paralysisSpeed end"
+      out[#out + 1] = "      if ailments.burnAttack ~= nil then Status.BURN_ATTACK_DIV = ailments.burnAttack end"
+      out[#out + 1] = "      if ailments.confusionMin ~= nil then Status.CONFUSION_MIN = ailments.confusionMin end"
+      out[#out + 1] = "      if ailments.confusionSpan ~= nil then Status.CONFUSION_SPAN = ailments.confusionSpan end"
+      out[#out + 1] = "      if ailments.confusionHit ~= nil then Status.CONFUSION_HIT = ailments.confusionHit end"
+      out[#out + 1] = "      if ailments.confusionPower ~= nil then Status.CONFUSION_POWER = ailments.confusionPower end"
+      out[#out + 1] = "      if ailments.sleepMin ~= nil then Status.SLEEP_MIN = ailments.sleepMin end"
+      out[#out + 1] = "      if ailments.sleepSpan ~= nil then Status.SLEEP_SPAN = ailments.sleepSpan end"
+      out[#out + 1] = "      if ailments.restTurns ~= nil then Status.REST_TURNS = ailments.restTurns end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    elseif next(ail) then
+      out[#out + 1] = "  -- Status damage (Battle burn / poison / paralysis)"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local ailments = " .. emitTableLiteral(ail, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Battle = require(\"src.battle.gen2.Battle\")"
+      out[#out + 1] = "      if ailments.burnFraction ~= nil then Battle.BURN_FRACTION = ailments.burnFraction end"
+      out[#out + 1] = "      if ailments.poisonFraction ~= nil then Battle.POISON_FRACTION = ailments.poisonFraction end"
+      out[#out + 1] = "      if ailments.toxicFraction ~= nil then Battle.TOXIC_FRACTION = ailments.toxicFraction end"
+      out[#out + 1] = "      if ailments.burnAttack ~= nil then Battle.BURN_ATTACK_DIVISOR = ailments.burnAttack end"
+      out[#out + 1] = "      if ailments.paralysisSpeed ~= nil then Battle.PARALYSIS_SPEED_DIVISOR = ailments.paralysisSpeed end"
+      out[#out + 1] = "      if ailments.paralysisSkip ~= nil then Battle.PARALYSIS_SKIP_CHANCE = ailments.paralysisSkip end"
+      out[#out + 1] = "      if ailments.thaw ~= nil then Battle.THAW_CHANCE = ailments.thaw end"
+      out[#out + 1] = "      if ailments.confusionMin ~= nil then Battle.CONFUSION_MIN = ailments.confusionMin end"
+      out[#out + 1] = "      if ailments.confusionSpan ~= nil then Battle.CONFUSION_SPAN = ailments.confusionSpan end"
+      out[#out + 1] = "      if ailments.confusionHit ~= nil then Battle.CONFUSION_HIT = ailments.confusionHit end"
+      out[#out + 1] = "      if ailments.confusionPower ~= nil then Battle.CONFUSION_POWER = ailments.confusionPower end"
+      out[#out + 1] = "      if ailments.attractFail ~= nil then Battle.ATTRACT_FAIL = ailments.attractFail end"
+      out[#out + 1] = "      if ailments.rampageSpan ~= nil then Battle.RAMPAGE_SPAN = ailments.rampageSpan end"
+      out[#out + 1] = "      if ailments.sleepMin ~= nil then Battle.SLEEP_MIN = ailments.sleepMin end"
+      out[#out + 1] = "      if ailments.sleepSpan ~= nil then Battle.SLEEP_SPAN = ailments.sleepSpan end"
+      out[#out + 1] = "      if ailments.sleepTowerSpan ~= nil then Battle.SLEEP_TOWER_SPAN = ailments.sleepTowerSpan end"
+      out[#out + 1] = "      if ailments.restTurns ~= nil then Battle.REST_TURNS = ailments.restTurns end"
+      out[#out + 1] = "      if ailments.napMin ~= nil then Battle.NAP_MIN = ailments.napMin end"
+      out[#out + 1] = "      if ailments.napSpan ~= nil then Battle.NAP_SPAN = ailments.napSpan end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  -- Trainer prize. Gen 1 reads Prize.MULTIPLIER. Gen 2 reads Prize.QUARTERS.
+  if type(project.prizeRules) == "table" and next(project.prizeRules) then
+    local prize = {}
+    local function take(key)
+      local n = tonumber(project.prizeRules[key])
+      if n == nil then return end
+      n = math.floor(n)
+      if n < 0 then n = 0 end
+      if n > 255 then n = 255 end
+      prize[key] = n
+    end
+    if gen2 then
+      take("quarters")
+      take("amulet")
+      local mod = tonumber(project.prizeRules.rewardMod)
+      if mod ~= nil then
+        mod = math.floor(mod)
+        if mod < 1 then mod = 1 end
+        if mod > 9999999 then mod = 9999999 end
+        prize.rewardMod = mod
+      end
+      local cap = tonumber(project.prizeRules.rewardCap)
+      if cap ~= nil then
+        cap = math.floor(cap)
+        if cap < 0 then cap = 0 end
+        if cap > 16777215 then cap = 16777215 end
+        prize.rewardCap = cap
+      end
+    else
+      take("multiplier")
+    end
+    if next(prize) then
+      out[#out + 1] = "  -- Trainer prize money"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local prizeRules = " .. emitTableLiteral(prize, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      if gen2 then
+        out[#out + 1] = "      local Prize = require(\"src.battle.gen2.Prize\")"
+        out[#out + 1] = "      if prizeRules.quarters ~= nil then Prize.QUARTERS = prizeRules.quarters end"
+        out[#out + 1] = "      if prizeRules.amulet ~= nil then Prize.AMULET_MULTIPLIER = prizeRules.amulet end"
+        out[#out + 1] = "      if prizeRules.rewardMod ~= nil then Prize.REWARD_MOD = prizeRules.rewardMod end"
+        out[#out + 1] = "      if prizeRules.rewardCap ~= nil then Prize.REWARD_CAP = prizeRules.rewardCap end"
+      else
+        out[#out + 1] = "      local Prize = require(\"src.battle.Prize\")"
+        out[#out + 1] = "      if prizeRules.multiplier ~= nil then Prize.MULTIPLIER = prizeRules.multiplier end"
+      end
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
+  end
+
+  -- Gen 2 specialty balls. The catch arm reads these fields live.
+  if gen2 and type(project.specialtyBalls) == "table" and next(project.specialtyBalls) then
+    local MULT_KEY = {
+      LEVEL_BALL = "LEVEL_BALL_MULT", LURE_BALL = "LURE_BALL_MULT",
+      FAST_BALL = "FAST_BALL_MULT", MOON_BALL = "MOON_BALL_MULT",
+      LOVE_BALL = "LOVE_BALL_MULT",
+    }
+    local lines = {}
+    local ids = {}
+    for id in pairs(project.specialtyBalls) do ids[#ids + 1] = id end
+    table.sort(ids)
+    for _, id in ipairs(ids) do
+      local row = project.specialtyBalls[id]
+      local fieldName = MULT_KEY[id]
+      if id == "HEAVY_BALL" and type(row) == "table" and (type(row.bands) == "table" or type(row.divs) == "table") then
+        local bands = {}
+        for i, band in ipairs(type(row.bands) == "table" and row.bands or {}) do
+          if type(band) == "table" then
+            local bonus = math.floor(tonumber(band.bonus) or 0)
+            bonus = math.max(-255, math.min(255, bonus))
+            if band.below ~= nil then
+              local below = math.floor(tonumber(band.below) or 0)
+              below = math.max(0, math.min(255, below))
+              bands[i] = { below = below, bonus = bonus }
+            else
+              bands[i] = { bonus = bonus }
+            end
+          end
+        end
+        if #bands > 0 then
+          lines[#lines + 1] = "      Catching.HEAVY_BANDS = " .. emitTableLiteral(bands, 3)
+        end
+        if type(row.divs) == "table" then
+          for i = 1, 4 do
+            local n = tonumber(row.divs[i])
+            if n ~= nil then
+              n = math.max(1, math.min(65535, math.floor(n)))
+              lines[#lines + 1] = string.format("      Catching.HEAVY_DIV[%d] = %d", i, n)
+            end
+          end
+        end
+      elseif fieldName and type(row) == "table" then
+        local n = tonumber(row.mult)
+        if n ~= nil then
+          n = math.max(0, math.min(255, math.floor(n)))
+          lines[#lines + 1] = string.format("      Catching.%s = %d", fieldName, n)
+        end
+        if id == "LEVEL_BALL" and type(row.divs) == "table" then
+          for i = 1, 2 do
+            local d = tonumber(row.divs[i])
+            if d ~= nil then
+              d = math.max(1, math.min(255, math.floor(d)))
+              lines[#lines + 1] = string.format("      Catching.LEVEL_BALL_DIV[%d] = %d", i, d)
+            end
+          end
+        end
+        if id == "FAST_BALL" and type(row.species) == "table" then
+          local set = {}
+          for _, name in ipairs(row.species) do
+            if type(name) == "string" and name:match("^[%w_]+$") then
+              set[name:upper()] = true
+            end
+          end
+          lines[#lines + 1] = "      Catching.FAST_BALL_SPECIES = " .. emitTableLiteral(set, 3)
+        end
+      end
+    end
+    if #lines > 0 then
+      out[#out + 1] = "  -- Specialty ball catch arms"
+      out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "    local Catching = require(\"src.battle.gen2.Catching\")"
+      for _, line in ipairs(lines) do out[#out + 1] = line end
+      out[#out + 1] = "  end)"
+      out[#out + 1] = ""
+    end
+  end
+
+  -- Stat stage percents. Gen 1 reads Stats.STAGE_MULT. Gen 2 reads Damage.STAGE.
+  if type(project.statStages) == "table" and next(project.statStages) then
+    local lines = {}
+    for key, percent in pairs(project.statStages) do
+      local stage = tonumber(key)
+      local n = tonumber(percent)
+      if stage and stage >= -6 and stage <= 6 and stage % 1 == 0 and n ~= nil then
+        n = math.max(0, math.min(1000, math.floor(n)))
+        lines[#lines + 1] = string.format("[%d] = { %d, 100 }", stage, n)
+      end
+    end
+    table.sort(lines)
+    if #lines > 0 then
+      out[#out + 1] = "  -- Stat stage multipliers"
+      out[#out + 1] = "  mod.events:on(\"mods.loaded\", function()"
+      if gen2 then
+        out[#out + 1] = "    local Damage = require(\"src.battle.gen2.Damage\")"
+        for _, line in ipairs(lines) do
+          out[#out + 1] = "    Damage.STAGE" .. line
+        end
+      else
+        out[#out + 1] = "    local Stats = require(\"src.pokemon.Stats\")"
+        for _, line in ipairs(lines) do
+          out[#out + 1] = "    Stats.STAGE_MULT" .. line
+        end
+      end
+      out[#out + 1] = "  end)"
+      out[#out + 1] = ""
+    end
+  end
+
+  -- Experience formula. Gen 1 reads data.constants.exp. Gen 2 reads Mon.EXP_*.
+  if type(project.expRules) == "table" and next(project.expRules) then
+    local exp = {}
+    local function take(key, minV, maxV)
+      local n = tonumber(project.expRules[key])
+      if n == nil then return end
+      n = math.floor(n)
+      if n < minV then n = minV end
+      if n > maxV then n = maxV end
+      exp[key] = n
+    end
+    take("divisor", 1, 255)
+    take("trainerPercent", 0, 1000)
+    take("tradedPercent", 0, 1000)
+    if gen2 then take("luckyPercent", 0, 1000) end
+    if next(exp) and not gen2 then
+      out[#out + 1] = "  -- Experience formula (Experience.gainFor)"
+      out[#out + 1] = string.format(
+        "  mod.content.constants:patch(%q, %s)",
+        "exp", emitTableLiteral(exp, 1))
+      out[#out + 1] = ""
+    elseif next(exp) then
+      out[#out + 1] = "  -- Experience formula (Mon.experienceGain)"
+      out[#out + 1] = "  do"
+      out[#out + 1] = "    local expRules = " .. emitTableLiteral(exp, 2)
+      out[#out + 1] = "    mod.events:on(\"mods.loaded\", function()"
+      out[#out + 1] = "      local Mon = require(\"src.battle.gen2.Mon\")"
+      out[#out + 1] = "      if expRules.divisor ~= nil then Mon.EXP_DIVISOR = expRules.divisor end"
+      out[#out + 1] = "      if expRules.trainerPercent ~= nil then"
+      out[#out + 1] = "        Mon.EXP_TRAINER_NUM = expRules.trainerPercent"
+      out[#out + 1] = "        Mon.EXP_TRAINER_DEN = 100"
+      out[#out + 1] = "      end"
+      out[#out + 1] = "      if expRules.tradedPercent ~= nil then"
+      out[#out + 1] = "        Mon.EXP_TRADED_NUM = expRules.tradedPercent"
+      out[#out + 1] = "        Mon.EXP_TRADED_DEN = 100"
+      out[#out + 1] = "      end"
+      out[#out + 1] = "      if expRules.luckyPercent ~= nil then"
+      out[#out + 1] = "        Mon.EXP_LUCKY_NUM = expRules.luckyPercent"
+      out[#out + 1] = "        Mon.EXP_LUCKY_DEN = 100"
+      out[#out + 1] = "      end"
+      out[#out + 1] = "    end)"
+      out[#out + 1] = "  end"
+      out[#out + 1] = ""
+    end
   end
 
   -- Stock Gen1Recomp: map index >= firstIndoorMap (37) rolls wilds on EVERY

@@ -124,6 +124,7 @@ function State.blankProject(id, name)
     uiTrueColor = {},   -- imported UI image paths drawn in their own colors
     uiScripts = {},     -- UI tab script copies: id -> { module, rel }
     diploma = {},       -- Gold: gen2Diploma sheet
+    tradeGfx = {},      -- Gen 2 trade animation sheets (data.gen2Trade)
     pokedex = {},       -- Gold: gen2Pokedex.entries overrides (kind/text/…)
     -- Lab ball remap (Oak / Elm): vanillaSpecies -> { species, level }
     starterRemap = {},
@@ -167,7 +168,7 @@ function State.ensureProjectFields(project)
   project.fishing = project.fishing or {}
   project.boot = project.boot or {}
   project.constants = project.constants or {}
-  project.breeding = project.breeding or {} -- Gold Day-Care knobs
+  project.breeding = project.breeding or {} -- Gen 2 Day-Care knobs
   project.audio = project.audio or {}
   project.phoneContacts = project.phoneContacts or {}
   project.scripts = project.scripts or {} -- Gold mod talk scripts (scriptKey → ops)
@@ -204,6 +205,7 @@ function State.ensureProjectFields(project)
   project.uiScripts = project.uiScripts or {}
   project.minigames = project.minigames or {}
   project.diploma = project.diploma or {}
+  project.tradeGfx = project.tradeGfx or {}
   project.pokedex = project.pokedex or {}
   project.hiddenItems = project.hiddenItems or {}
   project.badgeGates = project.badgeGates or {}
