@@ -93,6 +93,8 @@ M.fields={
 function M.draw(S,x,y,w,h,App)
   local K=require("Kit");local s=K.scale
   if not S.project then return end
+  local top,view,viewX,viewW=require("RegList").beginForm(S,x,y,w,h,"g3BattleScroll",S.project,12*s)
+  x,y,w=viewX,top,viewW
   K.caption(x,y,(({firered="FIRERED",leafgreen="LEAFGREEN",emerald="EMERALD",ruby="RUBY",sapphire="SAPPHIRE"})[require("Generation").id(S)] or "GEN 3").." BATTLE RULES")
   y=y+38*s
   local values=S.project.gen3BattleRules or {}
@@ -109,17 +111,19 @@ function M.draw(S,x,y,w,h,App)
     y=y+38*s
   end
   if K.button(x,y+12*s,160*s,28*s,"Reset to defaults",{}) then S.project.gen3BattleRules=nil;App.markDirty() end
+  y=y+48*s
   local id=require("Generation").id(S)
   if id=="firered" or id=="leafgreen" or id=="ruby" or id=="sapphire" then
-    require("PickupItems").draw(S,x,y+48*s,w,App)
+    y=require("PickupItems").draw(S,x,y,w,App)+12*s
   end
   if id=="emerald" then
-    require("PickupBands").draw(S,x,y+48*s,w,App)
+    y=require("PickupBands").draw(S,x,y,w,App)+12*s
   end
   if id=="ruby" or id=="sapphire" or id=="emerald" then
-    require("PyramidRules").draw(S,x,y+220*s,w,App)
-    require("FrontierRules").draw(S,x,y+700*s,w,App)
+    y=require("PyramidRules").draw(S,x,y,w,App)+12*s
+    y=require("FrontierRules").draw(S,x,y,w,App)
   end
+  require("FormPane").finish(S,"g3BattleScroll",top,y,view)
 end
 function M.emit(p,encode,out)
   if not next(p.gen3BattleRules or {}) then return end
