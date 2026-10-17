@@ -130,21 +130,28 @@ function M.install(mod,configs,species,artwork)
     mon.ability=P.abilityId(row.index,mon.personality or 0);mon.abilityId=mon.ability
     return row.index~=species
   end
+  -- Imported shiny artwork for a species, or nil when it has none.
+  local function shinyPicture(side,species)
+    local rec=records[tonumber(species)]
+    local customShiny=rec and artwork and artwork[rec.id] and artwork[rec.id][side]
+    if not customShiny or customShiny=="" or customShiny:match("^gen3%-shiny/") then return end
+    local key="shiny/"..customShiny
+    if pictures[key]==nil then
+      local ok,img=pcall(function()
+        local i=love.graphics.newImage(love.filesystem.newFileData(assert(mod:read(customShiny)),"shiny.png"));i:setFilter("nearest","nearest");return i
+      end)
+      pictures[key]=ok and {image=img,w=img:getWidth(),h=img:getHeight()} or false
+    end
+    return pictures[key] or nil
+  end
   for _,side in ipairs({"front","back"}) do
     local method=side.."Pic";local hook="editor.gen3.forms."..side
     bridge(P,method,hook)
     mod.hooks:wrap(hook,function(proceed,species,form,shiny,personality)
       local rec=records[tonumber(species)]
       local path=rec and rec[side=="front" and "spriteFront" or "spriteBack"]
-      local customShiny=shiny and rec and artwork and artwork[rec.id] and artwork[rec.id][side]
-      if customShiny and not customShiny:match("^gen3%-shiny/") then
-        local key="shiny/"..customShiny
-        if not pictures[key] then
-          local img=love.graphics.newImage(love.filesystem.newFileData(assert(mod:read(customShiny)),"shiny.png"));img:setFilter("nearest","nearest")
-          pictures[key]={image=img,w=img:getWidth(),h=img:getHeight()}
-        end
-        return pictures[key]
-      end
+      local custom=shiny and shinyPicture(side,species)
+      if custom then return custom end
       if path and not path:match("^data/generated/") then
         if not pictures[path] then
           local img=love.graphics.newImage(path);img:setFilter("nearest","nearest")
@@ -161,6 +168,50 @@ function M.install(mod,configs,species,artwork)
       return entry
     end)
   end
+  -- The game's own sprite override (Gen3Compat.applyMerged) wraps frontPic and
+  -- backPic after mods load. For a species with an edited picture it returns
+  -- that normal picture on every call, shiny or not, so the hook above never
+  -- sees shiny requests. Keep a shiny check outside it.
+  for _,side in ipairs({"front","back"}) do
+    mod.hooks:wrap("editor.gen3.forms.shiny."..side,function(proceed,species,form,shiny,...)
+      if shiny and (tonumber(form) or 0)==0 then
+        local custom=shinyPicture(side,species)
+        if custom then return custom end
+      end
+      return proceed(species,form,shiny,...)
+    end)
+  end
+  local function keepShinyOutside()
+    local Pk=require("src.core.game3.pokemon")
+    -- Shared by every mod using this runtime: one outer layer is enough, as
+    -- all of them dispatch to the same hook chain.
+    Pk._editorShinyOuter=Pk._editorShinyOuter or setmetatable({},{__mode="k"})
+    for _,side in ipairs({"front","back"}) do
+      local method=side.."Pic";local current=Pk[method]
+      if current and not Pk._editorShinyOuter[current] then
+        local key="editor.gen3.forms.shiny."..side
+        local outer=function(...) return Runtime.call(key,current,...) end
+        Pk._editorShinyOuter[outer]=true;Pk[method]=outer
+        if side=="front" then Pk.frontSprite=outer end
+      end
+    end
+  end
+  keepShinyOutside()
+  -- Re-assert straight after the game re-wraps the pictures.
+  local okCompat,Compat=pcall(require,"src.mods.Gen3Compat")
+  if okCompat and type(Compat)=="table" and not Compat._editorShinyOuter then
+    Compat._editorShinyOuter=keepShinyOutside
+    for _,name in ipairs({"applyMerged","reseedSprites"}) do
+      local original=Compat[name]
+      if type(original)=="function" then
+        local function after(...) pcall(Compat._editorShinyOuter);return ... end
+        Compat[name]=function(...) return after(original(...)) end
+      end
+    end
+  end
+  mod.events:on("mods.loaded",keepShinyOutside)
+  mod.events:on("game.ready",keepShinyOutside)
+  P.onReload(keepShinyOutside,"editor.gen3.forms.shiny")
   local Party=require("src.core.game3.party")
   local Battle=require("src.core.game3.battle")
   bridge(Battle,"start","editor.gen3.forms.battleMoves")
