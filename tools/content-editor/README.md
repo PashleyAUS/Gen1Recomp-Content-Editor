@@ -15,6 +15,132 @@ contains maps and tile sources, the center switches between **Terrain** and
 **Warps**. Existing maps are prepared for the 16×16 grid when selected; use
 **+ New Map** for a new layered map and **World View** for connected neighbors.
 
+## Gen 3 live 3D terrain preview
+
+In Emerald, FireRed or LeafGreen, choose a map and click **Edit Map**.
+The Maps workspace shows the 2D painting canvas beside a live textured 3D
+terrain preview in the right drawer. Select **3D Height**, choose 0–15, and
+paint or drag in the 2D canvas. Drag in the preview to orbit and tilt; use
+**+**, **-**, **Reset**, or **Hide 3D** to adjust the view.
+
+**Slopes:** Under **3D Height**, select **Flat**, **Rise N/E/S/W**, or a
+corner. The selected number is the low edge's height; ramps rise one level
+at the indicated edge, and corner shapes raise one vertex. Paint Flat to
+remove a slope. Arrow overlays show the uphill direction on the 2D map.
+
+**Trees and buildings:** Supported Emerald outdoor and FR/LG Pallet outdoor
+tile patterns automatically become textured models: trees have trunks and
+faceted foliage, and buildings have walls and pitched roofs. Other artwork
+stays flat until you mark its footprint. Choose **3D Objects → Tree / Building**,
+set the model height, and drag around an existing tree or the complete roof
+and facade in the 2D map. A single click uses a default footprint; dragging
+sets exact dimensions. **Remove** hides the model while preserving the 2D
+tiles. **Auto native objects** toggles automatic models for the current map.
+
+Shapes and manual objects are saved with the layered editor project and
+support undo/redo. Heights and slopes follow resizing; shrinking a map drops
+manual models that no longer fit. Objects use the map's current imported or
+custom textures. This is a stylized reconstruction, with approximate building
+sides, rather than authored models for every tileset. Visual geometry is
+independent of the original passage elevations.
+Maps larger than 128 cells per axis preview the first 128 cells of each axis.
+
+**Playable Emerald, FireRed and LeafGreen:** **3D Objects → Play in 3D** is on by default for editable
+maps in those games. Save the mod, enable it in the matching game runtime, and enter the
+map. The runtime embeds the same geometry and depth renderer as the preview,
+using the player's imported textures. Player and NPC sprites are upright,
+follow the terrain surface, and are occluded by the models. Movement crosses
+continuous slope edges and blocks abrupt visual cliffs; existing tile
+collision, NPC occupancy, passage elevations, and warp records still apply.
+Turn **Play in 3D** off to keep a particular map in 2D. Unedited maps keep
+the normal renderer. Large runtime maps use a moving 128-cell rendering window.
+
+**Camera controls:** In game, **[ / ]** rotate in 15-degree steps,
+**Page Up / Page Down** tilt, **- / =** zoom, and **Home** restores the
+authored view. The camera keeps following the player and retains its settings
+through building visits and connected routes for the current play session.
+Controls are inactive in menus, dialogue and battles; gameplay key bindings
+and input rebinding take priority. Movement directions remain the map's compass directions.
+In the editor preview, drag to orbit/tilt or use **Rotate / Tilt** buttons.
+**Save camera** stores that angle and tilt as the mod's starting view for the
+map and its connected 3D group. Save/export the project to apply it in game.
+
+**Object angles:** In **3D Objects**, **Rotate** cycles through 0–315 degrees
+in 45-degree steps. **Tree lean 45** leans a tree away from its base. Set
+these controls before dragging a footprint; dragging over an existing model
+replaces its settings. These transforms match in the preview and all three supported runtimes.
+Rotated buildings in those games derive solid walls and entrances from the same
+rotation as the preview. Swept collision prevents cutting through diagonal
+corners, and vacated footprint cells become walkable. Door warp indices stay
+stable so interiors return to the moved entrance, facing away from the building.
+Amber outlines and cyan entrance markers show the derived navigation in the
+2D object editor. Movement and entrance landings still use the 16×16 grid.
+Export reports an error if a rotated doorway has no safe landing cell; the
+original authoring warp records remain editable with the existing warp tools.
+
+This initial field renderer retains native menus, dialogue, and battle UI;
+field weather, door animations, and other flat field effects are not yet
+projected onto the 3D scene.
+
+Run `tests/content-editor/run-terrain3d-native-checks.ps1` for real Emerald,
+FireRed and LeafGreen painting, slope, model and workspace rendering checks.
+Run `tests/content-editor/run-terrain3d-playable-checks.ps1` for exported
+Emerald, FireRed and LeafGreen mod loading, player movement, slopes, sprites, collision and warp checks.
+Run `tests/content-editor/run-terrain3d-door-checks.ps1` for controller-driven
+walking uphill/downhill and into and out of rotated houses in each rendered runtime at
+45°, 135°, 225°, and 315°, including native interior maps and return positions.
+
+### Native town mods
+
+`tests/content-editor/run-terrain3d-town-checks.ps1` exports and loads real mods
+for the original Littleroot Town (Emerald) and Pallet Town (FireRed/LeafGreen).
+The town recipe in `Town3D.lua` keeps buildings forward-facing in their native
+positions, with cross-gabled houses, a flat-roof lab, tilted sprite trees, a
+forest border, and a walkable slope. Roof materials repeat at tile scale;
+masked sprite trees use the imported grass palette to remove their background.
+Native door triggers and collision remain in place. Connected routes are checked
+before export. Optional object rotation remains available in the editor. Native interiors, warp
+indices, scripts, and map connections are retained. Interiors use their native
+2D renderer.
+
+The 3D field uses the runtime window-resolution world override, with up to
+4× MSAA where supported. World dimensions follow physical drawable pixels on
+resize; the normal 240×160 UI compositor and warp fades remain active. Native
+interiors and battle transitions use their existing renderer. Textures remain
+GBA artwork; HD geometry does not increase their source resolution.
+
+These towns use a north-up camera that follows the player with their feet at
+the screen center. The runtime reads `visualCamera = {angle=0, pitch=.8,
+scale=8.5}` from the map source. The view also uses `visualPerspective=2` for distance foreshortening and a
+cooler ambient tint. This changes the view, not movement directions. The art
+remains native GBA artwork; this is not a DS asset conversion.
+The in-game test uses an isolated post-introduction session, directional input,
+native interior warps, and the actual world/UI compositor. It checks slope
+height, all three entry/exit round trips, walking away without re-entering,
+and camera centering on every exterior frame. Run
+`python tests/content-editor/package-town-mods.py` after a successful run to
+package each tested mod with its editable project and a gameplay GIF. Outputs
+are under `tests/content-editor/terrain3d-towns/<game>/`.
+
+### Connected 3D routes
+
+The native town exports also include Route 101 for Emerald and Route 1 plus
+northern Route 21 for FireRed/LeafGreen. `MapWorld3D.lua` places these maps with
+their original connection offsets in one town-anchored coordinate system. A
+cached 80-cell rendering window samples their native layouts and textures,
+including neighboring NPCs. Adjacent terrain is visible before crossing; the
+native connection code retains player movement without a fade or camera reset.
+The editor continues to edit each original map separately. Interiors remain 2D.
+
+The in-game town suite walks every northern exit and returns, and uses the
+native Surf hop and directional movement for Pallet's southern connection.
+It checks the actual map IDs, original landing coordinates, continuous world
+camera positions on every crossing frame, HD rendering, absence of warp/fade,
+and all native house entrances. The test's post-introduction state and read-only
+cache configuration do not change the exported story data or player saves.
+`package-town-mods.py` includes these routes in each ZIP and produces a separate
+`connections.gif` from actual gameplay frames.
+
 ## GUIDES tab
 
 The first tab. Step-by-step guides by topic -- Getting started, Gen 3

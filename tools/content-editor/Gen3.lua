@@ -270,6 +270,7 @@ function Gen3.emit(project, encode)
     out[#out+1]="    return data end)()"
     out[#out+1]="  local tilePixels=(function()\n"..assert(love.filesystem.read("tools/content-editor/TilePixels.lua")).."\nend)()"
     out[#out+1]=require("Gen3LayeredRuntime")
+    require("Gen3SceneExport").emit(project,out)
   end
   -- Whirlpools (map editor collision): crossed with WHIRLPOOL while surfing.
   if project.gen3Layered and next(project.gen3Layered) then

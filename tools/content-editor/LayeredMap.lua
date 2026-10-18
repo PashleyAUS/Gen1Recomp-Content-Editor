@@ -652,7 +652,7 @@ function LayeredMap.resize(source, newWidth, newHeight)
           and source.collision[y * oldWidth + x + 1] or "solid"
     end
   end
-  for _,key in ipairs({"gen3Elevation","gen3Collision","gen3Behavior","gen3Bridges"}) do
+  for _,key in ipairs({"gen3Elevation","gen3Collision","gen3Behavior","gen3Bridges","visualHeights","visualShapes"}) do
     if source[key] then
       local values={}
       for y=0,height-1 do for x=0,width-1 do
@@ -661,6 +661,7 @@ function LayeredMap.resize(source, newWidth, newHeight)
       source[key]=values
     end
   end
+  require("MapObjects3D").resize(source,width,height)
   source.collision = collision
   source.cellWidth, source.cellHeight = width, height
   return true

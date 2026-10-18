@@ -27,6 +27,8 @@ local TOOLS = {
   { id = "exits", label = "Exit type",
     tip = "Paint door, stairs, cave, or pad so the warp uses the right kind" },
   { id = "bridge", label = "Bridge", tip = "Paint an elevated deck over existing ground, then mark its entrances" },
+  { id = "visual_object", label = "3D Objects", tip = "Drag a tree or building footprint; Remove hides a raised object" },
+  { id = "visual_height", label = "3D Height", tip = "Paint visual terrain height without changing passage elevations" },
   { id = "elevation", label = "Elevation", tip = "Paint a height from 0 to 15 on the selected map" },
   { id = "warp", label = "Warp", tip = "Place directed, two-way, or custom-return warps" },
   { id = "pan", label = "Pan", tip = "Drag the map without painting" },
@@ -63,7 +65,7 @@ local LEGACY_TOOLS = { berry = true, path = true }
 
 function MapBuilder.supportsTool(S, id)
   if id=="hidden_item" then return Generation.isGen2(S) end
-  if id=="bridge" or id=="elevation" then return Generation.isGen3(S) end
+  if id=="visual_object" or id=="visual_height" or id=="bridge" or id=="elevation" then return Generation.isGen3(S) end
   return not (Generation.isGen3(S) and LEGACY_TOOLS[id])
 end
 
@@ -107,7 +109,7 @@ local function drawMapStencil(S, source)
 end
 
 local BASIC_TERRAIN_TOOLS = {
-  pencil = true, eraser = true, fill = true, pan = true, exits = true, bridge = true, elevation = true,
+  pencil = true, eraser = true, fill = true, pan = true, exits = true, bridge = true, elevation = true, visual_height = true, visual_object = true,
 }
 local BASIC_EVENT_TOOLS = {
   object = true, item = true, hidden_item = true, sign = true, berry = true, path = true, trigger = true,
@@ -1290,6 +1292,13 @@ local function drawCanvas(S, source, x, y, w, h, App)
   love.graphics.rectangle("line", -1, -1, mapPx + 2, mapPy + 2)
   love.graphics.setColor(0.35, 0.95, 0.5, 1)
   love.graphics.rectangle("line", 0, 0, mapPx, mapPy)
+  if S.builderTool=="visual_object" then
+    local objects=require("MapObjects3D")
+    objects.draw2D(source)
+    local map=require("Maps").resolveMap(S,source.id)
+    require("MapNavigation3D").draw2D(source,map and map.warps,objects.objects(source))
+  end
+  if S.builderTool=="visual_height" then require("MapPreview3D").draw2D(source,x0,y0,x1,y1) end
   drawSelections(S, source)
   drawWarpNodes(S, source)
   if S.mapWorkspace then
@@ -1551,14 +1560,14 @@ local function drawCanvas(S, source, x, y, w, h, App)
         S.builderCamY = S._builderDrag.camY
           - (Kit.mouseY - S._builderDrag.my) / zoom
       end
-    elseif inMap and (tool == "rectangle" or tool == "elevation_rectangle" or tool == "select" or tool == "eraser") then
+    elseif inMap and (tool == "rectangle" or tool == "elevation_rectangle" or tool == "select" or tool == "eraser" or tool == "visual_object") then
       if not S._builderDrag then
-        S._builderDrag = { range = true, x0 = cx, y0 = cy, tool = tool, elevation = S.builderElevation or 3 }
+        S._builderDrag = { range = true, x0 = cx, y0 = cy, tool = tool, elevation = S.builderElevation or 3, objectKind = S.builderObjectKind or "tree", objectSize = S.builderObjectSize or 3, rotation = S.builderObjectRotation or 0, lean = S.builderTreeLean or 0 }
       end
       S.builderRangeDraft = {
         x0 = S._builderDrag.x0, y0 = S._builderDrag.y0, x1 = cx, y1 = cy,
       }
-    elseif inMap and (tool == "pencil" or tool == "collision" or tool == "exits" or tool=="bridge" or tool=="elevation") then
+    elseif inMap and (tool == "pencil" or tool == "collision" or tool == "exits" or tool=="bridge" or tool=="elevation" or tool=="visual_height") then
       local stroke = S._builderStroke
       if not stroke or stroke.tool ~= tool then
         if stroke then App.endEditBatch() end
@@ -1575,6 +1584,8 @@ local function drawCanvas(S, source, x, y, w, h, App)
             changed = paintCell(S, source, px, py, App, false, true) or changed
           elseif tool=="bridge" then
             changed=require("Gen3Bridges").paint(source,px,py,S.builderBridgeMode or "deck_horizontal",brushRef(S)) or changed
+          elseif tool=="visual_height" then
+            changed=require("MapPreview3D").paint(source,px,py,S.builderVisualHeight or 0,S.builderVisualShape or "flat") or changed
           elseif tool=="elevation" then
             changed=require("MapElevations").paint(source,px,py,S.builderElevation or 3) or changed
           else
@@ -1593,6 +1604,10 @@ local function drawCanvas(S, source, x, y, w, h, App)
         if not shift then S.builderSelections = {} end
         S.builderSelections = S.builderSelections or {}
         S.builderSelections[#S.builderSelections + 1] = rect
+      elseif S._builderDrag.tool == "visual_object" then
+        App.beginEditBatch()
+        if require("MapObjects3D").place(source,rect,S._builderDrag.objectKind,S._builderDrag.objectSize,S._builderDrag.rotation,S._builderDrag.lean) then App.markDirty() end
+        App.endEditBatch()
       elseif S._builderDrag.tool == "elevation_rectangle" then
         App.beginEditBatch()
         if require("MapElevations").rectangle(source, rect, S._builderDrag.elevation) then App.markDirty() end
@@ -2489,6 +2504,71 @@ local function drawToolbar(S, source, x, y, w, App)
         x + 118 * s, barY + 5 * s, PAL.muted)
       barBottom = barY + 24 * s
     end
+  elseif S.builderTool=="visual_height" then
+    Kit.text("micro", "3D HEIGHT", x, barY + 5 * s, PAL.caption)
+    local bx, by = x + 76 * s, barY
+    for value = 0, 15 do
+      if bx + 30 * s > x + w then bx, by = x + 76 * s, by + 29 * s end
+      if Kit.chip(bx, by, 30 * s, 26 * s, tostring(value),
+          (S.builderVisualHeight or 0) == value, PAL.blue, PAL.steel,
+          "Editor visual height; passage and runtime rendering stay unchanged") then
+        S.builderVisualHeight = value
+      end
+      bx = bx + 33 * s
+    end
+    by = by + 30 * s
+    bx = x
+    for _, shape in ipairs(require("MapPreview3D").shapes) do
+      local bw = (shape.id:match("corner") and 92 or 68) * s
+      if bx + bw > x + w and bx > x then bx, by = x, by + 29 * s end
+      if Kit.chip(bx, by, bw, 26 * s, shape.label,
+          (S.builderVisualShape or "flat") == shape.id, PAL.blue, PAL.steel,
+          "Ramps rise one height level toward this edge; corners raise one vertex") then
+        S.builderVisualShape = shape.id
+      end
+      bx = bx + bw + 3 * s
+    end
+    barBottom = by + 28 * s
+  elseif S.builderTool=="visual_object" then
+    local bx, by = x, barY
+    for _, mode in ipairs({{"tree","Tree"},{"building","Building"},{"none","Remove"}}) do
+      if bx+82*s>x+w and bx>x then bx,by=x,by+29*s end
+      if Kit.chip(bx,by,82*s,26*s,mode[2],(S.builderObjectKind or "tree")==mode[1],PAL.green,PAL.steel,
+          "Drag a footprint in the 2D map. Remove hides 3D objects without erasing tiles.") then S.builderObjectKind=mode[1] end
+      bx=bx+85*s
+    end
+    by=by+30*s
+    Kit.text("micro","MODEL HEIGHT",x,by+5*s,PAL.caption)
+    bx=x+104*s
+    for _,size in ipairs({2,3,4,5,6}) do
+      if bx+32*s>x+w then bx,by=x+104*s,by+29*s end
+      if Kit.chip(bx,by,32*s,26*s,tostring(size),(S.builderObjectSize or 3)==size,PAL.blue,PAL.steel,
+          "Height of newly placed models in map cells") then S.builderObjectSize=size end
+      bx=bx+35*s
+    end
+    by=by+30*s
+    if Kit.button(x,by,150*s,26*s,"Rotate "..tostring(S.builderObjectRotation or 0).." deg",{}) then
+      S.builderObjectRotation=((S.builderObjectRotation or 0)+45)%360
+    end
+    local leanX=x+154*s
+    if leanX+118*s>x+w then leanX,by=x,by+29*s end
+    if Kit.chip(leanX,by,118*s,26*s,"Tree lean 45",S.builderTreeLean==45,PAL.green,PAL.steel,
+        "Lean new tree models back 45 degrees") then S.builderTreeLean=S.builderTreeLean==45 and 0 or 45 end
+    by=by+30*s
+    if Kit.chip(x,by,160*s,26*s,"Auto native objects",source.visualAutoObjects~=false,PAL.green,PAL.steel,
+        "Recognize supported native tree and building tile patterns") then
+      source.visualAutoObjects=source.visualAutoObjects==false
+      App.markDirty()
+    end
+    local playX=x+164*s
+    if (Generation.id(S)=="emerald" or Generation.id(S)=="firered" or Generation.id(S)=="leafgreen") and playX+118*s>x+w then playX,by=x,by+29*s end
+    if (Generation.id(S)=="emerald" or Generation.id(S)=="firered" or Generation.id(S)=="leafgreen") and Kit.chip(playX,by,118*s,26*s,"Play in 3D",source.visualPlayable~=false,PAL.green,PAL.steel,
+        "Export this map with playable 3D terrain in the selected game") then
+      source.visualPlayable=source.visualPlayable==false
+      App.markDirty()
+    end
+    Kit.text("micro",Kit.ellipsize("micro","Drag around existing tree / roof + walls",w),x,by+33*s,PAL.muted)
+    barBottom=by+54*s
   elseif S.builderTool=="elevation" then
     local modeX = x
     for _, mode in ipairs({{"pencil", "Pencil"}, {"fill", "Fill"}, {"rectangle", "Square"}}) do
@@ -3632,7 +3712,8 @@ function MapBuilder.draw(S, x, y, w, h, App)
 
   local s = Kit.scale
   local leftW = math.min(270 * s, math.max(220 * s, w * 0.22))
-  local rightW = math.min(330 * s, math.max(270 * s, w * 0.25))
+  local rightW = Generation.isGen3(S) and math.min(560 * s, math.max(270 * s, w * 0.38))
+    or math.min(330 * s, math.max(270 * s, w * 0.25))
   local gap = 9 * s
   local centerX = x + leftW + gap
   local centerW = math.max(220 * s, w - leftW - rightW - gap * 2)
@@ -3737,7 +3818,15 @@ function MapBuilder.draw(S, x, y, w, h, App)
       })
     end
   end
-  drawProperties(S, source, rightX, y, rightW, h, App)
+  if Generation.isGen3(S) then
+    -- Keep the existing editor at full width; the right drawer holds live 3D.
+    local previewH = S.mapHide3D and 32 * s or math.min(h * 0.55, 430 * s)
+    require("MapPreview3D").draw(S, source, rightX, y, rightW, previewH, App)
+    drawProperties(S, source, rightX, y + previewH + gap, rightW,
+      math.max(40 * s, h - previewH - gap), App)
+  else
+    drawProperties(S, source, rightX, y, rightW, h, App)
+  end
 end
 
 return MapBuilder

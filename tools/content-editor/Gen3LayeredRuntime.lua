@@ -340,6 +340,8 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
       for i=0,#slots-1 do ts.midToSlot[i]=i end
       local pair="editor_"..mod.id.."_"..id
       local entry={ts=ts,slots=slots};prepare(entry);render(entry);built[id]=entry
+      -- Window mode changes can clear Canvas contents without changing size.
+      ts._editorRebuild=function() render(entry) end
       layered.maps[id]={cellWidth=width,cellHeight=height,slotRefs=slots,cellSlots=cellSlots}
       T._pairs[pair]=ts;Interactions.behaviors[pair]=behaviors
       map.pair=pair;map.width=width;map.height=height

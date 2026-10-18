@@ -22,6 +22,16 @@ portable.txt
 !/mods/realtime_day_night/
 
 # Tool caches
+/tests/content-editor/terrain3d-native/*.png
+/tests/content-editor/terrain3d-native/*-log.txt
+/tests/content-editor/terrain3d-native/result.txt
+/tests/content-editor/terrain3d-smoke/*.png
+/tests/content-editor/terrain3d-smoke/result.txt
+/tests/content-editor/terrain3d-playable/*.png
+/tests/content-editor/terrain3d-playable/*-log.txt
+/tests/content-editor/terrain3d-playable/result.txt
+/tests/content-editor/terrain3d-playable/project/
+/tests/content-editor/terrain3d-playable/project.editor_project.lua
 __pycache__/
 *.pyc
 .DS_Store
@@ -102,3 +112,21 @@ tests/content-editor/leafgreen-smoke/*.png
 /tests/content-editor/emerald-playtest/*.png
 /tools/diag-music/*.txt
 /tests/content-editor/game-switch-smoke/result*.txt
+/tests/content-editor/terrain3d-doors/*.png
+/tests/content-editor/terrain3d-doors/*.gif
+/tests/content-editor/terrain3d-doors/*-log.txt
+/tests/content-editor/terrain3d-doors/result.txt
+/tests/content-editor/terrain3d-doors/project/
+/tests/content-editor/terrain3d-doors/project.editor_project.lua
+
+/tests/content-editor/terrain3d-doors/emerald/
+/tests/content-editor/terrain3d-doors/firered/
+/tests/content-editor/terrain3d-doors/leafgreen/
+/tests/content-editor/terrain3d-playable/emerald/
+/tests/content-editor/terrain3d-playable/firered/
+/tests/content-editor/terrain3d-playable/leafgreen/
+
+/tests/content-editor/terrain3d-towns/*/
+/tests/content-editor/terrain3d-towns/*.png
+/tests/content-editor/terrain3d-towns/*-log.txt
+/tests/content-editor/terrain3d-towns/result.txt

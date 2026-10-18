@@ -242,6 +242,15 @@ function M.compile(S)
   for _,rows in pairs(byMap) do
     for i,node in ipairs(rows) do node.originalIndex=i end
   end
+  if p.game=="emerald" or p.game=="firered" or p.game=="leafgreen" then
+    for id,source in pairs(p.layeredMaps or {}) do
+      if source.visualPlayable~=false then
+        local nav=require("MapNavigation3D").prepare(source,(p.gen3.maps[id] or {}).warps,
+          require("MapObjects3D").objects(source))
+        if #nav.errors>0 then return false,id..": "..table.concat(nav.errors,"; ") end
+      end
+    end
+  end
   -- Keep PNG tile sheets as pixel data, so the mod needs no image files.
   require("LayeredMap").bakeTileSources(S)
   p.gen3Layered=copy(p.layeredMaps or {})
