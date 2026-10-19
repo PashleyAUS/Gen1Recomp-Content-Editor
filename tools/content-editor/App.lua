@@ -1571,6 +1571,7 @@ function App.importToMod(picked, destRel, onDone)
 end
 
 function App.update(dt)
+  if S and S.nativeProfileJob then require('NativeMapProfiles3D').update(S) end
   if not S then return end
   if S._gameSwitch then
     local job = S._gameSwitch

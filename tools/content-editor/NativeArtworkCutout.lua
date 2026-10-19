@@ -1,17 +1,25 @@
 -- Remove only edge-connected native background; enclosed artwork stays intact.
 local M={}
+local cache=setmetatable({},{__mode='k'})
 function M.runs(pixels,o)
+  local signature=table.concat({o.textureX or o.x,o.textureY or o.y,o.textureW or o.width,o.textureH or o.height,
+    tostring(o.cutoutColors),tostring(o.cutoutBackgrounds)},':')
+  cache[pixels]=cache[pixels] or {}
+  if cache[pixels][signature] then return cache[pixels][signature] end
+  local pw,ph=pixels:getDimensions()
   local function key(x,y)
+    if x<0 or y<0 or x>=pw or y>=ph then return 0,0 end
     local r,g,b,a=pixels:getPixel(x,y)
     return math.floor(r*255+.5)*65536+math.floor(g*255+.5)*256+math.floor(b*255+.5),a
   end
   local palette={}
+  for _,color in ipairs(o.cutoutColors or {}) do palette[color]=true end
   for _,r in ipairs(o.cutoutBackgrounds or {}) do
     for y=math.ceil(r[2]*16),math.ceil((r[2]+r[4])*16)-1 do
       for x=math.ceil(r[1]*16),math.ceil((r[1]+r[3])*16)-1 do palette[key(x,y)]=true end
     end
   end
-  local w,h=o.width*16,o.height*16
+  local w,h=(o.textureW or o.width)*16,(o.textureH or o.height)*16
   local ox,oy=(o.textureX or o.x)*16,(o.textureY or o.y)*16
   local background,removed,queue={},{},{}
   for y=0,h-1 do for x=0,w-1 do
@@ -41,7 +49,8 @@ function M.runs(pixels,o)
       end
     end
   end
-  for _,r in ipairs(runs) do r.bottom=bottom end
+  for _,r in ipairs(runs) do r.bottom=bottom;r.pixelWidth=w;r.pixelHeight=h end
+  cache[pixels][signature]=runs
   return runs
 end
 return M

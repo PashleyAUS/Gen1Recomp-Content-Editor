@@ -29,9 +29,11 @@ function M.build(maps,placed,ids,objects,cx,cy,span)
   local owners={};local ground,tree
   for _,id in ipairs(ids) do
     local src=maps[id]
+    if src.visualNativeCutouts then view.visualNativeCutouts=true end
+    if src.visualProfileVersion then view.visualProfileVersion=src.visualProfileVersion end
     if not ground then
       for i,mode in ipairs(src.collision) do
-        if mode=='walk' then ground={id=id,x=(i-1)%src.cellWidth,y=math.floor((i-1)/src.cellWidth)};break end
+        if mode=='walk' or (mode=='water' and src.visualEnvironment=='underwater') then ground={id=id,x=(i-1)%src.cellWidth,y=math.floor((i-1)/src.cellWidth)};break end
       end
     end
     -- Emerald border trees omit the crown row. Prefer a complete, taller sprite.

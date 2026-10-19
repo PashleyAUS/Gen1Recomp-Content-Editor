@@ -223,6 +223,12 @@ return function(data, root, output, game)
       'Dragging a custom model footprint did not place the selected GLB asset')
     save(frame(0,0,false,workspaceDraw),'custom-model-workspace')
   end
+  if os.getenv('POKEPORT_NATIVE_PROFILE_REVIEW')=='1' then
+    local unchanged=Writer.encodeLua({source.layers,source.collision,source.gen3Collision,source.gen3Elevation})
+    require('NativeMapProfiles3D').build(S,id,{})
+    assert(source.visualNativeProfile and unchanged==Writer.encodeLua({source.layers,source.collision,source.gen3Collision,source.gen3Elevation}))
+    save(frame(0,0,false,workspaceDraw),'native-profiles-workspace')
+  end
   -- A clean showcase, separate from the destructive test edits above.
   source.layers=assert(loadstring('return '..initialLayers))()
   source.visualHeights={};source.visualShapes={};source.visualObjects=nil

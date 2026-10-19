@@ -80,16 +80,17 @@ function M.apply(source,def)
   local center=source.baseTileset=='building__pokemon_center' and source.cellWidth==14 and source.cellHeight==10
       and cells[1].tile==520 and cells[3*14+5].tile==600 and cells[4*14+5].tile==608
   if center then
+    local reviewedCenter=source.id=='EM_OLDALE_TOWN_POKEMON_CENTER_1F' or def.nativeArtworkProfiles
     local wall=fixture(0,0,14,2,'native_room_wall',2,nil,'wall_decor')
     if wall then
       wall.wallClearRects={{4,1,6,1}}
       wall.wallFill={5,0,1,1}
-      if source.id=='EM_OLDALE_TOWN_POKEMON_CENTER_1F' then
+      if reviewedCenter then
         wall.wallClearRects={{1,0,1,2},{2,1,2,1},{4,1,6,1},{10,0,1,2}}
         wall.wallFill={4,.25,1,.75};wall.wallTopFill={4,0,1,1}
       end
     end
-    if source.id=='EM_OLDALE_TOWN_POKEMON_CENTER_1F' then
+    if reviewedCenter then
       source.visualNativeCutouts=true
       local function cutout(x,y,w,h)
         local o=fixture(x,y,w,h,'native_cutout',h)
@@ -118,7 +119,7 @@ function M.apply(source,def)
       fixture(4,3,6,2,'native_fixture',.9,1)
     end
     if cells[6*14+12].tile==573 and cells[7*14+12].tile==581 then
-      local tableArt=fixture(11,6,2,2,source.id=='EM_OLDALE_TOWN_POKEMON_CENTER_1F' and 'native_cutout' or 'native_fixture',source.id=='EM_OLDALE_TOWN_POKEMON_CENTER_1F' and 2 or .6,1.2)
+      local tableArt=fixture(11,6,2,2,reviewedCenter and 'native_cutout' or 'native_fixture',reviewedCenter and 2 or .6,1.2)
       if tableArt and tableArt.style=='native_cutout' then tableArt.cutoutBackgrounds={{3,5,1,1}} end
     end
   end

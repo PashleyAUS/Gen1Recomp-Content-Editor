@@ -335,7 +335,7 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
       -- Native interior scripts read and write ROM metatile IDs (the labs
       -- restore their floors on entry). Keep those IDs when the room uses a
       -- single native layer; compact atlas slots would reinterpret script edits.
-      local direct=source.visualInterior and (border.pair or source.baseTileset)==source.baseTileset
+      local direct=(source.visualInterior or source.visualNativeProfile) and (border.pair or source.baseTileset)==source.baseTileset
       for _,refs in ipairs(slots) do
         if #refs~=1 or refs[1].source~="@runtime:"..source.baseTileset or refs[1].opacity~=1 then direct=false;break end
       end

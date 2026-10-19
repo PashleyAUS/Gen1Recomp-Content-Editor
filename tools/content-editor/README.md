@@ -68,6 +68,29 @@ It does not reload the map or require another export. Maps without enabled 3D
 content keep their normal view. Gameplay bindings, input rebinding, dialogue,
 menus and battles take priority over the shortcut.
 
+**Native-art profiles for all maps:** Open **3D MAPS → Build all maps in 3D**
+to generate profiles for every map loaded from the selected Emerald, FireRed or
+LeafGreen game, plus project maps. Progress and errors appear in the builder;
+**Stop** keeps completed maps. **Build this map** refreshes only the selected
+map. Save normally to export the generated scenes as a playable mod. The builder
+runs incrementally and keeps working if you switch tabs.
+
+Shared profiles use original artwork for upright walls, flat-roof building
+surfaces, whole furniture cutouts and thin silhouette solids. Guarded room
+patterns apply across matching native layouts, including Pokémon Centers.
+Caves and underwater maps get native-art terrain relief; black void is excluded.
+Native connection groups share a world/camera anchor. Visual generation keeps
+native collision, encounters, events, scripts and warps intact and protects exit
+approaches. Custom models, manual objects, manual heights and slopes survive
+rebuilding. No external models or replacement artwork are needed.
+
+In **3D Objects**, use **Artwork / Thin solid / Box / Flat**, then redraw an
+object's footprint to correct its treatment. **Default** restores its generated
+base treatment when available. Corrections become manual objects and survive
+rebuilding. Art without a precise rule uses grouped-prop or terrain-relief
+fallbacks; the selected map shows its fallback cell count. Automatic coverage
+is not a claim that every unusual prop has been individually art-directed.
+
 **Custom 3D models (Emerald, FireRed and LeafGreen):** In **3D MAPS →
 3D Objects**, choose **Import 3D model** or drop an `.obj`, `.gltf`, or `.glb`
 onto the editor with an editable map selected. Select the imported asset and

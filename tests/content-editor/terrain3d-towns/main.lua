@@ -35,7 +35,7 @@ function love.load()
     if not drawGame() then return end
     love.graphics.captureScreenshot(function(pixels)
       local f=assert(io.open(output.."/"..os.getenv("POKEPORT_VERSION").."-in-game.png","wb"));f:write(pixels:encode("png"):getString());f:close()
-      report(os.getenv('POKEPORT_HOUSE_CAPTURE_ONLY')=='1'
+      report(os.getenv('POKEPORT_PROFILE_CONNECTIONS')=='1' and 'PASS: all-map profile mod connection round trips and continuous camera' or os.getenv('POKEPORT_HOUSE_CAPTURE_ONLY')=='1'
         and 'PASS: in-game house camera captures'
         or os.getenv('POKEPORT_INTERIOR_REVIEW')=='1' and 'PASS: native interior walking, camera and entry/exit'
         or "PASS: native 3D town walking, slopes, camera and entrances")

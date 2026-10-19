@@ -1577,7 +1577,7 @@ local function drawCanvas(S, source, x, y, w, h, App)
       end
     elseif inMap and (tool == "rectangle" or tool == "elevation_rectangle" or tool == "select" or tool == "eraser" or tool == "visual_object") then
       if not S._builderDrag then
-        S._builderDrag = { range = true, x0 = cx, y0 = cy, tool = tool, elevation = S.builderElevation or 3, objectKind = S.builderObjectKind or "tree", objectSize = S.builderObjectSize or 3, rotation = S.builderObjectRotation or 0, lean = S.builderTreeLean or 0, mount=S.builderPropMount or 0, model=(source.visualModelLibrary or {})[S.builderModelIndex or 1] }
+        S._builderDrag = { range = true, x0 = cx, y0 = cy, tool = tool, elevation = S.builderElevation or 3, objectKind = S.builderObjectKind or "tree", objectSize = S.builderObjectSize or 3, rotation = S.builderObjectRotation or 0, lean = S.builderTreeLean or 0, mount=S.builderPropMount or 0, treatment=S.builderNativeTreatment, model=(source.visualModelLibrary or {})[S.builderModelIndex or 1] }
       end
       S.builderRangeDraft = {
         x0 = S._builderDrag.x0, y0 = S._builderDrag.y0, x1 = cx, y1 = cy,
@@ -1621,7 +1621,7 @@ local function drawCanvas(S, source, x, y, w, h, App)
         S.builderSelections[#S.builderSelections + 1] = rect
       elseif S._builderDrag.tool == "visual_object" then
         App.beginEditBatch()
-        if require("MapObjects3D").place(source,rect,S._builderDrag.objectKind,S._builderDrag.objectSize,S._builderDrag.rotation,S._builderDrag.lean,S._builderDrag.mount,S._builderDrag.model) then App.markDirty() end
+        if require("MapObjects3D").place(source,rect,S._builderDrag.objectKind,S._builderDrag.objectSize,S._builderDrag.rotation,S._builderDrag.lean,S._builderDrag.mount,S._builderDrag.model,S._builderDrag.treatment) then App.markDirty() end
         App.endEditBatch()
       elseif S._builderDrag.tool == "elevation_rectangle" then
         App.beginEditBatch()
@@ -2237,58 +2237,67 @@ end
 
 local function drawToolbar(S, source, x, y, w, App)
   local s = Kit.scale
-  local elevationViewW = Generation.isGen3(S) and 92 * s or 0
-  local stackedHeader = w < 460 * s + elevationViewW
-  local tx, toolY = x, y + (stackedHeader and 64 or 32) * s
   local workspace = S.mapWorkspace
+  local headerX, headerY = x, y
+  -- Reserve each whole control/group before drawing it. The previous fixed
+  -- right alignment could place Grid/Passage over the edit-mode buttons.
+  local function headerSlot(width)
+    width = width * s
+    if headerX + width > x + w and headerX > x then
+      headerX, headerY = x, headerY + 32 * s
+    end
+    local sx, sy = headerX, headerY
+    headerX = headerX + width + 4 * s
+    return sx, sy
+  end
   if workspace then
     S.mapEditMode = S.mapEditMode or "map"
-    Kit.text("micro", "EDIT", x, y + 7 * s, PAL.caption)
-    Kit.offerTooltip(x, y, 34 * s, 26 * s,
+    local modeX, modeY = headerSlot(205)
+    Kit.text("micro", "EDIT", modeX, modeY + 7 * s, PAL.caption)
+    Kit.offerTooltip(modeX, modeY, 34 * s, 26 * s,
       "Paint tiles, or switch to events to place NPCs and triggers")
-    local modeX = x + 34 * s
-    if Kit.chip(modeX, y, 82 * s, 26 * s, "Paint map",
+    modeX = modeX + 34 * s
+    if Kit.chip(modeX, modeY, 82 * s, 26 * s, "Paint map",
         S.mapEditMode == "map", PAL.green, PAL.steel,
         "Paint tiles, collision, exits, and warps") then
       S.mapEditMode = "map"
       if EVENT_TOOL_BY_ID[S.builderTool] then S.builderTool = "pencil" end
     end
-    if Kit.chip(modeX + 85 * s, y, 86 * s, 26 * s, "Add events",
+    if Kit.chip(modeX + 85 * s, modeY, 86 * s, 26 * s, "Add events",
         S.mapEditMode == "events", PAL.yellow, PAL.steel,
-        "Place NPCs, signs, trainers, wild PokÃ©mon, paths, and step triggers") then
+        "Place NPCs, signs, trainers, wild Pokémon, paths, and step triggers") then
       S.mapEditMode = "events"
       if not EVENT_TOOL_BY_ID[S.builderTool] then S.builderTool = "object" end
     end
   end
-  local viewY = stackedHeader and y + 32 * s or y
-  local zx = stackedHeader and x or x + w - 276 * s - elevationViewW
-  if Kit.chip(zx, viewY, 88 * s, 26 * s, "Neighbors",
+  local gx, gy = headerSlot(52)
+  if Kit.chip(gx, gy, 52 * s, 26 * s, "Grid",
+      S.mapShowGrid ~= false, PAL.steel, PAL.steel,
+      "Show the 16x16 cell grid over the map") then
+    S.mapShowGrid = S.mapShowGrid == false and true or false
+  end
+  local px, py = headerSlot(68)
+  if Kit.chip(px, py, 68 * s, 26 * s, "Passage",
+      S.mapShowCollision == true, PAL.red, PAL.steel,
+      "Show collision without changing tools") then
+    S.mapShowCollision = not S.mapShowCollision
+  end
+  local nx, ny = headerSlot(88)
+  if Kit.chip(nx, ny, 88 * s, 26 * s, "Neighbors",
       neighborsEnabled(S), PAL.blue, PAL.steel,
       "Show directly connected maps around this one") then
     S.mapShowNeighbors = not neighborsEnabled(S)
   end
-  if not stackedHeader and zx > x + 220 * s then
-    if Kit.chip(zx - 128 * s, y, 52 * s, 26 * s, "Grid",
-        S.mapShowGrid ~= false, PAL.steel, PAL.steel,
-        "Show the 16x16 cell grid over the map") then
-      S.mapShowGrid = S.mapShowGrid == false and true or false
-    end
-    if Kit.chip(zx - 72 * s, y, 68 * s, 26 * s, "Passage",
-        S.mapShowCollision == true, PAL.red, PAL.steel,
-        "Show collision without changing tools") then
-      S.mapShowCollision = not S.mapShowCollision
-    end
-  end
-  local zc = zx + 92 * s
   if Generation.isGen3(S) then
-    if Kit.chip(zc, viewY, 88 * s, 26 * s, "Elevations",
+    local ex, ey = headerSlot(88)
+    if Kit.chip(ex, ey, 88 * s, 26 * s, "Elevations",
         S.mapShowElevations == true, PAL.blue, PAL.steel,
         "Show elevation numbers on this map and connected neighbors. Compare values across map edges; 0 is a wildcard height.") then
       S.mapShowElevations = not S.mapShowElevations
       if S.mapShowElevations then S.mapShowNeighbors = true end
     end
-    zc = zc + elevationViewW
   end
+  local zc, viewY = headerSlot(180)
   if Kit.stepper(zc, viewY, 26 * s, 26 * s, "-",
       { tooltip = "Zoom out" }) then
     S.builderZoom = clamp((S.builderZoom or 1) - 0.25, 0.25, 8)
@@ -2305,6 +2314,7 @@ local function drawToolbar(S, source, x, y, w, App)
         tooltip = "Fit this map in the canvas" }) then
     S._builderDoFit = true
   end
+  local tx, toolY = x, headerY + 32 * s
 
   local allTools = workspace and S.mapEditMode == "events" and EVENT_TOOLS or TOOLS
   local basicTools = workspace and S.mapEditMode == "events"
@@ -2581,6 +2591,16 @@ local function drawToolbar(S, source, x, y, w, App)
           'Drag a footprint to position the model. Use Collision to set passage separately.') then S.builderObjectKind='model' end
     end
     by=by+30*s
+    if S.builderObjectKind~='model' then
+      local fx,fy=x,by
+      for _,entry in ipairs({{'auto','Default'},{'cutout','Artwork'},{'voxel','Thin solid'},{'box','Box'},{'flat','Flat'}}) do
+        if fx+76*s>x+w and fx>x then fx,fy=x,fy+29*s end
+        if Kit.chip(fx,fy,76*s,26*s,entry[2],(S.builderNativeTreatment or 'auto')==entry[1],PAL.blue,PAL.steel,
+            'Override the native-art shape; redraw its footprint to apply. Rebuilding profiles preserves your correction.') then S.builderNativeTreatment=entry[1] end
+        fx=fx+79*s
+      end
+      by=fy+30*s
+    end
     Kit.text("micro","MODEL HEIGHT",x,by+5*s,PAL.caption)
     bx=x+104*s
     for _,size in ipairs({.5,1,2,3,4,5,6}) do
@@ -2623,13 +2643,16 @@ local function drawToolbar(S, source, x, y, w, App)
     end
     by=by+30*s
     local environment=require('Environment3D').kind(source)
-    local buildLabel=environment and (source.visualEnvironment and "Rebuild 3D terrain" or "Build 3D terrain")
-      or (source.visualInterior and "Rebuild 3D interior" or "Build 3D interior")
+    local buildLabel=source.visualNativeProfile and "Rebuild native 3D" or "Build native 3D"
     if Kit.button(x,by,154*s,26*s,buildLabel,{
         tooltip=environment and "Raise native cave walls or underwater reefs; keep paths, exits, Dive data and manual edits."
           or "Create a roofless room with raised native furniture. Keeps collision, events, warps and manual objects."}) then
-      require('Interior3D').apply(source,S.project.maps[source.id] or {})
-      App.markDirty()
+      local ok,err=pcall(require('NativeMapProfiles3D').build,S,source.id,{})
+      if ok then App.markDirty() else S.status='3D profile failed: '..tostring(err) end
+    end
+    if source.visualNativeProfile then
+      local profile=source.visualNativeProfile
+      Kit.text('micro',Kit.ellipsize('micro',profile.category..' / '..tostring(profile.fallbackCells or 0)..' fallback cells',math.max(1,w-160*s)),x+160*s,by+7*s,PAL.muted)
     end
     Kit.text("micro",Kit.ellipsize("micro","Drag artwork; middle-drag or Space+drag to pan",w),x,by+33*s,PAL.muted)
     barBottom=by+54*s

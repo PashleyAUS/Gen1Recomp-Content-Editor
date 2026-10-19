@@ -1,6 +1,6 @@
 package.path='tools/content-editor/?.lua;'..package.path
 local C=require('NativeArtworkCutout')
-local pixels={getPixel=function(_,x,y)
+local pixels={getDimensions=function() return 16,16 end,getPixel=function(_,x,y)
   -- White background and an outlined object containing the same white color.
   if x>=4 and x<=11 and y>=4 and y<=11 and (x==4 or x==11 or y==4 or y==11) then return 0,0,0,1 end
   return 1,1,1,1

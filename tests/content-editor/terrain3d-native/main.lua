@@ -26,7 +26,7 @@ function love.load()
     return entries
   end)
   local output=root.."/tests/content-editor/terrain3d-native"
-  local test=os.getenv('POKEPORT_INTERIOR_REVIEW')=='1' and 'test_interior_3d_native.lua' or 'test_map_preview_3d_native.lua'
+  local test=os.getenv('POKEPORT_ALL_MAP_PROFILES')=='1' and 'test_all_map_profiles_native.lua' or os.getenv('POKEPORT_INTERIOR_REVIEW')=='1' and 'test_interior_3d_native.lua' or 'test_map_preview_3d_native.lua'
   dofile(root.."/tests/content-editor/"..test)(data,root,output,os.getenv("POKEPORT_VERSION") or "firered")
   report("PASS: native terrain preview checks")
   love.event.quit()

@@ -137,3 +137,6 @@ tests/content-editor/leafgreen-smoke/*.png
 /tests/content-editor/rules-ingame/*.editor_project.lua
 /tests/content-editor/rules-ingame/*.log
 /tests/content-editor/rules-ingame/gameplay-*.png
+
+/tests/content-editor/terrain3d-native/all-profiles-*/
+/tests/content-editor/terrain3d-native/*-profiles-log.txt

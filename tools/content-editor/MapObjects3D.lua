@@ -146,7 +146,7 @@ function M.objects(source)
   return result
 end
 
-function M.place(source,rect,kind,size,rotation,lean,mount,model)
+function M.place(source,rect,kind,size,rotation,lean,mount,model,treatment)
   if kind=='model' and not (type(model)=='table' and model.version==1 and model.parts) then return false end
   if kind~='model' and kind~='tree' and kind~='building' and kind~='furniture' and kind~='none' and not M.propDefaults[kind] then return false end
   local x=math.max(0,math.min(rect.x0,rect.x1))
@@ -159,6 +159,7 @@ function M.place(source,rect,kind,size,rotation,lean,mount,model)
   mount=tonumber(mount) or (M.propDefaults[kind] or {}).mount or 0
   if mount~=mount or math.abs(mount)>8 then return false end
   if rotation%45~=0 or (lean~=0 and lean~=45) then return false end
+  if treatment=='flat' and kind~='model' then kind='none' end
   local object={x=x,y=y,width=right-x+1,height=bottom-y+1,kind=kind,size=size or (M.propDefaults[kind] or {}).size or 3,
     rotation=rotation%360,lean=lean,mount=mount,model=kind=='model' and model or nil}
   if object.width==1 and object.height==1 and (kind=='tree' or kind=='building') then
@@ -170,9 +171,16 @@ function M.place(source,rect,kind,size,rotation,lean,mount,model)
     for _,old in ipairs(M.objects(source)) do
       if old.kind==kind and old.x==x and old.y==y and old.width==object.width and old.height==object.height then
         for _,key in ipairs({'crop','style','roofRows','roofInset','surfaceTopRows','surfaceDepth','surfaceInset','surfaceBevel',
-            'cutoutBackgrounds','surfaceTopRect','surfaceFrontRect','anchorDepth','wallFill','wallTopFill','wallClearRects','leafStart','leafEnd'}) do object[key]=old[key] end
+            'profileClass','profileBaseStyle','profileThickness','cutoutColors','groundDX','groundDY','cutoutBackgrounds','surfaceTopRect','surfaceFrontRect','anchorDepth','wallFill','wallTopFill','wallClearRects','leafStart','leafEnd'}) do object[key]=old[key] end
       end
     end
+  end
+  if treatment=='auto' and object.profileBaseStyle then object.style=object.profileBaseStyle end
+  if kind~='model' and kind~='none' and treatment and treatment~='auto' then
+    object.style=treatment=='box' and 'native_fixture' or treatment=='voxel' and 'native_profile_voxel' or 'native_profile_cutout'
+    object.cutoutColors=object.cutoutColors or source.visualProfileColors
+    source.visualNativeCutouts=true
+    object.profileThickness=object.profileThickness or .08
   end
   for _,old in ipairs(source.visualObjects) do
     if old.x==x and old.y==y and old.width==object.width and old.height==object.height

@@ -19,6 +19,11 @@ return function(data,root,output,game)
     require('Interior3D').apply(assert(L.convertMap(S,reviewRoom)),S.project.maps[reviewRoom])
     if os.getenv('POKEPORT_CUSTOM_MODEL_REVIEW')=='1' then dofile(root..'/tests/content-editor/custom_model_review.lua')(S,S.project.layeredMaps[reviewRoom],root) end
   end
+  if os.getenv('POKEPORT_NATIVE_PROFILE_REVIEW')=='1' then
+    local profiles=require('NativeMapProfiles3D');local context={}
+    profiles.build(S,town.id,context)
+    if reviewRoom then profiles.build(S,reviewRoom,context) end
+  end
   local signs,fences=0,0
   for _,o in ipairs(Models.objects(town.source)) do
     if o.kind=='sign' then signs=signs+1 elseif o.kind=='fence' then fences=fences+1 end
@@ -34,7 +39,9 @@ return function(data,root,output,game)
     if model.kind=='building' then assert(model.rotation==0 and model.style,'Town house lost its authored forward-facing geometry') end
   end
   assert(town.source.visualTreeStyle=='sprite' and town.source.visualForestBorder>0,'Town forest presentation missing')
-  assert(L.compileProject(S));assert(IO.save(S.path,S.project))
+  local profileMod=os.getenv('POKEPORT_PROFILE_MOD')
+  if profileMod and profileMod~='' then S.path=profileMod
+  else assert(L.compileProject(S));assert(IO.save(S.path,S.project)) end
   local fresh={};require('Gen3').load(fresh,data._gen3Read)
   local loader=assert(require('Gen3Mod').load(fresh,S.path))
   if reviewRoom then
@@ -102,7 +109,7 @@ return function(data,root,output,game)
     error('Field/warp did not settle on '..tostring(Map.current))
   end
   local dirs={{'up',0,-1},{'down',0,1},{'left',-1,0},{'right',1,0}}
-  local function walkTo(tx,ty,probe)
+  local function walkTo(tx,ty,probe,retries)
     local start=P.cellY*1024+P.cellX
     local queue={{P.cellX,P.cellY}};local head=1;local previous={[start]=false}
     while head<=#queue do
@@ -144,6 +151,15 @@ return function(data,root,output,game)
         if Map.current~=from then held=nil;settle();return end
         if P.cellX==step.x and P.cellY==step.y and not P.moving then break end
       end
+      if (P.cellX~=step.x or P.cellY~=step.y) and (retries or 0)<3 then
+        local pass,why=C.canEnter(g,step.x,step.y,{fromX=P.cellX,fromY=P.cellY,dir=step.dir,elevation=P.elevation})
+        if pass or why=='entity' then
+          -- Native NPCs keep moving while the controller follows a planned
+          -- path. Wait and replan when one steps into it; never alter the NPC.
+          held=nil;for _=1,60 do tick(nil) end
+          return walkTo(tx,ty,false,(retries or 0)+1)
+        end
+      end
       assert(P.cellX==step.x and P.cellY==step.y,'Controller failed '..step.dir..' to '..step.x..','..step.y..' at '..P.cellX..','..P.cellY..' moving='..tostring(P.moving)..' locked='..tostring(require('src.core.game3.field').locked)..' map='..tostring(Map.current))
       held=nil
       if require('src.core.game3.warp').isBusy() then settle();return end
@@ -163,6 +179,74 @@ return function(data,root,output,game)
     if label then shot(label) end
   end
   local play=coroutine.create(function()
+    if os.getenv('POKEPORT_PROFILE_CONNECTIONS')=='1' then
+      Map.load(host,g,town.id,{x=town.slope.x-1,y=town.slope.y+1,facing='up'});settle();tick(nil)
+      local View=require('src.core.game3.field_view')
+      local opposite={up='down',down='up',left='right',right='left'}
+      Bus.call('input.key',function() error('Native profile camera input fell through') end,g,{phase='pressed',key=']'})
+      tick(nil)
+      local gameplayAngle,gameplayPitch=View._editor3DLast.cameraAngle,View._editor3DLast.cameraPitch
+    local directions={north='up',south='down',east='right',west='left'}
+    for _,connection in ipairs(town.connected) do
+      assert(Map.current==town.id)
+      local dir=assert(directions[connection.dir])
+      if connection.dir=='south' then
+        local shore
+        for y=C._heightCells-2,1,-1 do
+          for x=1,C._widthCells-2 do
+            if not C.isWater(x,y) and C.isWater(x,y+1) and walkTo(x,y,true) then shore={x,y};break end
+          end
+          if shore then break end
+        end
+        assert(shore,'No reachable Surf shore in the native town')
+        walkTo(shore[1],shore[2]);for _=1,10 do tick('down') end
+        assert(P.startSurfing(g),'Native Surf hop failed');settle()
+        assert(P.surfing,'Surf state was not retained after the native hop')
+      end
+      local edge,landing
+      local w,h=C._widthCells,C._heightCells
+      local span=(dir=='up' or dir=='down') and w or h
+      local candidates={};for n=0,span-1 do candidates[#candidates+1]=n end
+      table.sort(candidates,function(a,b) return math.abs(a-span/2)<math.abs(b-span/2) end)
+      for _,n in ipairs(candidates) do
+        local x,y
+        if dir=='up' then x,y=n,0 elseif dir=='down' then x,y=n,h-1
+        elseif dir=='left' then x,y=0,n else x,y=w-1,n end
+        local def=fresh.maps[connection.id]
+        local lx,ly=C.connectionLanding(def,{dir=connection.dir,map=connection.id,offset=connection.offset},dir,x,y)
+        if lx and (not P.surfing or C.isWater(x,y)) and walkTo(x,y,true)
+            and (not C.isWaterOn(def,lx,ly) or P.surfing)
+            and not require('src.core.game3.ghosts').blocksOn(connection.id,def,lx,ly) then
+          edge,landing={x=x,y=y},{x=lx,y=ly};break
+        end
+      end
+      assert(edge,'No reachable native connection to '..connection.id)
+      walkTo(edge.x,edge.y)
+      shot('connection-'..connection.id..'-before')
+      local before=assert(require('src.core.game3.field_view')._editor3DLast)
+      assert(before.connected and before.visibleMaps[connection.id],'Route was not rendered before crossing')
+      if connection==town.connected[1] then switchMode('2d') end
+      monitorConnections=true;previousWorld=nil
+      for _=1,120 do tick(dir);if Map.current~=town.id then break end end
+      held=nil
+      assert(Map.current==connection.id,'Directional input did not cross into '..connection.id..' at '..P.cellX..','..P.cellY..' surfing='..tostring(P.surfing)..' elevation='..tostring(P.elevation))
+      settle()
+      assert(P.cellX==landing.x and P.cellY==landing.y,'Native connection offset changed the landing')
+      if connection==town.connected[1] then
+        assert(View._editor3DLast.mode=='2d','Crossing a route reset the view preference')
+        shot('toggle-route-2d');switchMode('3d','toggle-route-3d')
+      end
+      shot('connection-'..connection.id..'-entered')
+      assert(View._editor3DLast.cameraAngle==gameplayAngle and View._editor3DLast.cameraPitch==gameplayPitch,'Camera settings were lost crossing a map connection')
+      for _=1,120 do tick(opposite[dir]);if Map.current==town.id then break end end
+      held=nil;settle()
+      assert(Map.current==town.id and P.cellX==edge.x and P.cellY==edge.y,'Reverse connection did not return to its original boundary')
+      shot('connection-'..connection.id..'-returned')
+      monitorConnections=false;previousWorld=nil
+      print('PASS native connection '..town.id..' <-> '..connection.id..': controller round trip, preserved offsets, 3D on both sides, continuous camera, no fade')
+    end
+      return
+    end
     if reviewRoom then
       local source=S.project.layeredMaps[reviewRoom]
       local function passable(x,y)

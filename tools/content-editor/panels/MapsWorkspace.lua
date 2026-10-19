@@ -184,7 +184,8 @@ function MapsWorkspace.draw(S, x, y, w, h, App)
   S.builderPane = S.builderPane or "layers"
   local s = Kit.scale
   local moreH = S.mapMoreActions and 36 * s or 0
-  local barH = 76 * s + moreH
+  local profileH=S.tab=='maps3d' and Generation.isGen3(S) and 36*s or 0
+  local barH = 76 * s + moreH + profileH
   local selected = S.mapId or S.builderMapId
   local isLayered = selected and S.project and S.project.layeredMaps
     and S.project.layeredMaps[selected] ~= nil
@@ -327,10 +328,38 @@ function MapsWorkspace.draw(S, x, y, w, h, App)
     if picked then Maps.importTmx(S, picked, App) end
   end
 
+  if profileH>0 then
+    local py=y+76*s+moreH
+    local profiles=require('NativeMapProfiles3D')
+    if Kit.button(x+12*s,py,148*s,26*s,'Build all maps in 3D',{
+        enabled=S.project~=nil and not S.nativeProfileJob,
+        tooltip='Build native-art profiles for every loaded map, including interiors, caves and underwater. Keeps manual models, terrain, collision, events and entrances.'}) then profiles.start(S,App) end
+    if Kit.button(x+166*s,py,136*s,26*s,'Build this map',{
+        enabled=selected~=nil and not S.nativeProfileJob,
+        tooltip='Generate or refresh this map using native textures and reusable shape profiles.'}) then
+      local ok,err=pcall(profiles.build,S,selected,{})
+      if ok then App.markDirty();S.status='Built native 3D profiles for '..selected else S.status='3D profile failed: '..tostring(err) end
+    end
+    if S.nativeProfileJob then
+      if Kit.button(x+308*s,py,60*s,26*s,'Stop',{}) then S.nativeProfileJob.cancelled=true;profiles.finish(S) end
+      local job=S.nativeProfileJob
+      if job then Kit.text('micro',string.format('%d / %d maps',job.index-1,#job.ids),x+376*s,py+6*s,PAL.muted) end
+    elseif S.nativeProfileReport then
+      local r=S.nativeProfileReport
+      Kit.text('micro',string.format('%d/%d maps; %d errors',r.built,r.total,#r.errors),x+310*s,py+6*s,PAL.muted)
+    end
+  end
+
   local formH = S.mapNewDraft and (Generation.isGen3(S) and 188 or 154) * s or 0
   if S.mapNewDraft then drawNewMapForm(S, x, y + barH + 6 * s, w, App) end
   local bodyY = y + barH + 8 * s + formH
   local bodyH = h - barH - 8 * s - formH
+  if S.nativeProfileJob then
+    Kit.card(x,bodyY,w,bodyH,10*s)
+    Kit.text('caption','Building native 3D profiles...',x+16*s,bodyY+20*s,PAL.heading)
+    Kit.text('small','Use Stop to keep the maps completed so far.',x+16*s,bodyY+52*s,PAL.muted)
+    return
+  end
   if selected then
     S.mapId = selected
     S.builderMapId = selected

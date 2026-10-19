@@ -88,7 +88,9 @@ function M.build(source,terrain,cols,rows,angle,pixels)
         end
       end
     end
-    ground[o]=source.visualNativeCutouts and {3,5} or best
+    local gx,gy=o.x+(o.groundDX or -9999),o.y+(o.groundDY or -9999)
+    ground[o]=(o.groundDX and gx>=0 and gy>=0 and gx<cols and gy<rows) and {gx,gy}
+      or (source.id=='EM_OLDALE_TOWN_POKEMON_CENTER_1F' and source.visualNativeCutouts and not source.visualProfileVersion and {3,5}) or best
   end
   local function corners(x,y)
     if x<0 or y<0 or x>=cols or y>=rows then return {{x,y,0},{x+1,y,0},{x+1,y+1,0},{x,y+1,0}} end
@@ -148,15 +150,26 @@ function M.build(source,terrain,cols,rows,angle,pixels)
     end
     if o.kind=='model' then
       for _,v in ipairs(require('CustomModels3D').vertices(o,terrain,source)) do vertices[#vertices+1]=v end
-    elseif o.style=='native_cutout' and pixels then
+    elseif (o.style=='native_cutout' or o.style=='native_profile_voxel' or o.style=='native_profile_cutout') and pixels then
       local runs=require('NativeArtworkCutout').runs(pixels,o)
-      local scale=height/o.height
+      local scale=height/(o.textureH or o.height)
       for _,r in ipairs(runs) do
-        local left,right=(r[1]-o.width*8)/16,(r[2]-o.width*8)/16
+        local left,right=(r[1]/r.pixelWidth-.5)*o.width,(r[2]/r.pixelWidth-.5)*o.width
         local lo,hi=(r.bottom-r[3]-1)/16*scale,(r.bottom-r[3])/16*scale
         local sample=uv(tx+r[1]/16,ty+r[3]/16,tx+r[2]/16,ty+(r[3]+1)/16)
         polygon({point(left,lo),point(right,lo),point(right,hi),point(left,hi)},
           {sample[4],sample[3],sample[2],sample[1]})
+        if o.style=='native_profile_voxel' then
+          local depth=o.profileThickness or .08
+          local function back(dx,dz)
+            local p=point(dx,dz);p[1]=p[1]+depth*math.sin(yaw);p[2]=p[2]-depth*math.cos(yaw);return p
+          end
+          local a,b,c,d=point(left,lo),point(right,lo),point(right,hi),point(left,hi)
+          local aa,bb,cc,dd=back(left,lo),back(right,lo),back(right,hi),back(left,hi)
+          polygon({bb,aa,dd,cc},{sample[3],sample[4],sample[1],sample[2]})
+          quad(a,aa,dd,d,sample,.85);quad(bb,b,c,cc,sample,.85)
+          quad(d,c,cc,dd,sample,.92)
+        end
       end
     elseif o.style=='native_room_wall' and o.wallFill then
       for row=0,o.height-1 do for col=0,o.width-1 do
@@ -171,8 +184,19 @@ function M.build(source,terrain,cols,rows,angle,pixels)
         local lo,hi=height*(1-(row+1)/o.height),height*(1-row/o.height)
         polygon({point(left,lo),point(right,lo),point(right,hi),point(left,hi)},
           {sample[4],sample[3],sample[2],sample[1]})
+        if o.style=='native_profile_voxel' then
+          local depth=o.profileThickness or .08
+          local function back(dx,dz)
+            local p=point(dx,dz);p[1]=p[1]+depth*math.sin(yaw);p[2]=p[2]-depth*math.cos(yaw);return p
+          end
+          local a,b,c,d=point(left,lo),point(right,lo),point(right,hi),point(left,hi)
+          local aa,bb,cc,dd=back(left,lo),back(right,lo),back(right,hi),back(left,hi)
+          polygon({bb,aa,dd,cc},{sample[3],sample[4],sample[1],sample[2]})
+          quad(a,aa,dd,d,sample,.85);quad(bb,b,c,cc,sample,.85)
+          quad(d,c,cc,dd,sample,.92)
+        end
       end end
-    elseif o.kind=='furniture' and o.style=='native_fixture' then
+    elseif o.style=='native_fixture' then
       local x0,y0,x1,y1=o.x,o.y,o.x+o.width,o.y+(o.surfaceDepth or o.height)-.1
       local inset=o.surfaceInset or 0
       x0,y0,x1,y1=x0+inset,y0+inset,x1-inset,y1-inset
@@ -217,7 +241,7 @@ function M.build(source,terrain,cols,rows,angle,pixels)
       quad({x0,y0,top},{x1,y0,top},{x1,y1,top},{x0,y1,top},topTex,1)
       end
       transform=nil
-    elseif o.kind=='building' and (o.style=='littleroot_native_surfaces' or o.style=='littleroot_lab_native_surfaces') then
+    elseif o.kind=='building' and (o.style=='littleroot_native_surfaces' or o.style=='littleroot_lab_native_surfaces' or o.style=='native_building_surfaces') then
       -- Match the card lean while keeping the ground footprint anchored.
       transform=function(p)
         local dx,dy,dz=p[1]-cx,p[2]-cy,p[3]-base
@@ -231,7 +255,8 @@ function M.build(source,terrain,cols,rows,angle,pixels)
       local front,back=y+o.height-.1,y+.1
       local lab=o.style=='littleroot_lab_native_surfaces'
       local width=o.width
-      local roofRows=lab and 3 or 3.375
+      local roofRows=o.style=='native_building_surfaces' and (o.roofRows or math.max(1,o.height-2)) or (lab and 3 or 3.375)
+      roofRows=math.min(o.height-.25,roofRows)
       local top=base+o.height-roofRows
       -- Front artwork becomes one upright wall, retaining its native door.
       local facade=uv(tx,ty+roofRows,tx+width,ty+o.height)
@@ -239,7 +264,7 @@ function M.build(source,terrain,cols,rows,angle,pixels)
         {facade[4],facade[3],facade[2],facade[1]})
       -- A single complete front-wall tile (under the window, no door) repeats
       -- along each side. Keep one vertical course, preserving its base trim.
-      local sideTile=lab and 1 or 2
+      local sideTile=math.min(width-1,o.sideTile or (lab and 1 or 2))
       local wall=uv(tx+sideTile,ty+o.height-1,tx+sideTile+1,ty+o.height)
       local wallUV={wall[4],wall[3],wall[2],wall[1]}
       local function repeatWall(ax,ay,bx,by)

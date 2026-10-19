@@ -50,7 +50,7 @@ function M.install(mod,maps,terrain,geometry,renderer,models,world)
     local copy={id=source.id,baseTileset=source.baseTileset,cellWidth=math.min(128,source.cellWidth-ox),
       cellHeight=math.min(128,source.cellHeight-oy),layers={},collision={},visualHeights={},visualShapes={},
       visualAutoObjects=source.visualAutoObjects,visualObjects={}}
-    for _,key in ipairs({'visualTreeStyle','visualTint','visualPerspective','visualBackground','visualEnvironment'}) do
+    for _,key in ipairs({'visualTreeStyle','visualTint','visualPerspective','visualBackground','visualEnvironment','visualNativeCutouts','visualProfileVersion'}) do
       copy[key]=source[key]
     end
     for i,layer in ipairs(source.layers or {}) do
