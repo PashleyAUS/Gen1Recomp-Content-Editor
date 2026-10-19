@@ -11,6 +11,7 @@ function M.install(mod,maps,terrain,geometry,renderer,models,world)
   local Sprites=require('src.core.game3.ow_sprites')
   local T=require('src.core.game3.tileset_native')
   local states,groups={},{}
+  local enabled,toggleHeld=true,false
   local function current()
     return maps[Map.current or Collision._mapId]
   end
@@ -21,14 +22,24 @@ function M.install(mod,maps,terrain,geometry,renderer,models,world)
     return state
   end
   mod.hooks:wrap('input.key',function(proceed,game,event)
+    if event.key=='f6' and event.phase=='released' then
+      local handled=toggleHeld;toggleHeld=false
+      if handled then return end
+    end
     local source=current()
     local input=game.input
-    if not source or (input and (input.captureArmed or (input.keyBindings or {})[event.key]))
+    if not source or (input and (input.captureArmed or (input.keyBindings and input.keyBindings[event.key]~=nil)))
         or not require('src.core.game3.runtime').isActive()
         or require('src.core.game3.field').locked
         or require('src.ui.game3.stack').top()
         or require('src.core.game3.battle').isActive() then return proceed(game,event) end
-    if event.phase=='pressed' and terrain.cameraKey(cameraState(source).camera,event.key,terrain.cameraDefaults(source)) then return end
+    if event.phase=='pressed' then
+      if event.key=='f6' then
+        if not toggleHeld then enabled=not enabled;toggleHeld=true end
+        return
+      end
+      if enabled and terrain.cameraKey(cameraState(source).camera,event.key,terrain.cameraDefaults(source)) then return end
+    end
     return proceed(game,event)
   end)
   local function window(source,px,py,state)
@@ -131,6 +142,15 @@ function M.install(mod,maps,terrain,geometry,renderer,models,world)
     if not source then return proceed(game,w,h,opts) end
     local id=Map.current or Collision._mapId
     local state=cameraState(source)
+    if not enabled then
+      state.drawn=false
+      -- A room's native atlas may have been evicted while the 3D view was
+      -- active. Load it before the native renderer's readiness check.
+      local def=Map.currentDef() or (game.data and game.data.maps[id])
+      if def and def.pair then T.get(def.pair) end
+      FieldView._editor3DLast={mapId=id,mode='2d',localX=Player.px/16+.5,localY=Player.py/16+.5}
+      return proceed(game,w,h,opts)
+    end
     if opts and opts.actorsOnly then
       if not state.drawn then return proceed(game,w,h,opts) end
       return
@@ -191,16 +211,29 @@ function M.install(mod,maps,terrain,geometry,renderer,models,world)
       scale=math.min(rw/w,rh/h)
       samples=math.min(4,love.graphics.getSystemLimits().canvasmsaa or 0)
     end
+    local cameraX,cameraY=px-ox,py-oy
+    if source.visualInterior then
+      -- Clamp indoor tracking to the room so the doorway does not push it off-screen.
+      local halfW=rw/(camera.scale*scale)/2-1
+      local halfH=rh/(camera.scale*scale)/2/math.sin(camera.pitch)-1
+      local function clampRoom(value,extent,half)
+        if extent<=half*2 then return extent/2 end
+        return math.max(half,math.min(extent-half,value))
+      end
+      cameraX=clampRoom(cameraX,view.cellWidth,halfW)
+      cameraY=clampRoom(cameraY,view.cellHeight,halfH)
+    end
     renderer.draw(state,view,terrain,geometry,0,0,rw,rh,{angle=camera.angle or -.65,pitch=camera.pitch or .65,static=true,
-      camera={x=px-ox,y=py-oy,z=z,scale=(camera.scale or 16)*scale},actors=list,
+      camera={x=cameraX,y=cameraY,z=z,scale=(camera.scale or 16)*scale},actors=list,
       offscreen=hd,samples=samples})
     if hd then compositor:setWorldOverride(state.scene) end
     state.drawn=true
     local sx,sy=state.project(px-ox,py-oy,z)
-    FieldView._editor3DLast={mapId=id,x=px,y=py,z=z,actors=#list,objects=state.objectCount,
+    FieldView._editor3DLast={mapId=id,mode='3d',x=px,y=py,z=z,actors=#list,objects=state.objectCount,
       screenX=sx,screenY=sy,width=rw,height=rh,nativeWidth=w,nativeHeight=h,
       hd=hd and true or false,samples=samples,worldX=worldX,worldY=worldY,
       cameraAngle=camera.angle,cameraPitch=camera.pitch,cameraScale=camera.scale,
+      interior=source.visualInterior and true or false,
       localX=Player.px/16+.5,localY=Player.py/16+.5,connected=owners and true or false,
       visibleMaps=state.visibleMaps,canvasWidth=state.scene:getWidth(),canvasHeight=state.scene:getHeight(),atlasRevision=state.atlasRevision}
   end)

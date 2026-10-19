@@ -332,6 +332,21 @@ return "  local collisionModes="..encode(C.modes).."\n  local paintedCollision="
         borderMids[i]=#slots
         slots[#slots+1]={{source="@runtime:"..(border.pair or source.baseTileset),tile=mid,opacity=1}}
       end
+      -- Native interior scripts read and write ROM metatile IDs (the labs
+      -- restore their floors on entry). Keep those IDs when the room uses a
+      -- single native layer; compact atlas slots would reinterpret script edits.
+      local direct=source.visualInterior and (border.pair or source.baseTileset)==source.baseTileset
+      for _,refs in ipairs(slots) do
+        if #refs~=1 or refs[1].source~="@runtime:"..source.baseTileset or refs[1].opacity~=1 then direct=false;break end
+      end
+      if direct then
+        for index,cell in ipairs(cells) do cell.mid=slots[cellSlots[index]][1].tile end
+        map.pair=source.baseTileset;map.width=width;map.height=height
+        map.midLayout=Layout.fromDecoded({width=width,height=height,cells=cells,
+          borderWidth=border.width,borderHeight=border.height,borderMids=border.mids},id,source.baseTileset)
+        layered.maps[id]={cellWidth=width,cellHeight=height,slotRefs=slots,cellSlots=cellSlots}
+        return
+      end
       local cols=math.max(1,math.ceil(math.sqrt(#slots)))
       local rows=math.max(1,math.ceil(#slots/cols))
       local ts={cols=cols,rows=rows,midCount=#slots,midToSlot={},quads={},overQuads={},layered=true,

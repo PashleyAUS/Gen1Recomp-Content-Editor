@@ -9,7 +9,11 @@ function M.build(S)
   local buildings={}
   for i,o in ipairs(objects) do
     if o.kind=='building' then buildings[#buildings+1]=o
-    else Models.place(source,{x0=o.x,y0=o.y,x1=o.x+o.width-1,y1=o.y+o.height-1},'tree',3,0,45) end
+    elseif o.kind=='tree' then Models.place(source,{x0=o.x,y0=o.y,x1=o.x+o.width-1,y1=o.y+o.height-1},'tree',3,0,45)
+    else
+      source.visualObjects=source.visualObjects or {}
+      source.visualObjects[#source.visualObjects+1]=o
+    end
   end
   -- Prefer diagonals, then other 45-degree steps to retain native walking routes.
   local walkModes={walk=true,grass=true,door=true,carpet=true,panel=true}
@@ -54,18 +58,28 @@ function M.build(S)
     return seen,floor
   end
   for _,o in ipairs(buildings) do
-    Models.place(source,{x0=o.x,y0=o.y,x1=o.x+o.width-1,y1=o.y+o.height-1},'building',3,0)
+    Models.place(source,{x0=o.x,y0=o.y,x1=o.x+o.width-1,y1=o.y+o.height-1},'building',o.height,0)
     for _,model in ipairs(source.visualObjects) do
       if model.kind=='building' and model.x==o.x and model.y==o.y then
         model.roofRows,model.roofInset=o.roofRows,o.roofInset
-        model.style=o.width>5 and 'flat_lab' or 'front_gable'
+        model.lean=45
+        model.style=o.width>5 and 'flat_lab' or 'native_house'
+        model.chimneySide=S.version=='emerald' and 'left' or 'right'
+        -- Keep the sample house and lab on native flat roofs and upright walls.
+        if S.version=='emerald' and model.x==2 and model.y==4 then
+          model.style='littleroot_native_surfaces'
+          model.lean=0
+        elseif S.version=='emerald' and model.x==3 and model.y==12 then
+          model.style='littleroot_lab_native_surfaces'
+          model.lean=0
+        end
       end
     end
   end
   source.visualTreeStyle='sprite'
   source.visualForestBorder=8
-  source.visualTint={.66,.76,.8}
-  source.visualPerspective=2
+  source.visualTint={1,1,1}
+  source.visualPerspective=1.2
   local nav=N.prepare(source,def.warps,Models.objects(source))
   -- Native, forward-facing doors retain the game's original trigger and return step.
   local seen,floor=routes(nav)
@@ -100,7 +114,7 @@ function M.build(S)
     T.paint(source,slope.x+2,y,0,'west')
   end
   source.visualPlayable=true
-  source.visualCamera={angle=0,pitch=.8,scale=8.5}
+  source.visualCamera={angle=0,pitch=.8,scale=14}
   source.visualWorldAnchor=id
   local connected={}
   for _,c in ipairs(require('src.core.game3.connections').each(def)) do
@@ -113,6 +127,7 @@ function M.build(S)
     connected[#connected+1]={id=c.map,dir=c.dir,offset=c.offset,source=route}
   end
   local entry=def.warps[1]
-  return {id=id,source=source,def=def,nav=nav,slope=slope,start={x=entry.x,y=entry.y},buildings=#buildings,connected=connected}
+  local interiors=require('Interior3D').town(S,id)
+  return {id=id,source=source,def=def,nav=nav,slope=slope,start={x=entry.x,y=entry.y},buildings=#buildings,connected=connected,interiors=interiors}
 end
 return M

@@ -18,6 +18,37 @@ local function ref(source,x,y)
   end
 end
 
+M.propDefaults={wall_decor={size=.8,mount=1.2},potted_plant={size=1.4,mount=0},sign={size=1,mount=0},fence={size=.8,mount=0}}
+function M.detectProps(source)
+  local result={};local pair=source.baseTileset or ''
+  local function tile(x,y) local c=ref(source,x,y);return c and c.source=='@runtime:'..pair and c.tile end
+  local function add(x,y,w,h,kind,crop)
+    local d=M.propDefaults[kind]
+    result[#result+1]={x=x,y=y,width=w,height=h,kind=kind,size=d.size,mount=d.mount,crop=crop,automatic=true}
+    return result[#result]
+  end
+  local outdoorEm=pair:match('^general__')
+  local outdoorFr=pair=='pallet_outdoor' or source.visualNativeObjects=='frlg'
+  for y=0,source.cellHeight-1 do for x=0,source.cellWidth-1 do
+    local t=tile(x,y)
+    if pair=='building__brendans_mays_house' and ((t==551 and tile(x,y+1)==559) or (t==647 and tile(x,y+1)==655)) then
+      local clock=add(x,y,1,2,'wall_decor',{.08,.12,.92,.92})
+      clock.style,clock.size,clock.mount='clock',1.1,.8
+    elseif pair=='player_house' and ((t==87 and tile(x,y+1)==95) or (t==71 and tile(x,y+1)==79)) then
+      add(x,y,1,2,'potted_plant')
+    elseif pair=='building__lab' and ((t==572 and tile(x,y+1)==580) or ((t==550 or t==658) and tile(x,y+1)==558)) then
+      local p=add(x,y,1,2,'potted_plant');p.leafStart=.85;p.leafEnd=1.45
+    elseif (outdoorEm and t==3) or (outdoorFr and (t==2 or t==3)) then
+      add(x,y,1,1,'sign')
+    elseif pair=='pallet_outdoor' and (t==644 or t==647) and tile(x-1,y)~=644 and tile(x-1,y)~=647 then
+      local finish=x+1
+      while tile(finish,y)==644 or tile(finish,y)==647 do finish=finish+1 end
+      add(x,y,finish-x,1,'fence')
+    end
+  end end
+  return result
+end
+
 -- Conservative signatures for native outdoor tiles. Unrecognized art stays 2D;
 -- manual footprints work with any native or custom tileset.
 function M.detect(source)
@@ -25,7 +56,7 @@ function M.detect(source)
   local pair=source.baseTileset or ''
   local emerald=pair:match('^general__') ~= nil
   local frlg=pair=='pallet_outdoor' or source.visualNativeObjects=='frlg'
-  if not emerald and not frlg then return result end
+  if not emerald and not frlg then return M.detectProps(source) end
   local function tile(x,y)
     local cell=ref(source,x,y)
     return cell and cell.source=='@runtime:'..pair and cell.tile or -1
@@ -77,20 +108,46 @@ function M.detect(source)
       if tile(finish,y)==701 and tile(finish+1,y)==693 then add(x,y,finish-x+2,5,'building',3) end
     end
   end end
+  for _,prop in ipairs(M.detectProps(source)) do
+    local overlap=false
+    for _,o in ipairs(result) do if overlaps(o,prop) then overlap=true;break end end
+    if not overlap then result[#result+1]=prop end
+  end
   return result
 end
 
 function M.objects(source)
   local result=source.visualAutoObjects==false and {} or M.detect(source)
   for _,manual in ipairs(source.visualObjects or {}) do
-    for i=#result,1,-1 do if overlaps(result[i],manual) then table.remove(result,i) end end
+    for i=#result,1,-1 do
+      if overlaps(result[i],manual) and (manual.kind=='none' or not (manual.allowOverlap or result[i].allowOverlap)) then table.remove(result,i) end
+    end
     if manual.kind~='none' then result[#result+1]=manual end
+  end
+  -- These approved native treatments must also work on an ordinary editable
+  -- copy, not only on the special town demo/export recipe. Return copies so
+  -- previewing an older project never rewrites its saved/manual object data.
+  if source.id=='EM_LITTLEROOT_TOWN' and source.baseTileset=='general__petalburg' then
+    for i,o in ipairs(result) do
+      local house=o.kind=='building' and o.x==2 and o.y==4 and o.width==5 and o.height==5
+      local lab=o.kind=='building' and o.x==3 and o.y==12 and o.width==7 and o.height==5
+      local c=ref(source,o.x,o.y)
+      if (house or lab) and (o.rotation or 0)==0 and c
+          and c.source=='@runtime:general__petalburg' and c.tile==(house and 520 or 524)
+          and (o.style==nil or o.style=='native_house' or o.style=='flat_lab'
+            or o.style=='littleroot_native_surfaces' or o.style=='littleroot_lab_native_surfaces') then
+        local item={};for k,v in pairs(o) do item[k]=v end
+        item.style=house and 'littleroot_native_surfaces' or 'littleroot_lab_native_surfaces'
+        item.lean=(o.automatic or o.style=='native_house' or o.style=='flat_lab') and 0 or (o.lean or 0)
+        result[i]=item
+      end
+    end
   end
   return result
 end
 
-function M.place(source,rect,kind,size,rotation,lean)
-  if kind~='tree' and kind~='building' and kind~='none' then return false end
+function M.place(source,rect,kind,size,rotation,lean,mount)
+  if kind~='tree' and kind~='building' and kind~='furniture' and kind~='none' and not M.propDefaults[kind] then return false end
   local x=math.max(0,math.min(rect.x0,rect.x1))
   local y=math.max(0,math.min(rect.y0,rect.y1))
   local right=math.min(source.cellWidth-1,math.max(rect.x0,rect.x1))
@@ -98,18 +155,27 @@ function M.place(source,rect,kind,size,rotation,lean)
   if x>right or y>bottom then return false end
   rotation=tonumber(rotation) or 0
   lean=tonumber(lean) or 0
+  mount=tonumber(mount) or (M.propDefaults[kind] or {}).mount or 0
+  if mount~=mount or math.abs(mount)>8 then return false end
   if rotation%45~=0 or (lean~=0 and lean~=45) then return false end
-  local object={x=x,y=y,width=right-x+1,height=bottom-y+1,kind=kind,size=size or 3,
-    rotation=rotation%360,lean=kind=='tree' and lean or 0}
-  if object.width==1 and object.height==1 and kind~='none' then
+  local object={x=x,y=y,width=right-x+1,height=bottom-y+1,kind=kind,size=size or (M.propDefaults[kind] or {}).size or 3,
+    rotation=rotation%360,lean=lean,mount=mount}
+  if object.width==1 and object.height==1 and (kind=='tree' or kind=='building') then
     object.width=math.min(kind=='tree' and 2 or 4,source.cellWidth-x)
     object.height=math.min(kind=='tree' and 2 or 4,source.cellHeight-y)
   end
   source.visualObjects=source.visualObjects or {}
+  do
+    for _,old in ipairs(M.objects(source)) do
+      if old.kind==kind and old.x==x and old.y==y and old.width==object.width and old.height==object.height then
+        for _,key in ipairs({'crop','style','roofRows','roofInset','leafStart','leafEnd'}) do object[key]=old[key] end
+      end
+    end
+  end
   for _,old in ipairs(source.visualObjects) do
     if old.x==x and old.y==y and old.width==object.width and old.height==object.height
-        and old.kind==kind and old.size==object.size and (old.rotation or 0)==object.rotation
-        and (old.lean or 0)==object.lean then return false end
+        and old.kind==kind and old.style==object.style and old.size==object.size and (old.rotation or 0)==object.rotation
+        and (old.lean or 0)==object.lean and (old.mount or 0)==object.mount then return false end
   end
   for i=#source.visualObjects,1,-1 do
     if overlaps(source.visualObjects[i],object) then table.remove(source.visualObjects,i) end

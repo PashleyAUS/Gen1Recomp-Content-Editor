@@ -1562,7 +1562,7 @@ local function drawCanvas(S, source, x, y, w, h, App)
       end
     elseif inMap and (tool == "rectangle" or tool == "elevation_rectangle" or tool == "select" or tool == "eraser" or tool == "visual_object") then
       if not S._builderDrag then
-        S._builderDrag = { range = true, x0 = cx, y0 = cy, tool = tool, elevation = S.builderElevation or 3, objectKind = S.builderObjectKind or "tree", objectSize = S.builderObjectSize or 3, rotation = S.builderObjectRotation or 0, lean = S.builderTreeLean or 0 }
+        S._builderDrag = { range = true, x0 = cx, y0 = cy, tool = tool, elevation = S.builderElevation or 3, objectKind = S.builderObjectKind or "tree", objectSize = S.builderObjectSize or 3, rotation = S.builderObjectRotation or 0, lean = S.builderTreeLean or 0, mount=S.builderPropMount or 0 }
       end
       S.builderRangeDraft = {
         x0 = S._builderDrag.x0, y0 = S._builderDrag.y0, x1 = cx, y1 = cy,
@@ -1606,7 +1606,7 @@ local function drawCanvas(S, source, x, y, w, h, App)
         S.builderSelections[#S.builderSelections + 1] = rect
       elseif S._builderDrag.tool == "visual_object" then
         App.beginEditBatch()
-        if require("MapObjects3D").place(source,rect,S._builderDrag.objectKind,S._builderDrag.objectSize,S._builderDrag.rotation,S._builderDrag.lean) then App.markDirty() end
+        if require("MapObjects3D").place(source,rect,S._builderDrag.objectKind,S._builderDrag.objectSize,S._builderDrag.rotation,S._builderDrag.lean,S._builderDrag.mount) then App.markDirty() end
         App.endEditBatch()
       elseif S._builderDrag.tool == "elevation_rectangle" then
         App.beginEditBatch()
@@ -2531,29 +2531,45 @@ local function drawToolbar(S, source, x, y, w, App)
     barBottom = by + 28 * s
   elseif S.builderTool=="visual_object" then
     local bx, by = x, barY
-    for _, mode in ipairs({{"tree","Tree"},{"building","Building"},{"none","Remove"}}) do
+    for _, mode in ipairs({{"tree","Tree"},{"building","Building"},{"furniture","Furniture"},{"wall_decor","Wall prop"},{"potted_plant","Plant"},{"sign","Sign"},{"fence","Fence"},{"none","Remove"}}) do
       if bx+82*s>x+w and bx>x then bx,by=x,by+29*s end
       if Kit.chip(bx,by,82*s,26*s,mode[2],(S.builderObjectKind or "tree")==mode[1],PAL.green,PAL.steel,
-          "Drag a footprint in the 2D map. Remove hides 3D objects without erasing tiles.") then S.builderObjectKind=mode[1] end
+          "Drag the complete object artwork in the 2D map. Wall props stand upright at the mounting height.") then
+        S.builderObjectKind=mode[1]
+        local d=require('MapObjects3D').propDefaults[mode[1]]
+        S.builderPropMount=d and d.mount or 0
+        S.builderObjectSize=d and d.size or 3
+      end
       bx=bx+85*s
     end
     by=by+30*s
     Kit.text("micro","MODEL HEIGHT",x,by+5*s,PAL.caption)
     bx=x+104*s
-    for _,size in ipairs({2,3,4,5,6}) do
+    for _,size in ipairs({.5,1,2,3,4,5,6}) do
       if bx+32*s>x+w then bx,by=x+104*s,by+29*s end
       if Kit.chip(bx,by,32*s,26*s,tostring(size),(S.builderObjectSize or 3)==size,PAL.blue,PAL.steel,
           "Height of newly placed models in map cells") then S.builderObjectSize=size end
       bx=bx+35*s
     end
     by=by+30*s
+    if require('MapObjects3D').propDefaults[S.builderObjectKind] then
+      Kit.text('micro','MOUNT Z',x,by+5*s,PAL.caption)
+      bx=x+74*s
+      for _,z in ipairs({0,.5,1,1.5,2}) do
+        if bx+32*s>x+w then bx,by=x+74*s,by+29*s end
+        if Kit.chip(bx,by,32*s,26*s,tostring(z),S.builderPropMount==z,PAL.blue,PAL.steel,
+            'Raise the object above the floor without changing terrain or collision') then S.builderPropMount=z end
+        bx=bx+35*s
+      end
+      by=by+30*s
+    end
     if Kit.button(x,by,150*s,26*s,"Rotate "..tostring(S.builderObjectRotation or 0).." deg",{}) then
       S.builderObjectRotation=((S.builderObjectRotation or 0)+45)%360
     end
     local leanX=x+154*s
     if leanX+118*s>x+w then leanX,by=x,by+29*s end
-    if Kit.chip(leanX,by,118*s,26*s,"Tree lean 45",S.builderTreeLean==45,PAL.green,PAL.steel,
-        "Lean new tree models back 45 degrees") then S.builderTreeLean=S.builderTreeLean==45 and 0 or 45 end
+    if Kit.chip(leanX,by,118*s,26*s,"Lean 45 deg",S.builderTreeLean==45,PAL.green,PAL.steel,
+        "Lean any object back 45 degrees; redraw its footprint to apply") then S.builderTreeLean=S.builderTreeLean==45 and 0 or 45 end
     by=by+30*s
     if Kit.chip(x,by,160*s,26*s,"Auto native objects",source.visualAutoObjects~=false,PAL.green,PAL.steel,
         "Recognize supported native tree and building tile patterns") then
@@ -2567,7 +2583,13 @@ local function drawToolbar(S, source, x, y, w, App)
       source.visualPlayable=source.visualPlayable==false
       App.markDirty()
     end
-    Kit.text("micro",Kit.ellipsize("micro","Drag around existing tree / roof + walls",w),x,by+33*s,PAL.muted)
+    by=by+30*s
+    if Kit.button(x,by,154*s,26*s,source.visualInterior and "Rebuild 3D interior" or "Build 3D interior",{
+        tooltip="Create a roofless room with raised native furniture. Keeps collision, events, warps and manual models."}) then
+      require('Interior3D').apply(source,S.project.maps[source.id] or {})
+      App.markDirty()
+    end
+    Kit.text("micro",Kit.ellipsize("micro","Drag complete artwork; set height / Mount Z",w),x,by+33*s,PAL.muted)
     barBottom=by+54*s
   elseif S.builderTool=="elevation" then
     local modeX = x

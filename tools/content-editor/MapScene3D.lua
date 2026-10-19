@@ -13,7 +13,7 @@ function M.draw(state,source,terrain,geometry,x,y,w,h,options)
     projected=cached.vertices
     minX,minY,maxX,maxY=unpack(cached.bounds)
   else
-    local world,objects=geometry.build(source,terrain,cols,rows)
+    local world,objects=geometry.build(source,terrain,cols,rows,angle)
     state.objectCount=#objects
     projected={}
     minX,minY,maxX,maxY=math.huge,math.huge,-math.huge,-math.huge
@@ -126,7 +126,8 @@ function M.draw(state,source,terrain,geometry,x,y,w,h,options)
   state.shader:send('cameraDepth',cameraDepth)
   state.shader:send('perspectiveStrength',source.visualPerspective or 0)
   g.push('all');g.setCanvas({state.scene,depthstencil=state.depth});g.origin();g.setScissor()
-  g.clear(.07,.12,.22,1,0,1);g.setDepthMode('less',true);g.setShader(state.shader)
+  local bg=source.visualBackground or {.07,.12,.22}
+  g.clear(bg[1],bg[2],bg[3],1,0,1);g.setDepthMode('less',true);g.setShader(state.shader)
   if vertices and #vertices>0 then
     if state.worldMesh then state.worldMesh:release() end
     state.worldMesh=g.newMesh(format,vertices,'triangles',options.static and 'static' or 'stream')

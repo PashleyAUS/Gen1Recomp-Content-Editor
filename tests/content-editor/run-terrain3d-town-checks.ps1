@@ -24,6 +24,7 @@ try {
       -ArgumentList 'tests/content-editor/terrain3d-towns' -WindowStyle Hidden -PassThru `
       -RedirectStandardOutput (Join-Path $PSScriptRoot "terrain3d-towns/$game-log.txt")
     if (-not $process.WaitForExit(150000)) { $process.Kill(); throw "$game native town game tests timed out" }
+    $process.Refresh()
     $output = Get-Content -LiteralPath $result -Raw
     Write-Output "$game`: $output"
     if ($process.ExitCode -ne 0 -or -not $output.StartsWith('PASS:')) {

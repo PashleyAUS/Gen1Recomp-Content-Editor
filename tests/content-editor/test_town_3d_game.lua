@@ -2,13 +2,24 @@
 return function(data,root,output,game)
   local IO,L=require('ModIO'),require('LayeredMap')
   local Models,N=require('MapObjects3D'),require('MapNavigation3D')
-  output=output..'/'..game;IO.ensureDirectory(output)
+  local houseReview=os.getenv('POKEPORT_HOUSE_REVIEW')=='1'
+  output=output..'/'..game..(houseReview and '-house-review' or '');IO.ensureDirectory(output)
   local modId='town3d_'..game
   local S={data=data,version=game,project=require('State').blankProject(modId,game=='emerald' and 'Littleroot Town 3D' or 'Pallet Town 3D')}
   S.project.game=game;S.path=output..'/mod';IO.ensureDirectory(S.path)
   IO.writeText(S.path..'/manifest.json','{"id":"'..modId..'","name":"3D native town","version":"1.0.0","entry":"main.lua","games":["'..game..'"]}')
   require('Gen3ContentAdapter').prepare(S);require('Gen3Workspace').prepare(S)
   local town=require('Town3D').build(S)
+  local signs,fences=0,0
+  for _,o in ipairs(Models.objects(town.source)) do
+    if o.kind=='sign' then signs=signs+1 elseif o.kind=='fence' then fences=fences+1 end
+  end
+  assert(signs>0 and (game=='emerald' or fences>0),'Native outdoor signs/fences were not modeled')
+  local clocks,plants=0,0
+  for _,id in ipairs(town.interiors) do for _,o in ipairs(Models.objects(S.project.layeredMaps[id])) do
+    if o.kind=='wall_decor' then clocks=clocks+1 elseif o.kind=='potted_plant' then plants=plants+1 end
+  end end
+  assert(plants>0 and (game~='emerald' or clocks==2),'Native clocks/plants were not modeled as complete props')
   assert(town.buildings==3,'Native town buildings were not all modeled')
   for _,model in ipairs(Models.objects(town.source)) do
     if model.kind=='building' then assert(model.rotation==0 and model.style,'Town house lost its authored forward-facing geometry') end
@@ -18,10 +29,10 @@ return function(data,root,output,game)
   local fresh={};require('Gen3').load(fresh,data._gen3Read)
   local loader=assert(require('Gen3Mod').load(fresh,S.path))
   assert(require('Gen3Map').tileset(fresh,town.source.baseTileset))
-  -- Hydrate untouched interiors from the actual imported ROM cache, as Dataset does.
+  -- Interior maps are exported too; keep their compiled native layouts intact.
   for _,w in ipairs(town.def.warps) do
     local def=assert(fresh.maps[w.destMap])
-    def.midLayout=assert(require('Gen3Map').layout(fresh,w.destMap))
+    def.midLayout=def.midLayout or assert(require('Gen3Map').layout(fresh,w.destMap))
     def.width,def.height=def.midLayout.width,def.midLayout.height
     assert(require('Gen3Map').tileset(fresh,def.pair))
   end
@@ -38,6 +49,7 @@ return function(data,root,output,game)
   end
   for name,id in pairs(constants.IDS) do
     if name:find('SYS_POKEMON_GET') or name:find('SYS_POKEDEX_GET') or name:find('RECEIVED_STARTER') or name:find('HIDE_LITTLEROOT') or name:find('HIDE.*TRUCK') then session.flags[tostring(id)]=true end
+    if name:find('HOUSE_RIVAL_MOM') then session.flags[tostring(id)]=false end
   end
   local g={data=fresh,session=session,save={position={},party={}},input=input,options={}}
   local cache={read=function(_,p) return data._gen3Read((p:gsub('^'..game..'/',''))) end,
@@ -51,6 +63,7 @@ return function(data,root,output,game)
   local Display=require('src.core.game3.display')
   local tickCount=0
   local pendingShot,recording,monitorConnections,previousWorld
+  local expectedMode='3d'
   local function shot(label) pendingShot=label;coroutine.yield() end
   local function tick(dir)
     held,pressed=dir,dir~=held and dir or nil
@@ -117,6 +130,18 @@ return function(data,root,output,game)
     end
   end
   local exteriorFrames=0
+  local function switchMode(mode,label)
+    local before={Map.current,P.px,P.py,P.targetX,P.targetY,P.moving}
+    local function event(phase)
+      Bus.call('input.key',function() error('View toggle was not handled') end,g,{phase=phase,key='f6'})
+    end
+    event('pressed');event('pressed') -- OS key repeat must not immediately switch back.
+    assert(Map.current==before[1] and P.px==before[2] and P.py==before[3]
+      and P.targetX==before[4] and P.targetY==before[5] and P.moving==before[6],'View toggle changed player movement or map')
+    event('released');expectedMode=mode;previousWorld=nil;tick(nil)
+    assert(require('src.core.game3.field_view')._editor3DLast.mode==mode,'View toggle selected the wrong renderer')
+    if label then shot(label) end
+  end
   local play=coroutine.create(function()
     Map.load(host,g,town.id,{x=town.slope.x-1,y=town.slope.y+1,facing='right'});settle()
     recording=true
@@ -138,6 +163,9 @@ return function(data,root,output,game)
     assert(View._editor3DLast.cameraAngle==originalCamera.cameraAngle,'Camera moved while rebinding controls')
     input.keyBindings={ [']']='a' };cameraKey(']',true);input.keyBindings=nil
     assert(View._editor3DLast.cameraAngle==originalCamera.cameraAngle,'Camera stole a bound gameplay key')
+    input.captureArmed=true;cameraKey('f6',true);input.captureArmed=nil
+    input.keyBindings={f6='a'};cameraKey('f6',true);input.keyBindings=nil
+    assert(View._editor3DLast.mode=='3d','View toggle stole a bound or captured key')
     cameraKey(']');cameraKey(']');cameraKey(']')
     assert(math.abs(View._editor3DLast.cameraAngle-math.pi/4)<.001,'In-game orbit did not rotate 45 degrees')
     shot('camera-rotated')
@@ -145,15 +173,43 @@ return function(data,root,output,game)
     assert(View._editor3DLast.cameraPitch>originalCamera.cameraPitch and View._editor3DLast.cameraScale>originalCamera.cameraScale,'In-game tilt/zoom did not change')
     shot('camera-tilted')
     cameraKey('home')
+    if houseReview then
+      assert(game=='emerald','House review requires Emerald')
+      walkTo(4,9)
+      cameraKey('-');cameraKey('-')
+      shot('house-front-in-game')
+      for _=1,2 do cameraKey('pagedown') end
+      shot('house-front-low-angle-in-game')
+      cameraKey('home');cameraKey('-');cameraKey('-')
+      walkTo(8,9)
+      cameraKey(']');cameraKey(']')
+      shot('house-angle-in-game')
+      cameraKey('home')
+      if os.getenv('POKEPORT_HOUSE_CAPTURE_ONLY')=='1' then return end
+    end
     assert(View._editor3DLast.cameraAngle==originalCamera.cameraAngle and View._editor3DLast.cameraPitch==originalCamera.cameraPitch and View._editor3DLast.cameraScale==originalCamera.cameraScale,'Camera reset did not restore authored defaults')
     cameraKey(']');cameraKey('pagedown')
     local gameplayAngle,gameplayPitch=View._editor3DLast.cameraAngle,View._editor3DLast.cameraPitch
+    switchMode('2d','toggle-town-2d')
+    local walking=false
+    for _,d in ipairs(dirs) do
+      local x,y=P.cellX+d[2],P.cellY+d[3]
+      if not C.warpAt(x,y) and C.canEnter(g,x,y,{fromX=P.cellX,fromY=P.cellY,dir=d[1]}) then
+        for _=1,12 do tick(d[1]);if P.moving then walking=true;break end end
+        if walking then break end
+      end
+    end
+    assert(walking,'2D view did not allow native walking')
+    switchMode('3d','toggle-town-3d');settle()
+    walkTo(town.slope.x+3,town.slope.y+1)
+    assert(View._editor3DLast.cameraAngle==gameplayAngle and View._editor3DLast.cameraPitch==gameplayPitch,'Switching views reset the camera')
     for index,w in ipairs(town.def.warps) do
       local e=town.nav.byWarp[index] or {x=w.x,y=w.y,outward='down'}
       local outward=assert(({up={0,-1},down={0,1},left={-1,0},right={1,0}})[e.outward])
       walkTo(e.x+outward[1],e.y+outward[2])
       assert(Map.current==town.id,'Walk around town changed maps unexpectedly')
       shot('door-'..index..'-before')
+      if index==1 then switchMode('2d') end
       if town.nav.byWarp[index] then walkTo(e.x,e.y)
       else
         for _=1,120 do tick('up');if Map.current~=town.id then break end end
@@ -166,14 +222,94 @@ return function(data,root,output,game)
         held=nil;settle()
       end
       assert(Map.current==w.destMap,'Door '..index..' did not reach its original native interior: '..tostring(Map.current)..' pos='..P.cellX..','..P.cellY..' gate='..e.x..','..e.y..' warp='..tostring(C.warpAt(e.x,e.y))..' running='..tostring(require('src.core.game3.scripting.space').vm:isRunning()))
+      assert(S.project.layeredMaps[Map.current].visualInterior,'Native interior was not converted to 3D')
+      if index==1 then
+        assert(View._editor3DLast.mode=='2d','Entering a building reset the view preference')
+        shot('toggle-interior-2d');switchMode('3d','toggle-interior-3d')
+      end
       shot('door-'..index..'-inside')
+      do
+        local d=fresh.maps[Map.current];local ts=require('src.core.game3.tileset_native').get(d.pair)
+        assert(d.pair==S.project.layeredMaps[Map.current].baseTileset,'Native interior scripts were given compact atlas IDs')
+        for y=0,d.midLayout.height-1 do for x=0,d.midLayout.width-1 do
+          assert(ts.midToSlot[d.midLayout:midAt(x,y)]~=nil,'Native interior script wrote a tile absent from its atlas')
+        end end
+      end
+      local roomId=Map.current
+      if index==1 then
+        Bus.call('input.key',function() error('Interior camera control fell through') end,g,{phase='pressed',key=']'})
+        tick(nil);shot('interior-camera-rotated')
+        assert(require('src.core.game3.field_view')._editor3DLast.cameraAngle>0,'Interior camera did not orbit')
+        Bus.call('input.key',function() end,g,{phase='pressed',key='home'});tick(nil)
+        local talked=false
+        for _,npc in ipairs(require('src.core.game3.objects').forDraw()) do
+          if npc.def and npc.def.scriptKey then
+            for _,d in ipairs(dirs) do
+              local x,y=npc.cellX-d[2],npc.cellY-d[3]
+              if walkTo(x,y,true) then
+                walkTo(x,y);tick(d[1]);tick(nil);tick('a')
+                local Message=require('src.ui.game3.message')
+                for _=1,120 do if Message.isOpen() then break end;tick(nil) end
+                if Message.isOpen() then
+                  talked=true;shot('interior-dialogue')
+                  local passed=false
+                  Bus.call('input.key',function() passed=true end,g,{phase='pressed',key='f6'})
+                  assert(passed,'View toggle consumed dialogue input')
+                  for n=1,1200 do
+                    if not Message.isOpen() and not require('src.core.game3.field').locked then break end
+                    local waiting=Message.isOpen() or require('src.ui.game3.choice').isOpen()
+                    tick(waiting and n%2==0 and 'a' or nil)
+                  end
+                  assert(not Message.isOpen() and not require('src.core.game3.field').locked,'Native dialogue did not return control')
+                  break
+                end
+              end
+            end
+          end
+          if talked then break end
+        end
+        assert(talked,'No native NPC dialogue was exercised in the 3D interior')
+        print('PASS native interior NPC dialogue: directional approach, A-button talk and return to walking')
+      end
+      for _,stair in ipairs(fresh.maps[roomId].warps or {}) do
+        if stair.destMap~=town.id and S.project.layeredMaps[stair.destMap]
+            and S.project.layeredMaps[stair.destMap].visualInterior then
+          local function useStair(w)
+            local from=Map.current;local approached=false
+            for _,d in ipairs(dirs) do
+              local x,y=w.x-d[2],w.y-d[3]
+              if x>=0 and y>=0 and x<C._widthCells and y<C._heightCells and walkTo(x,y,true) then
+                walkTo(x,y);approached=true
+                for _=1,180 do tick(d[1]);if Map.current~=from then break end end
+                if Map.current~=from then break end
+              end
+            end
+            assert(approached and Map.current==w.destMap,'Native interior stairs did not reach '..w.destMap)
+            held=nil;settle()
+          end
+          useStair(stair)
+          shot('door-'..index..'-upstairs')
+          assert(require('src.core.game3.field_view')._editor3DLast.interior,'Upstairs fell back to 2D')
+          local back=assert(fresh.maps[Map.current].warps[stair.destWarp or 1])
+          assert(back.destMap==roomId,'Upstairs exit points elsewhere')
+          useStair(back)
+          shot('door-'..index..'-downstairs')
+          assert(Map.current==roomId,'Downstairs did not return to the same house')
+          print('PASS native interior stairs '..roomId..' <-> '..stair.destMap..': controller input and 3D on both floors')
+        end
+      end
       local inner=assert(fresh.maps[Map.current]);local iw=assert(inner.warps[w.destWarp or 1])
       assert(iw.destMap==town.id,'Native exit points to a different exterior')
       print('Native exit '..iw.x..','..iw.y..' index '..tostring(w.destWarp)..' behavior '..tostring(C.behavior(iw.x,iw.y)))
+      if index==1 then switchMode('2d') end
       walkTo(iw.x,iw.y-1)
       for _=1,360 do tick('down');if Map.current==town.id then break end end
       held=nil;settle()
       assert(Map.current==town.id,'Native interior exit failed: '..Map.current..' at '..P.cellX..','..P.cellY..' behavior='..tostring(C.behavior(P.cellX,P.cellY))..' warp='..tostring(C.warpAt(P.cellX,P.cellY)))
+      if index==1 then
+        assert(View._editor3DLast.mode=='2d','Leaving a building reset the view preference')
+        switchMode('3d','toggle-returned-3d')
+      end
       assert(P.cellX==e.x and (P.cellY==e.y or P.cellY==e.y+1) and P.facing==e.outward,'Native exit did not return to the forward-facing town door')
       local ok,reason=C.canEnter(g,e.x+outward[1],e.y+outward[2],{fromX=e.x,fromY=e.y,dir=e.outward})
       print('Exit gate '..e.x..','..e.y..' outward '..e.outward..' immediate step '..tostring(ok)..' reason='..tostring(reason)..' targetwarp='..tostring(C.warpAt(e.x+outward[1],e.y+outward[2])))
@@ -223,12 +359,17 @@ return function(data,root,output,game)
       shot('connection-'..connection.id..'-before')
       local before=assert(require('src.core.game3.field_view')._editor3DLast)
       assert(before.connected and before.visibleMaps[connection.id],'Route was not rendered before crossing')
+      if connection==town.connected[1] then switchMode('2d') end
       monitorConnections=true;previousWorld=nil
       for _=1,120 do tick(dir);if Map.current~=town.id then break end end
       held=nil
       assert(Map.current==connection.id,'Directional input did not cross into '..connection.id..' at '..P.cellX..','..P.cellY..' surfing='..tostring(P.surfing)..' elevation='..tostring(P.elevation))
       settle()
       assert(P.cellX==landing.x and P.cellY==landing.y,'Native connection offset changed the landing')
+      if connection==town.connected[1] then
+        assert(View._editor3DLast.mode=='2d','Crossing a route reset the view preference')
+        shot('toggle-route-2d');switchMode('3d','toggle-route-3d')
+      end
       shot('connection-'..connection.id..'-entered')
       assert(View._editor3DLast.cameraAngle==gameplayAngle and View._editor3DLast.cameraPitch==gameplayPitch,'Camera settings were lost crossing a map connection')
       for _=1,120 do tick(opposite[dir]);if Map.current==town.id then break end end
@@ -261,6 +402,11 @@ return function(data,root,output,game)
     assert(Display.present(g,800,600) and not Display.planesBroken,'Actual game display fell back')
     if S.project.layeredMaps[Map.current] then
       local info=assert(require('src.core.game3.field_view')._editor3DLast)
+      assert(info.mode==expectedMode,'Unexpected 2D/3D mode during gameplay')
+      if expectedMode=='2d' then
+        assert(require('src.render.Renderer').worldOverride==nil,'2D mode retained a stale 3D frame')
+        assert(info.mapId==Map.current,'2D mode retained a stale map')
+      else
       local rect=require('src.render.Renderer'):frameRects()
       assert(info.hd and info.width==math.floor(rect.pw+.5) and info.height==math.floor(rect.ph+.5),'3D town is still rendered through the low-resolution framebuffer')
       assert(info.canvasWidth==info.width and info.canvasHeight==info.height,'HD dimensions do not match the actual world canvas')
@@ -274,12 +420,26 @@ return function(data,root,output,game)
         previousWorld={x=info.worldX,y=info.worldY}
       end
       assert(math.abs(info.localX-(P.px/16+.5))<.001 and math.abs(info.localY-(P.py/16+.5))<.001,'Camera did not track moving player')
-      assert(math.abs(info.screenX-info.width/2)<.001 and math.abs(info.screenY-info.height/2)<.001,'Player feet left screen center')
+      if info.interior then
+        assert(info.screenX>0 and info.screenX<info.width and info.screenY>0 and info.screenY<info.height,'Indoor camera lost the player')
+      else
+        assert(math.abs(info.screenX-info.width/2)<.001 and math.abs(info.screenY-info.height/2)<.001,'Player feet left screen center')
+      end
       exteriorFrames=exteriorFrames+1
+      end
     end
     if pendingShot then
       local label=pendingShot;pendingShot=nil
       love.graphics.captureScreenshot(function(pixels)
+        if label:match('^toggle%-') then
+          local width,height=pixels:getDimensions();local colors={};local count=0
+          for y=8,height-1,16 do for x=8,width-1,16 do
+            local r,g,b=pixels:getPixel(x,y)
+            local key=math.floor(r*31)*1024+math.floor(g*31)*32+math.floor(b*31)
+            if not colors[key] then colors[key]=true;count=count+1 end
+          end end
+          assert(count>12,'View toggle produced a blank or missing-atlas frame: '..label)
+        end
         if label=='town-hd-wide' then
           local width,height=pixels:getDimensions();local green,total=0,0
           for y=8,height-1,16 do for x=8,width-1,16 do

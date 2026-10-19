@@ -10,6 +10,15 @@ return function(data, root, output, game)
   require('Gen3ContentAdapter').prepare(S); require('Gen3Workspace').prepare(S)
   S.mapId=id; S.builderMapId=id; S.mapWorkspace=true; S.mapEditMode='map'
   local source=assert(L.convertMap(S,id))
+  if game=='emerald' then
+    local surfaces=0
+    for _,o in ipairs(require('MapObjects3D').objects(source)) do
+      if o.style=='littleroot_native_surfaces' or o.style=='littleroot_lab_native_surfaces' then
+        surfaces=surfaces+1;assert(o.lean==0,'Editable native building is still tilted')
+      end
+    end
+    assert(surfaces==2,'Fresh editable Littleroot did not match the house/lab demo')
+  end
   S.builderLayer=1; S.builderTool='visual_height'; S.builderVisualHeight=6
   S.builderZoom=2; S.builderCamX=0; S.builderCamY=0; S._builderCamMapId=id
   S.mapShowNeighbors=false
@@ -125,8 +134,10 @@ return function(data, root, output, game)
   local treeImage=footprint('tree',10,9,11,10)
   assert(source.visualObjects[#source.visualObjects].kind=='tree','Tree placement did not commit')
   save(treeImage,'tree')
+  S.builderTreeLean=45
   local buildingImage=footprint('building',10,14,12,16)
   assert(source.visualObjects[#source.visualObjects].kind=='building','Building placement did not commit')
+  assert(source.visualObjects[#source.visualObjects].lean==45,'Editor discarded non-tree object lean')
   assert(previewBytes(treeImage)~=previewBytes(buildingImage),'Building model did not appear')
   local objectCount=#Objects.objects(source)
   footprint('none',10,9,10,9)

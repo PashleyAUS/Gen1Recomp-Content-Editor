@@ -1,4 +1,4 @@
--- CPU geometry shared by the renderer and deterministic model tests.
+-- Native artwork surfaces shared by the editor and in-game renderer.
 local Objects=require('MapObjects3D')
 local M={}
 
@@ -103,6 +103,10 @@ function M.build(source,terrain,cols,rows)
     local o=covered[y*source.cellWidth+x+1]
     local sample=(x<0 or y<0 or x>=cols or y>=rows) and floorSample or (o and ground[o])
     local tex=sample and uv(sample[1],sample[2],sample[1]+1,sample[2]+1) or uv(x,y,x+1,y+1)
+    if o and o.kind=='wall_decor' then
+      -- Sample the plain wall at the art's left margin, not nearby floorboards.
+      tex=uv(o.x+.01,o.y+.2,o.x+.09,o.y+.4)
+    end
     local p=corners(x,y)
     local shape=x>=0 and y>=0 and x<cols and y<rows and (source.visualShapes or {})[y*source.cellWidth+x+1]
     polygon(p,tex,nil,shape=='corner_nw' or shape=='corner_se')
@@ -125,139 +129,67 @@ function M.build(source,terrain,cols,rows)
       end
     end
   end end
-  local function box(x0,y0,x1,y1,z0,z1,color)
-    local a,b,c,d={x0,y0,z1},{x1,y0,z1},{x1,y1,z1},{x0,y1,z1}
-    polygon({a,b,c,d},nil,color)
-    polygon({{x0,y1,z0},{x1,y1,z0},c,d},nil,color)
-    polygon({{x1,y0,z0},{x0,y0,z0},a,b},nil,color)
-    polygon({{x0,y0,z0},{x0,y1,z0},d,a},nil,color)
-    polygon({{x1,y1,z0},{x1,y0,z0},b,c},nil,color)
-  end
+  -- Objects are complete native artwork cards, never reconstructed meshes.
+  -- Keep their source rectangle intact: crowns, roof silhouettes, pots and posts
+  -- are already drawn by the game artist and must not be synthesized here.
   for _,o in ipairs(visible) do
-    local base,lowest=0,math.huge
-    for y=o.y,o.y+o.height-1 do for x=o.x,o.x+o.width-1 do
-      for _,z in ipairs(terrain.corners(source,x,y)) do base=math.max(base,z);lowest=math.min(lowest,z) end
-    end end
-    local size=o.size or 3
-    local centerX,centerY=o.x+o.width/2,o.y+o.height/2
-    local root=o.kind=='tree' and terrain.surface(source,centerX,centerY) or base
-    local angle=math.rad(o.rotation or 0)
-    local lean=o.kind=='tree' and math.rad(o.lean or 0) or 0
-    transform=function(p)
-      local dx,dy,dz=p[1]-centerX,p[2]-centerY,p[3]-root
-      dy=dy-dz*math.sin(lean)
-      return {centerX+dx*math.cos(angle)-dy*math.sin(angle),
-        centerY+dx*math.sin(angle)+dy*math.cos(angle),root+dz*math.cos(lean)}
+    local cx,cy=o.x+o.width/2,o.y+o.height-.1
+    local base=o.virtual and 0 or terrain.surface(source,cx,cy)
+    base=base+(o.mount or 0)
+    local height=o.size or o.height
+    local tilt=math.rad(o.lean or (o.kind=='tree' and 45 or 0))
+    local yaw=math.rad(o.rotation or 0)
+    local tx,ty=o.textureX or o.x,o.textureY or o.y
+    local tex=uv(tx,ty,tx+(o.textureW or o.width),ty+(o.textureH or o.height))
+    local function point(dx,dz)
+      local dy=-dz*math.sin(tilt)
+      return {cx+dx*math.cos(yaw)-dy*math.sin(yaw),
+        cy+dx*math.sin(yaw)+dy*math.cos(yaw),base+dz*math.cos(tilt)}
     end
-    if o.kind=='building' and o.style then
-      local x0,y0,x1,y1=o.x,o.y,o.x+o.width,o.y+o.height
-      local rows=o.roofRows or 2
-      local wall=base+(o.style=='front_gable' and 2.8 or 2.4)
-      local ridge=wall+1.5
-      local front=uv(x0,y0+rows,x1,y1)
-      local facade={front[4],front[3],front[2],front[1]}
-      local side=uv(x0,y0+rows,x0+.6,y1)
-      polygon({{x0+.3,y0+.5,base+.012},{x1+.3,y0+.5,base+.012},
-        {x1+.3,y1+.5,base+.012},{x0+.3,y1+.5,base+.012}},nil,{.06,.12,.12,.3})
-      quad({x0,y1,base},{x1,y1,base},{x1,y1,wall},{x0,y1,wall},facade,1)
-      quad({x1,y0,base},{x0,y0,base},{x0,y0,wall},{x1,y0,wall},facade,.78)
-      quad({x0,y0,base},{x0,y1,base},{x0,y1,wall},{x0,y0,wall},{side[4],side[3],side[2],side[1]},.72)
-      quad({x1,y1,base},{x1,y0,base},{x1,y0,wall},{x1,y1,wall},{side[4],side[3],side[2],side[1]},.84)
-      local roof=uv(x0+1,y0+.75,x1-1,y0+math.max(.9,rows-.35))
-      if o.style=='flat_lab' then
-        roof=uv(x0+4.1,y0+1.1,x0+4.9,y0+1.9)
-        materialQuad({x0-.15,y0-.15,wall},{x1+.15,y0-.15,wall},{x1+.15,y1+.15,wall},{x0-.15,y1+.15,wall},roof,.9)
-        local rim={.35,.37,.4}
-        box(x0-.2,y0-.2,x1+.2,y0+.05,wall,wall+.2,rim)
-        box(x0-.2,y1-.05,x1+.2,y1+.2,wall,wall+.2,rim)
-        box(x0-.2,y0,x0+.05,y1,wall,wall+.2,rim)
-        box(x1-.05,y0,x1+.2,y1,wall,wall+.2,rim)
-        box(x1-1.3,y0+.4,x1-.5,y0+1.3,wall,wall+1.2,{.48,.22,.2})
-        box(x1-1.45,y0+.3,x1-.35,y0+1.4,wall+1.1,wall+1.3,{.35,.17,.17})
-      else
-        local cx=(x0+x1)/2
-        local mid=(y0+y1)/2
-        local left,right=x0+.6,x1-.6
-        local front=y1+.22
-        roof=uv(x0+1.1,y0+1.1,x0+1.8,y0+1.7)
-        -- A side-to-side main roof, with a forward-facing cross gable.
-        materialQuad({x0-.2,y0-.2,wall},{x1+.2,y0-.2,wall},{x1+.2,mid,ridge},{x0-.2,mid,ridge},roof,.8)
-        materialQuad({x0-.2,mid,ridge},{x1+.2,mid,ridge},{x1+.2,y1+.2,wall},{x0-.2,y1+.2,wall},roof,.95)
-        materialQuad({left,mid,ridge+.02},{cx,mid,ridge+.02},{cx,front,ridge+.02},{left,front,wall+.02},roof,.85)
-        materialQuad({cx,mid,ridge+.02},{right,mid,ridge+.02},{right,front,wall+.02},{cx,front,ridge+.02},roof,1)
-        polygon({{left,front,wall},{right,front,wall},{cx,front,ridge}},nil,{.72,.72,.74})
-        polygon({{left-.12,front+.02,wall},{cx,front+.02,ridge+.12},{cx,front+.02,ridge-.08},{left+.12,front+.02,wall}},nil,{.58,.24,.2})
-        polygon({{cx,front+.02,ridge+.12},{right+.12,front+.02,wall},{right-.12,front+.02,wall},{cx,front+.02,ridge-.08}},nil,{.65,.28,.22})
-        -- Independent upper windows and timber trim keep the gable off the roof texture.
-        local win=uv(x0+o.width*.55,y1-1.35,x0+o.width*.8,y1-.4)
-        for _,wx in ipairs({cx-1,cx+.25}) do
-          quad({wx,front+.03,wall+.18},{wx+.75,front+.03,wall+.18},
-            {wx+.75,front+.03,wall+.85},{wx,front+.03,wall+.85},
-            {win[4],win[3],win[2],win[1]},.95)
-        end
-        box(x0-.15,y1-.05,x1+.15,y1+.08,wall-.08,wall+.06,{.45,.31,.27})
-
+    if o.kind=='building' and (o.style=='littleroot_native_surfaces' or o.style=='littleroot_lab_native_surfaces') then
+      -- Match the card lean while keeping the ground footprint anchored.
+      transform=function(p)
+        local dx,dy,dz=p[1]-cx,p[2]-cy,p[3]-base
+        dy=dy-dz*math.sin(tilt)
+        return {cx+dx*math.cos(yaw)-dy*math.sin(yaw),
+          cy+dx*math.sin(yaw)+dy*math.cos(yaw),base+dz*math.cos(tilt)}
       end
-    elseif o.kind=='tree' and source.visualTreeStyle=='sprite' then
+      -- Opt-in Littleroot buildings. Every surface samples its existing map
+      -- artwork; no replacement textures, flat-color fills or added windows.
+      local x,y=o.x,o.y
+      local front,back=y+o.height-.1,y+.1
+      local lab=o.style=='littleroot_lab_native_surfaces'
+      local width=o.width
+      local roofRows=lab and 3 or 3.375
+      local top=base+o.height-roofRows
+      -- Front artwork becomes one upright wall, retaining its native door.
+      local facade=uv(tx,ty+roofRows,tx+width,ty+o.height)
+      polygon({{x,front,base},{x+width,front,base},{x+width,front,top},{x,front,top}},
+        {facade[4],facade[3],facade[2],facade[1]})
+      -- A single complete front-wall tile (under the window, no door) repeats
+      -- along each side. Keep one vertical course, preserving its base trim.
+      local sideTile=lab and 1 or 2
+      local wall=uv(tx+sideTile,ty+o.height-1,tx+sideTile+1,ty+o.height)
+      local wallUV={wall[4],wall[3],wall[2],wall[1]}
+      local function repeatWall(ax,ay,bx,by)
+        local count=math.ceil(math.sqrt((bx-ax)^2+(by-ay)^2))
+        for n=0,count-1 do
+          local x0,y0=ax+(bx-ax)*n/count,ay+(by-ay)*n/count
+          local x1,y1=ax+(bx-ax)*(n+1)/count,ay+(by-ay)*(n+1)/count
+          quad({x0,y0,base},{x1,y1,base},{x1,y1,top},{x0,y0,top},wallUV,1)
+        end
+      end
+      repeatWall(x,back,x,front)
+      repeatWall(x+width,front,x+width,back)
+      repeatWall(x+width,back,x,back)
+      -- Original roof artwork laid horizontally, with no raised/pitched sections.
+      quad({x,back,top},{x+width,back,top},{x+width,front,top},{x,front,top},
+        uv(tx,ty,tx+width,ty+roofRows),1)
       transform=nil
-      local cx,cy=o.x+o.width/2,o.y+o.height-.1
-      local z=o.virtual and 0 or terrain.surface(source,cx,cy)
-      local height=3;local tilt=math.rad(o.lean or 45)
-      local topY,topZ=cy-height*math.sin(tilt),z+height*math.cos(tilt)
-      local tx,ty=o.textureX or o.x,o.textureY or o.y
-      local tex=uv(tx,ty,tx+(o.textureW or o.width),ty+(o.textureH or o.height))
-      polygon({{cx-.65,cy-.1,z+.012},{cx+.8,cy-.1,z+.012},{cx+.9,cy+.5,z+.012},{cx-.6,cy+.5,z+.012}},nil,{.05,.12,.1,.22})
-      polygon({{cx-o.width/2,cy,z},{cx+o.width/2,cy,z},{cx+o.width/2,topY,topZ},{cx-o.width/2,topY,topZ}},
-        {tex[4],tex[3],tex[2],tex[1]},{1,1,1,2})
-    elseif o.kind=='building' then
-      local x0,y0,x1,y1=o.x,o.y,o.x+o.width,o.y+o.height
-      if lowest<base then box(x0,y0,x1,y1,lowest,base,{.43,.43,.36}) end
-      local roofRows=o.roofRows or math.max(1,math.floor(o.height*.55))
-      roofRows=math.min(o.height-.25,roofRows)
-      local wall=base+size*.65;local ridge=wall+size*.4
-      local mid=(y0+y1)/2
-      local front=uv(x0,y0+roofRows,x1,y1)
-      -- Bottom-to-top geometry receives bottom-to-top facade texture.
-      local frontUV={front[4],front[3],front[2],front[1]}
-      quad({x0,y1,base},{x1,y1,base},{x1,y1,wall},{x0,y1,wall},frontUV,1)
-      quad({x1,y0,base},{x0,y0,base},{x0,y0,wall},{x1,y0,wall},frontUV,.8)
-      local side=uv(x0,y0+roofRows,math.min(x0+1,x1),y1)
-      local sideUV={side[4],side[3],side[2],side[1]}
-      quad({x0,y0,base},{x0,y1,base},{x0,y1,wall},{x0,y0,wall},sideUV,.8)
-      quad({x1,y1,base},{x1,y0,base},{x1,y0,wall},{x1,y1,wall},sideUV,.7)
-      local roof=uv(x0,y0+(o.roofInset or 0),x1,y0+roofRows)
-      quad({x0,mid,ridge},{x1,mid,ridge},{x1,y1,wall},{x0,y1,wall},roof,1)
-      quad({x0,y0,wall},{x1,y0,wall},{x1,mid,ridge},{x0,mid,ridge},roof,.83)
-      polygon({{x0,y0,wall},{x0,y1,wall},{x0,mid,ridge}},nil,{.65,.58,.4})
-      polygon({{x1,y1,wall},{x1,y0,wall},{x1,mid,ridge}},nil,{.75,.68,.48})
     else
-      local cx,cy=o.x+o.width/2,o.y+o.height/2
-      base=terrain.surface(source,cx,cy)
-      box(cx-.17,cy-.17,cx+.17,cy+.17,base,base+size*.5,{.46,.29,.13})
-      -- Octagonal rings give each tree a closed, faceted canopy from all angles.
-      local rings={{.26,.25},{.36,.48},{.62,.52},{.85,.34},{1,.05}}
-      for ring=1,#rings-1 do
-        local lo,hi=rings[ring],rings[ring+1]
-        for side=0,7 do
-          local angle=side*math.pi/4;local nextAngle=(side+1)*math.pi/4
-          local function point(a,r) return {cx+math.cos(a)*o.width*r[2],cy+math.sin(a)*math.min(o.width,o.height)*r[2],base+size*r[1]} end
-          -- Sample the interior foliage, excluding the sprite's grass border.
-          local tex=uv(o.x+o.width*.2,o.y+.3,o.x+o.width*.8,o.y+.9)
-          local shade=.82+.16*math.cos(angle+.8)
-          quad(point(angle,hi),point(nextAngle,hi),point(nextAngle,lo),point(angle,lo),tex,shade)
-        end
-      end
-      local top={cx,cy,base+size*1.03}
-      for side=0,7 do
-        local a,b=side*math.pi/4,(side+1)*math.pi/4
-        local r=rings[#rings]
-        polygon({top,{cx+math.cos(a)*o.width*r[2],cy+math.sin(a)*math.min(o.width,o.height)*r[2],base+size},
-          {cx+math.cos(b)*o.width*r[2],cy+math.sin(b)*math.min(o.width,o.height)*r[2],base+size}},nil,{.27,.55,.14})
-        local bottom=rings[1]
-        polygon({{cx,cy,base+size*bottom[1]},
-          {cx+math.cos(a)*o.width*bottom[2],cy+math.sin(a)*math.min(o.width,o.height)*bottom[2],base+size*bottom[1]},
-          {cx+math.cos(b)*o.width*bottom[2],cy+math.sin(b)*math.min(o.width,o.height)*bottom[2],base+size*bottom[1]}},nil,{.2,.4,.12})
-      end
+    polygon({point(-o.width/2,0),point(o.width/2,0),
+      point(o.width/2,height),point(-o.width/2,height)},
+      {tex[4],tex[3],tex[2],tex[1]},o.kind=='tree' and {1,1,1,2} or nil)
     end
   end
   transform=nil

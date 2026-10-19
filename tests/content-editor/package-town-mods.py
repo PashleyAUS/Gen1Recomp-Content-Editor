@@ -29,7 +29,12 @@ for game in args.games:
         'Validated through the real mod loader, Emerald/FireRed/LeafGreen gameplay update loop,\n'
         'directional input, native interior entrances/exits, slopes and centered follow camera.\n'
         'The 3D world renders at physical window resolution; the UI stays at 240x160.\n'
-        'Native interiors keep their 2D presentation; weather and door animations retain existing 3D limits.\n'
+        'Town houses, upstairs bedrooms and labs use roofless 3D interiors with native collision and scripts.\n'
+        'Camera: [ / ] rotate, Page Up / Page Down tilt, - / = zoom, Home resets.\n'
+        'F6 switches between 2D and 3D during play; the view choice lasts for this session.\n'
+        'Objects use complete native game artwork on upright or tilted planes, without reconstructed models.\n'
+        'Known wall clocks, potted plants, signs and Pallet fences retain their original artwork.\n'
+        'Editor: 3D Objects > Wall prop / Plant / Sign / Fence; Mount Z raises a prop above the floor.\n'
     )
     with ZipFile(folder / (mod_id + '.zip'), 'w', ZIP_DEFLATED) as archive:
         for file in (folder / 'mod').iterdir():
@@ -54,3 +59,22 @@ for game in args.games:
         images[0].save(folder / 'connections.gif', save_all=True, append_images=images[1:],
                        duration=durations, loop=0)
         print(game + ': packaged ' + str(len(images)) + ' connection gameplay frames')
+
+    frames = sorted((f for f in folder.glob('*.png')
+                     if f.stat().st_mtime >= cutoff and
+                     (f.stem.startswith('interior-') or
+                      (f.stem.startswith('door-') and f.stem.endswith(('-inside', '-upstairs', '-downstairs'))))),
+                    key=lambda f: (f.stat().st_mtime, f.name))
+    if frames:
+        images = [Image.open(f).convert('RGB') for f in frames]
+        images[0].save(folder / 'interiors.gif', save_all=True, append_images=images[1:],
+                       duration=1200, loop=0)
+        print(game + ': packaged ' + str(len(images)) + ' interior gameplay screenshots')
+
+    frames = sorted((f for f in folder.glob('toggle-*.png') if f.stat().st_mtime >= cutoff),
+                    key=lambda f: (f.stat().st_mtime, f.name))
+    if frames:
+        images = [Image.open(f).convert('RGB') for f in frames]
+        images[0].save(folder / 'view-toggle.gif', save_all=True, append_images=images[1:],
+                       duration=1200, loop=0)
+        print(game + ': packaged ' + str(len(images)) + ' view toggle screenshots')
