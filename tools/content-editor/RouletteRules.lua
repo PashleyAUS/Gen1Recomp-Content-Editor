@@ -75,7 +75,7 @@ end
 function M.emit(p, encode, out)
   local g = p.rouletteRules
   if type(g) ~= "table" then return end
-  local ver = p.version
+  local ver = p.game or p.version
   if ver ~= "ruby" and ver ~= "sapphire" and ver ~= "emerald" then return end
   local lines = {}
   local balls = tonumber(g.balls)

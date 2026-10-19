@@ -81,7 +81,9 @@ local TABS = {
   { id = "patches",  label = "GAME PATCHES",
     tip = "Switch features this mod adds to the game on or off" },
   { id = "maps",     label = "MAPS",
-    tip = "Unified 16x16 terrain, events, encounters, and map settings" },
+    tip = "2D terrain, events, encounters, and map settings" },
+  { id = "maps3d",   label = "3D MAPS",
+    tip = "3D terrain, objects, interiors and live camera preview" },
   { id = "encounters", label = "ENCOUNTERS",
     tip = "Wild tables and Special gifts/battles (DVs, moves)" },
   { id = "dialog",   label = "DIALOG",
@@ -132,11 +134,15 @@ end
 local function activeTabs()
   if require("Generation").num(S)==1 then
     local result={}
-    for _,tab in ipairs(TABS) do if tab.id~="breeding" then result[#result+1]=tab end end
+    for _,tab in ipairs(TABS) do if tab.id~="breeding" and tab.id~="maps3d" then result[#result+1]=tab end end
     return result
   end
-  if not require("Generation").isGen3(S) then return TABS end
-  local extra={trades=true,effects=true,rules=true,ai=true,breeding=true,shops=true,types=true,project=true,manifest=true,cart=true,code=true,patches=true,guides=true,player=true,ui=true,anims=true,audio=true,gfx=true}
+  if not require("Generation").isGen3(S) then
+    local result={}
+    for _,tab in ipairs(TABS) do if tab.id~="maps3d" then result[#result+1]=tab end end
+    return result
+  end
+  local extra={maps3d=true,trades=true,effects=true,rules=true,ai=true,breeding=true,shops=true,types=true,project=true,manifest=true,cart=true,code=true,patches=true,guides=true,player=true,ui=true,anims=true,audio=true,gfx=true}
   local result={}
   for _,tab in ipairs(TABS) do if extra[tab.id] or require("Gen3").tabs[tab.id] then result[#result+1]=tab end end
   return result
@@ -163,6 +169,7 @@ local PANELS = {
   types = Types,
   rules = Rules,
   maps = MapsWorkspace,
+  maps3d = MapsWorkspace,
   encounters = Encounters,
   dialog = Dialog,
   shops = Shops,
@@ -1606,7 +1613,7 @@ function App.update(dt)
   if S.uiPreview or S.tab == "ui" then
     pcall(function() UiPreview.update(S, dt or 0) end)
   end
-  if S.tab == "maps" and MapsWorkspace.update then
+  if (S.tab == "maps" or S.tab == "maps3d") and MapsWorkspace.update then
     pcall(function() MapsWorkspace.update(S, dt or 0) end)
   end
   -- Arrow-key list nav (hold-to-repeat) for every panel that bindNav'd.
@@ -1897,7 +1904,7 @@ function App.draw()
       and S.tab ~= "code" and S.tab ~= "cart" and S.tab ~= "patches" and S.tab ~= "guides" then
     panel = (S.tab == "pokemon" or S.tab == "items" or S.tab == "moves" or S.tab == "trainers" or S.tab == "encounters" or S.tab == "dialog" or S.tab == "shops" or S.tab == "types" or S.tab == "breeding" or S.tab == "rules" or S.tab == "ai" or S.tab == "effects" or S.tab == "trades") and PANELS[S.tab]
       or S.tab == "events" and require("Gen3Events")
-      or S.tab == "maps" and MapsWorkspace
+      or (S.tab == "maps" or S.tab == "maps3d") and MapsWorkspace
       or S.tab == "gfx" and PANELS.gfx
       or S.tab == "anims" and BattleAnims
       or S.tab == "audio" and Audio
@@ -2036,7 +2043,7 @@ function App.keypressed(key)
       S.status = "Set destination cancelled"
       return
     end
-    if S.tab == "maps" and MapsWorkspace.keypressed
+    if (S.tab == "maps" or S.tab == "maps3d") and MapsWorkspace.keypressed
         and MapsWorkspace.keypressed(S, key, App) then
       return
     end
@@ -2058,7 +2065,7 @@ function App.keypressed(key)
   -- Hovered scrollbar first; otherwise list selection / panel keys.
   if Kit.scrollKeypressed and Kit.scrollKeypressed(key) then return end
   if RegList.keypressed(S, key) then return end
-  if S.tab == "maps" and MapsWorkspace.keypressed then
+  if (S.tab == "maps" or S.tab == "maps3d") and MapsWorkspace.keypressed then
     MapsWorkspace.keypressed(S, key, App)
   elseif S.tab == "events" and not require("Generation").isGen3(S) and Events.keypressed then
     Events.keypressed(S, key, App)
@@ -2103,7 +2110,7 @@ function App.wheelmoved(x, y)
     wheelY = wheelY + (y or 0)
     return
   end
-  if S and S.tab == "maps" and MapsWorkspace.wheelmoved
+  if S and (S.tab == "maps" or S.tab == "maps3d") and MapsWorkspace.wheelmoved
       and MapsWorkspace.wheelmoved(S, y, x) then
     return
   end
@@ -2116,6 +2123,11 @@ function App.filedropped(file)
   if not (file and S) then return end
   local path = file.getFilename and file:getFilename() or nil
   if not path then return end
+  if path:lower():match('%.obj$') or path:lower():match('%.gltf$') or path:lower():match('%.glb$') then
+    if not require('Generation').isGen3(S) then say('Custom 3D models require Emerald, FireRed or LeafGreen');return end
+    require('MapBuilder').importModel(S,path,App)
+    return
+  end
   if path:lower():match("%.tmx$") and require("Generation").isGen3(S) then
     say("TMX terrain import is not available for Gen 3 yet")
     return
@@ -2130,7 +2142,7 @@ function App.filedropped(file)
   if ModIO.exists(path .. "/manifest.json") or ModIO.exists(path .. "\\manifest.json") then
     App.openMod(path)
   else
-    say("Drop a mod folder or a .tmx map")
+    say("Drop a mod folder, .tmx map or OBJ/glTF/GLB model")
   end
 end
 

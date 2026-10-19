@@ -146,8 +146,9 @@ function M.objects(source)
   return result
 end
 
-function M.place(source,rect,kind,size,rotation,lean,mount)
-  if kind~='tree' and kind~='building' and kind~='furniture' and kind~='none' and not M.propDefaults[kind] then return false end
+function M.place(source,rect,kind,size,rotation,lean,mount,model)
+  if kind=='model' and not (type(model)=='table' and model.version==1 and model.parts) then return false end
+  if kind~='model' and kind~='tree' and kind~='building' and kind~='furniture' and kind~='none' and not M.propDefaults[kind] then return false end
   local x=math.max(0,math.min(rect.x0,rect.x1))
   local y=math.max(0,math.min(rect.y0,rect.y1))
   local right=math.min(source.cellWidth-1,math.max(rect.x0,rect.x1))
@@ -159,7 +160,7 @@ function M.place(source,rect,kind,size,rotation,lean,mount)
   if mount~=mount or math.abs(mount)>8 then return false end
   if rotation%45~=0 or (lean~=0 and lean~=45) then return false end
   local object={x=x,y=y,width=right-x+1,height=bottom-y+1,kind=kind,size=size or (M.propDefaults[kind] or {}).size or 3,
-    rotation=rotation%360,lean=lean,mount=mount}
+    rotation=rotation%360,lean=lean,mount=mount,model=kind=='model' and model or nil}
   if object.width==1 and object.height==1 and (kind=='tree' or kind=='building') then
     object.width=math.min(kind=='tree' and 2 or 4,source.cellWidth-x)
     object.height=math.min(kind=='tree' and 2 or 4,source.cellHeight-y)
@@ -168,13 +169,14 @@ function M.place(source,rect,kind,size,rotation,lean,mount)
   do
     for _,old in ipairs(M.objects(source)) do
       if old.kind==kind and old.x==x and old.y==y and old.width==object.width and old.height==object.height then
-        for _,key in ipairs({'crop','style','roofRows','roofInset','leafStart','leafEnd'}) do object[key]=old[key] end
+        for _,key in ipairs({'crop','style','roofRows','roofInset','surfaceTopRows','surfaceDepth','surfaceInset','surfaceBevel',
+            'cutoutBackgrounds','surfaceTopRect','surfaceFrontRect','anchorDepth','wallFill','wallTopFill','wallClearRects','leafStart','leafEnd'}) do object[key]=old[key] end
       end
     end
   end
   for _,old in ipairs(source.visualObjects) do
     if old.x==x and old.y==y and old.width==object.width and old.height==object.height
-        and old.kind==kind and old.style==object.style and old.size==object.size and (old.rotation or 0)==object.rotation
+        and old.kind==kind and old.model==object.model and old.style==object.style and old.size==object.size and (old.rotation or 0)==object.rotation
         and (old.lean or 0)==object.lean and (old.mount or 0)==object.mount then return false end
   end
   for i=#source.visualObjects,1,-1 do

@@ -2,7 +2,7 @@
 local Objects=require('MapObjects3D')
 local M={}
 
-function M.build(source,terrain,cols,rows)
+function M.build(source,terrain,cols,rows,angle,pixels)
   local vertices={}
   local transform
   local atlasH=rows*16+4
@@ -72,7 +72,7 @@ function M.build(source,terrain,cols,rows)
   for _,o in ipairs(objects) do
     if o.virtual or (o.x>=0 and o.y>=0 and o.x+o.width<=cols and o.y+o.height<=rows) then
       visible[#visible+1]=o
-      if not o.virtual then for y=o.y,o.y+o.height-1 do for x=o.x,o.x+o.width-1 do covered[y*source.cellWidth+x+1]=o end end end
+      if not o.virtual and (o.kind~='model' or o.replaceGround) then for y=o.y,o.y+o.height-1 do for x=o.x,o.x+o.width-1 do covered[y*source.cellWidth+x+1]=o end end end
     end
   end
   -- Replace the flattened sprite below a raised model with nearby ground.
@@ -88,7 +88,7 @@ function M.build(source,terrain,cols,rows)
         end
       end
     end
-    ground[o]=best
+    ground[o]=source.visualNativeCutouts and {3,5} or best
   end
   local function corners(x,y)
     if x<0 or y<0 or x>=cols or y>=rows then return {{x,y,0},{x+1,y,0},{x+1,y+1,0},{x,y+1,0}} end
@@ -103,7 +103,7 @@ function M.build(source,terrain,cols,rows)
     local o=covered[y*source.cellWidth+x+1]
     local sample=(x<0 or y<0 or x>=cols or y>=rows) and floorSample or (o and ground[o])
     local tex=sample and uv(sample[1],sample[2],sample[1]+1,sample[2]+1) or uv(x,y,x+1,y+1)
-    if o and o.kind=='wall_decor' then
+    if o and o.kind=='wall_decor' and o.style~='native_room_wall' then
       -- Sample the plain wall at the art's left margin, not nearby floorboards.
       tex=uv(o.x+.01,o.y+.2,o.x+.09,o.y+.4)
     end
@@ -129,11 +129,11 @@ function M.build(source,terrain,cols,rows)
       end
     end
   end end
-  -- Objects are complete native artwork cards, never reconstructed meshes.
-  -- Keep their source rectangle intact: crowns, roof silhouettes, pots and posts
-  -- are already drawn by the game artist and must not be synthesized here.
+  -- Native props retain their original artwork; imported models use their own
+  -- embedded geometry and materials in the same terrain/camera coordinate space.
   for _,o in ipairs(visible) do
-    local cx,cy=o.x+o.width/2,o.y+o.height-.1
+    local cx,cy=o.x+o.width/2,o.y+(o.anchorDepth or o.height)-.1
+    if o.style=='native_room_wall' then cy=o.y+.05 end
     local base=o.virtual and 0 or terrain.surface(source,cx,cy)
     base=base+(o.mount or 0)
     local height=o.size or o.height
@@ -146,7 +146,78 @@ function M.build(source,terrain,cols,rows)
       return {cx+dx*math.cos(yaw)-dy*math.sin(yaw),
         cy+dx*math.sin(yaw)+dy*math.cos(yaw),base+dz*math.cos(tilt)}
     end
-    if o.kind=='building' and (o.style=='littleroot_native_surfaces' or o.style=='littleroot_lab_native_surfaces') then
+    if o.kind=='model' then
+      for _,v in ipairs(require('CustomModels3D').vertices(o,terrain,source)) do vertices[#vertices+1]=v end
+    elseif o.style=='native_cutout' and pixels then
+      local runs=require('NativeArtworkCutout').runs(pixels,o)
+      local scale=height/o.height
+      for _,r in ipairs(runs) do
+        local left,right=(r[1]-o.width*8)/16,(r[2]-o.width*8)/16
+        local lo,hi=(r.bottom-r[3]-1)/16*scale,(r.bottom-r[3])/16*scale
+        local sample=uv(tx+r[1]/16,ty+r[3]/16,tx+r[2]/16,ty+(r[3]+1)/16)
+        polygon({point(left,lo),point(right,lo),point(right,hi),point(left,hi)},
+          {sample[4],sample[3],sample[2],sample[1]})
+      end
+    elseif o.style=='native_room_wall' and o.wallFill then
+      for row=0,o.height-1 do for col=0,o.width-1 do
+        local sample=uv(tx+col,ty+row,tx+col+1,ty+row+1)
+        for _,r in ipairs(o.wallClearRects or {}) do
+          if col>=r[1] and col<r[1]+r[3] and row>=r[2] and row<r[2]+r[4] then
+            local f=(row==0 and o.wallTopFill) or o.wallFill
+            sample=uv(tx+f[1],ty+f[2],tx+f[1]+f[3],ty+f[2]+f[4])
+          end
+        end
+        local left,right=col-o.width/2,col+1-o.width/2
+        local lo,hi=height*(1-(row+1)/o.height),height*(1-row/o.height)
+        polygon({point(left,lo),point(right,lo),point(right,hi),point(left,hi)},
+          {sample[4],sample[3],sample[2],sample[1]})
+      end end
+    elseif o.kind=='furniture' and o.style=='native_fixture' then
+      local x0,y0,x1,y1=o.x,o.y,o.x+o.width,o.y+(o.surfaceDepth or o.height)-.1
+      local inset=o.surfaceInset or 0
+      x0,y0,x1,y1=x0+inset,y0+inset,x1-inset,y1-inset
+      local split=o.surfaceTopRows or o.height/2
+      local top=base+height
+      transform=function(p)
+        local dx,dy,dz=p[1]-cx,p[2]-cy,p[3]-base
+        dy=dy-dz*math.sin(tilt)
+        return {cx+dx*math.cos(yaw)-dy*math.sin(yaw),
+          cy+dx*math.sin(yaw)+dy*math.cos(yaw),base+dz*math.cos(tilt)}
+      end
+      local face=uv(tx,ty+split,tx+o.width,ty+o.height)
+      local frontRect=o.surfaceFrontRect
+      if frontRect then face=uv(tx+frontRect[1],ty+frontRect[2],tx+frontRect[3],ty+frontRect[4]) end
+      local upright={face[4],face[3],face[2],face[1]}
+      if o.surfaceBevel then
+        -- Trace the native seat's clipped corners instead of making it square.
+        local b=o.surfaceBevel
+        local ring={{b,0},{1-b,0},{1,b},{1,1-b},{1-b,1},{b,1},{0,1-b},{0,b}}
+        local r=o.surfaceTopRect or {0,0,o.width,split}
+        local topUV=uv(tx+r[1],ty+r[2],tx+r[3],ty+r[4])
+        local function p(q,z) return {x0+(x1-x0)*q[1],y0+(y1-y0)*q[2],z} end
+        local function t(q) return {topUV[1][1]+(topUV[2][1]-topUV[1][1])*q[1],
+          topUV[1][2]+(topUV[4][2]-topUV[1][2])*q[2]} end
+        for n,a in ipairs(ring) do
+          local nextPoint=ring[n%#ring+1]
+          polygon({p({.5,.5},top),p(a,top),p(nextPoint,top)},
+            {t({.5,.5}),t(a),t(nextPoint)})
+          quad(p(a,base),p(nextPoint,base),p(nextPoint,top),p(a,top),upright,1)
+        end
+      else
+      quad({x0,y1,base},{x1,y1,base},{x1,y1,top},{x0,y1,top},upright,1)
+      local side=uv(tx,ty+split,tx+math.min(1,o.width),ty+o.height)
+      if frontRect then side=uv(tx+frontRect[1],ty+frontRect[2],tx+math.min(frontRect[3],frontRect[1]+1),ty+frontRect[4]) end
+      local sideUV={side[4],side[3],side[2],side[1]}
+      quad({x0,y0,base},{x0,y1,base},{x0,y1,top},{x0,y0,top},sideUV,1)
+      quad({x1,y1,base},{x1,y0,base},{x1,y0,top},{x1,y1,top},sideUV,1)
+      quad({x1,y0,base},{x0,y0,base},{x0,y0,top},{x1,y0,top},upright,1)
+      local topTex=uv(tx,ty,tx+o.width,ty+split)
+      local topRect=o.surfaceTopRect
+      if topRect then topTex=uv(tx+topRect[1],ty+topRect[2],tx+topRect[3],ty+topRect[4]) end
+      quad({x0,y0,top},{x1,y0,top},{x1,y1,top},{x0,y1,top},topTex,1)
+      end
+      transform=nil
+    elseif o.kind=='building' and (o.style=='littleroot_native_surfaces' or o.style=='littleroot_lab_native_surfaces') then
       -- Match the card lean while keeping the ground footprint anchored.
       transform=function(p)
         local dx,dy,dz=p[1]-cx,p[2]-cy,p[3]-base
@@ -189,7 +260,7 @@ function M.build(source,terrain,cols,rows)
     else
     polygon({point(-o.width/2,0),point(o.width/2,0),
       point(o.width/2,height),point(-o.width/2,height)},
-      {tex[4],tex[3],tex[2],tex[1]},o.kind=='tree' and {1,1,1,2} or nil)
+      {tex[4],tex[3],tex[2],tex[1]},(o.kind=='tree' or o.style=='native_underwater_plant') and {1,1,1,2} or nil)
     end
   end
   transform=nil

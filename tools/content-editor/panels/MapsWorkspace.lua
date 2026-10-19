@@ -151,7 +151,30 @@ local function drawNewMapForm(S, x, y, w, App)
   end
 end
 
+function MapsWorkspace.activate(S,App)
+  local mode=S.tab=='maps3d' and '3d' or '2d'
+  if S._mapWorkspaceMode==mode then return end
+  local previous=S._mapWorkspaceMode
+  if previous then S[previous=='3d' and '_map3DTool' or '_map2DTool']=S.builderTool end
+  if previous then
+    S['_mapOptions_'..previous]={mapEditMode=S.mapEditMode,mapViewMode=S.mapViewMode,mapBorderEditor=S.mapBorderEditor}
+  end
+  local options=S['_mapOptions_'..mode]
+  if options or previous or mode=='3d' then
+    S.mapEditMode=options and options.mapEditMode or 'map'
+    S.mapViewMode=options and options.mapViewMode or 'editor'
+    S.mapBorderEditor=options and options.mapBorderEditor or false
+  end
+  if S._builderStroke and App.endEditBatch then App.endEditBatch() end
+  S._builderStroke,S._builderDrag,S.builderRangeDraft=nil,nil,nil
+  local tool=S[mode=='3d' and '_map3DTool' or '_map2DTool']
+  if mode=='2d' and (tool=='visual_object' or tool=='visual_height') then tool=nil end
+  S.builderTool=tool or (mode=='3d' and 'visual_object' or 'pencil')
+  S._mapWorkspaceMode=mode
+end
+
 function MapsWorkspace.draw(S, x, y, w, h, App)
+  MapsWorkspace.activate(S,App)
   S.mapWorkspace = true
   if S.mapSection == "warps" then
     S.mapSection = "basics"
@@ -167,11 +190,11 @@ function MapsWorkspace.draw(S, x, y, w, h, App)
     and S.project.layeredMaps[selected] ~= nil
 
   Kit.card(x, y, w, barH, 10 * s)
-  Kit.text("caption", "MAP BUILDER", x + 12 * s, y + 10 * s, PAL.heading)
+  Kit.text("caption", S.tab=='maps3d' and "3D MAP BUILDER" or "MAP BUILDER", x + 12 * s, y + 10 * s, PAL.heading)
   local steps = {
     { label = "1  Choose a map", done = selected ~= nil },
     { label = "2  Make it editable", done = isLayered },
-    { label = "3  Paint or add events", done = isLayered },
+    { label = S.tab=='maps3d' and "3  Shape terrain and objects" or "3  Paint or add events", done = isLayered },
     { label = "4  Save your mod", done = isLayered and not S.dirty },
   }
   local stepX = x + 118 * s

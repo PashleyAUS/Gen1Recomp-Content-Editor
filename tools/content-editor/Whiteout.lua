@@ -50,8 +50,8 @@ end
 function M.emit(p, encode, out)
   local g = p.whiteout
   if type(g) ~= "table" then return end
-  local ver = p.version
-  local gen = p.generation
+  local ver = p.game or p.version
+  local gen = ver and require("Generation").num({version=ver}) or p.generation
   local gen2 = gen == 2 or ver == "gold" or ver == "silver" or ver == "crystal"
   local rse = ver == "ruby" or ver == "sapphire" or ver == "emerald"
   local frlg = ver == "firered" or ver == "leafgreen"

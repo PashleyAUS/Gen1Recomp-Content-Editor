@@ -1,30 +1,58 @@
 -- Shared editor/runtime renderer; textures and gameplay actors are supplied by the caller.
 local M={}
+local modelTextures=setmetatable({},{__mode='k'})
+local whiteTexture
+local function modelTexture(mat)
+  if modelTextures[mat] then return modelTextures[mat] end
+  if not mat.image then
+    if not whiteTexture then
+      local pixels=love.image.newImageData(1,1);pixels:setPixel(0,0,1,1,1,1)
+      whiteTexture=love.graphics.newImage(pixels);pixels:release()
+    end
+    return whiteTexture
+  end
+  local bytes=require('ModelAssetCodec3D').decode(mat.image)
+  local texture=love.graphics.newImage(love.filesystem.newFileData(bytes,'model.png'))
+  texture:setFilter('nearest','nearest');texture:setWrap(mat.wrapS or 'repeat',mat.wrapT or 'repeat')
+  modelTextures[mat]=texture;return texture
+end
 local format={{'VertexPosition','float',3},{'VertexTexCoord','float',2},{'VertexColor','float',4}}
 function M.draw(state,source,terrain,geometry,x,y,w,h,options)
   options=options or {}
   local g=love.graphics
   local cols,rows=math.min(source.cellWidth,128),math.min(source.cellHeight,128)
   local angle,pitch=options.angle or state.angle or 0,options.pitch or state.pitch or .85
-  local projected,minX,minY,maxX,maxY
+  local projected,modelGroups,minX,minY,maxX,maxY
   local cached=options.static and state.projection
   local reuse=cached and cached.source==source and cached.angle==angle and cached.pitch==pitch
   if reuse then
-    projected=cached.vertices
+    projected=cached.vertices;modelGroups=cached.models or {}
     minX,minY,maxX,maxY=unpack(cached.bounds)
   else
-    local world,objects=geometry.build(source,terrain,cols,rows,angle)
+    if source.visualNativeCutouts and (state.cutoutSource~=source or state.cutoutRevision~=state.updated) then
+      if state.cutoutPixels then state.cutoutPixels:release() end
+      state.cutoutPixels=state.atlas:newImageData()
+      state.cutoutSource,state.cutoutRevision=source,state.updated
+    end
+    local world,objects=geometry.build(source,terrain,cols,rows,angle,source.visualNativeCutouts and state.cutoutPixels)
     state.objectCount=#objects
-    projected={}
+    projected={};modelGroups={}
+    local groupByMaterial={}
     minX,minY,maxX,maxY=math.huge,math.huge,-math.huge,-math.huge
     for _,p in ipairs(world) do
       local px,py,depth=terrain.project(p[1]-cols/2,p[2]-rows/2,p[3],angle,pitch)
       local cameraDepth=depth*math.cos(pitch)+p[3]*math.sin(pitch)
-      projected[#projected+1]={px,py,-cameraDepth/(cols+rows+64),p[4],p[5],p[6],p[7],p[8],p[9]}
+      local target=projected
+      if p[10] then
+        local group=groupByMaterial[p[10]]
+        if not group then group={material=p[10],vertices={}};groupByMaterial[p[10]]=group;modelGroups[#modelGroups+1]=group end
+        target=group.vertices
+      end
+      target[#target+1]={px,py,-cameraDepth/(cols+rows+64),p[4],p[5],p[6],p[7],p[8],p[9]}
       minX,minY,maxX,maxY=math.min(minX,px),math.min(minY,py),math.max(maxX,px),math.max(maxY,py)
     end
     if options.static then
-      state.projection={source=source,angle=angle,pitch=pitch,vertices=projected,bounds={minX,minY,maxX,maxY}}
+      state.projection={source=source,angle=angle,pitch=pitch,vertices=projected,models=modelGroups,bounds={minX,minY,maxX,maxY}}
     end
   end
   local fit=math.min(w/math.max(1,maxX-minX),h/math.max(1,maxY-minY))*.9*(state.zoom or 1)
@@ -57,6 +85,7 @@ function M.draw(state,source,terrain,geometry,x,y,w,h,options)
     state.shader=g.newShader([[
       extern vec4 treeKeys[8];
       extern vec3 worldTint;
+      extern number alphaCutoff;
       vec4 effect(vec4 color, Image texture, vec2 uv, vec2 screen) {
         vec4 pixel=Texel(texture,uv);
         if (color.a>1.5) {
@@ -67,7 +96,7 @@ function M.draw(state,source,terrain,geometry,x,y,w,h,options)
         }
         pixel*=color;
         pixel.rgb*=worldTint;
-        if (pixel.a<0.01) discard;
+        if (pixel.a<alphaCutoff) discard;
         return pixel;
       }
     ]], [[
@@ -80,6 +109,9 @@ function M.draw(state,source,terrain,geometry,x,y,w,h,options)
         return p;
       }
     ]])
+  end
+  if state.treeKeySource~=source or state.treeKeyStyle~=source.visualTreeStyle then
+    state.treeKeys=nil;state.treeKeySource=source;state.treeKeyStyle=source.visualTreeStyle
   end
   if not state.treeKeys then
     local keys={}
@@ -117,6 +149,7 @@ function M.draw(state,source,terrain,geometry,x,y,w,h,options)
   end
   state.shader:send('treeKeys',unpack(state.treeKeys))
   state.shader:send('worldTint',source.visualTint or {1,1,1})
+  state.shader:send('alphaCutoff',.01)
   local cameraDepth=0
   if options.camera then
     local cam=options.camera
@@ -137,6 +170,26 @@ function M.draw(state,source,terrain,geometry,x,y,w,h,options)
     g.push();g.translate(w/2-centerX*fit,h/2-centerY*fit)
     state.worldMesh:setTexture(state.atlas);g.setColor(1,1,1,1);g.draw(state.worldMesh)
     g.pop()
+  end
+  if not options.static or not reuse or state.modelFit~=fit then
+    for _,batch in ipairs(state.modelMeshes or {}) do batch.mesh:release() end
+    state.modelMeshes={}
+    for _,group in ipairs(modelGroups or {}) do
+      local mv={}
+      for _,p in ipairs(group.vertices) do mv[#mv+1]={p[1]*fit,p[2]*fit,p[3],p[4],p[5],p[6],p[7],p[8],p[9]} end
+      if #mv>0 then
+        local mesh=g.newMesh(format,mv,'triangles',options.static and 'static' or 'stream')
+        mesh:setTexture(modelTexture(group.material));state.modelMeshes[#state.modelMeshes+1]={mesh=mesh,material=group.material}
+      end
+    end
+    state.modelFit=fit
+  end
+  if #(state.modelMeshes or {})>0 then
+    g.push();g.translate(w/2-centerX*fit,h/2-centerY*fit);g.setColor(1,1,1,1)
+    for _,batch in ipairs(state.modelMeshes) do
+      state.shader:send('alphaCutoff',batch.material.alphaCutoff or .01);g.draw(batch.mesh)
+    end
+    g.pop();state.shader:send('alphaCutoff',.01)
   end
   for _,actor in ipairs(options.actors or {}) do
     if actor.image and actor.quad then

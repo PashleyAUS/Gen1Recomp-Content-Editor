@@ -42,7 +42,7 @@ end
 function M.emit(p, encode, out)
   local g = p.coinOffers
   if type(g) ~= "table" then return end
-  local ver = p.version
+  local ver = p.game or p.version
   local gen2 = p.generation == 2 or ver == "gold" or ver == "silver" or ver == "crystal"
   if not gen2 then return end
   local lines = {}

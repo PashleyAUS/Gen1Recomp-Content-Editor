@@ -129,6 +129,16 @@ function love.load()
   local tabs={}
   for _,tab in ipairs(App.visibleTabs()) do tabs[tab.id]=true;tabs[#tabs+1]=tab.id;add(tab.id) end
   lines[#lines+1]="tabs: "..table.concat(tabs," ")
+  if os.getenv('EDITOR_MAP_TABS_ONLY')=='1' then
+    assert((tabs.maps3d==true)==gen3,'3D Maps tab availability does not match supported games')
+    if gen3 then
+      local id=game=='emerald' and 'EM_LITTLEROOT_TOWN' or 'FR_PALLET_TOWN'
+      assert(require('LayeredMap').convertMap(S,id))
+      S.mapId,S.builderMapId=id,id;S.mapViewMode='editor';S.mapEditMode='map'
+    end
+    views={};queued={};add('maps');if gen3 then add('maps3d') end
+    return
+  end
   local species=game=="emerald" and "TREECKO" or "BULBASAUR"
   addSubViews(gen3,species,game=="emerald" and "EM_LITTLEROOT_TOWN" or nil)
   local kept={}
@@ -137,6 +147,7 @@ function love.load()
 end
 -- Queue each chip the view drew that the view did not already pin.
 local function expand(view)
+  if os.getenv('EDITOR_MAP_TABS_ONLY')=='1' then return end
   for key,modes in pairs(chips) do
     if view.set[key]==nil then
       for _,m in ipairs(modes) do

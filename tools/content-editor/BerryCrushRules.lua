@@ -38,7 +38,7 @@ end
 function M.emit(p, encode, out)
   local g = p.berryCrush
   if type(g) ~= "table" then return end
-  local ver = p.version
+  local ver = p.game or p.version
   local gen3 = p.generation == 3 or ver == "firered" or ver == "leafgreen"
     or ver == "ruby" or ver == "sapphire" or ver == "emerald"
   if not gen3 then return end

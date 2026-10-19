@@ -18,8 +18,11 @@ contains maps and tile sources, the center switches between **Terrain** and
 ## Gen 3 live 3D terrain preview
 
 In Emerald, FireRed or LeafGreen, choose a map and click **Edit Map**.
-The Maps workspace shows the 2D painting canvas beside a live textured 3D
-terrain preview in the right drawer. Select **3D Height**, choose 0–15, and
+Open the separate **3D MAPS** tab for the 2D source canvas beside a live
+textured 3D preview. The normal **MAPS** tab keeps 2D painting and event tools
+without a 3D pane. Both tabs share the selected map and project data, while
+retaining their own tools and views. Switching tabs cancels unfinished object
+drags without placing anything. Select **3D Height**, choose 0–15, and
 paint or drag in the 2D canvas. Drag in the preview to orbit and tilt; use
 **+**, **-**, **Reset**, or **Hide 3D** to adjust the view.
 
@@ -64,6 +67,33 @@ the player's position, movement, collision rules, scripts and 3D camera settings
 It does not reload the map or require another export. Maps without enabled 3D
 content keep their normal view. Gameplay bindings, input rebinding, dialogue,
 menus and battles take priority over the shortcut.
+
+**Custom 3D models (Emerald, FireRed and LeafGreen):** In **3D MAPS →
+3D Objects**, choose **Import 3D model** or drop an `.obj`, `.gltf`, or `.glb`
+onto the editor with an editable map selected. Select the imported asset and
+**Place model**, then drag a footprint on the 2D map. **Model height** scales it
+uniformly, preserving its proportions; **Rotate**, **Lean 45 deg**, and **Mount Z**
+control orientation and height above the terrain. Middle-drag or Space+drag pans
+while the placement tool remains selected. **Remove** removes a placed model.
+Use the Collision tool separately for blocked/walkable tiles and the existing
+warp tools for entrances; importing a mesh does not invent collision or doors.
+
+Imports support static OBJ faces (including negative indices and convex polygon
+triangulation), MTL diffuse colors/textures, and glTF 2.0 scenes with node
+transforms, indexed/non-indexed triangles, strips/fans, vertex colors and base-color
+PNG/JPEG textures. glTF supports local `.bin`/image dependencies, base64 data URIs,
+and embedded GLB buffers/images. Keep dependencies inside the model's folder.
+Models use Y-up coordinates and are grounded automatically. Geometry and textures
+are embedded in the saved project and exported mod, so recipients do not need the
+original model files. The same geometry is used by the live preview and gameplay.
+
+This is a static base-color renderer: animation, skinning, morph targets, sparse
+accessors, compressed meshes/textures, PBR lighting and texture-transform extensions
+are not supported. Unsupported required mesh features produce an import error;
+export a plain static mesh with UV0 and PNG/JPEG textures. Keep models below
+50,000 triangles, combined file dependencies below 32 MB, and individual textures
+at or below 4096 × 4096. Repeated placements increase export size; smaller models
+are recommended for smooth editing.
 
 **Object angles:** In **3D Objects**, **Rotate** cycles through 0–315 degrees
 in 45-degree steps. **Lean 45 deg** leans any object away from its base, including buildings, furniture, signs, fences, plants and wall props. Set
@@ -124,6 +154,15 @@ are under `tests/content-editor/terrain3d-towns/<game>/`.
 
 ### 3D interiors
 
+Emerald's Abandoned Ship captain's office has a dedicated native-art layout:
+the back wall stays together upright, while complete cabinets, the ship display
+counter and the chart desk use horizontal tops and upright fronts. All materials
+come from the room's existing tiles. Exit mats, collision, scripts and manual
+objects remain intact. Use **3D Objects → Build 3D interior** (or **Rebuild 3D
+interior**) to apply this treatment to the office. Adjusted fixtures retain their
+native texture splits when rotated, leaned or rebuilt.
+
+
 The town recipe includes five native rooms in Emerald and four in each FR/LG
 game. Wall and furniture artwork is lifted onto native artwork cards. Known
 lab fixtures keep their complete multi-tile artwork together. Empty border tiles,
@@ -151,6 +190,30 @@ house plants, outdoor signs, and Pallet Town fence runs. Rebuild existing 3D
 interiors to replace the older tile boxes. Other tilesets can use the manual
 tools; unknown artwork is not assigned a prop type automatically. Native 2D
 artwork, collision, signs' scripts, and the live F6 view toggle are preserved.
+
+### Caves, underwater and additional rooms
+
+**3D Objects → Build 3D terrain** creates native-texture relief for cave and
+underwater maps. Solid cells become raised rock/reef areas; traversable cells,
+ladder and exit approaches retain their original floor height. Emerald's named
+cave tilesets and the known FireRed/LeafGreen cave map IDs are recognized,
+including Mt. Moon, Rock Tunnel and Seafoam. Underwater seaweed uses leaned native
+artwork with its original seabed background masked out. Native collision,
+passage elevations, scripts, warp indices, Dive data and swimmer state are not
+rewritten. This is an initial relief pass; use the height/slope brushes to refine
+it. Rebuilding refreshes generated relief while retaining manual height and slope
+changes and manual objects.
+
+Emerald's standard Pokémon Center layout has an upright rear wall, a complete
+reception counter, healing equipment and a raised glass table. The Oldale review
+sample uses upright original-art cutouts for its equipment, bookcase, plant, stools
+and glass table. Edge-connected native wall/floor pixels are removed without
+removing enclosed artwork colors; the counter retains its existing surfaces.
+This treatment is isolated to Oldale until reviewed. Birch-style lab
+fixtures also use original-art horizontal tops and upright fronts. Furniture depth
+stops at its native solid rows, keeping the walkable tiles below its artwork clear.
+Use **Build/Rebuild 3D interior** to update an existing room; unrecognized room
+layouts keep the general builder and manual tools.
 
 ### Connected 3D routes
 

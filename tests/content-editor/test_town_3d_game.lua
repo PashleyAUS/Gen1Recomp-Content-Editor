@@ -3,13 +3,22 @@ return function(data,root,output,game)
   local IO,L=require('ModIO'),require('LayeredMap')
   local Models,N=require('MapObjects3D'),require('MapNavigation3D')
   local houseReview=os.getenv('POKEPORT_HOUSE_REVIEW')=='1'
-  output=output..'/'..game..(houseReview and '-house-review' or '');IO.ensureDirectory(output)
+  local interiorReview=os.getenv('POKEPORT_INTERIOR_REVIEW')=='1'
+  local requestedRoom=os.getenv('POKEPORT_INTERIOR_MAP')
+  local reviewPrefix=requestedRoom and 'scene' or 'captains-office'
+  output=output..'/'..game..(interiorReview and (requestedRoom and '-review-'..requestedRoom:lower() or '-interior-review') or houseReview and '-house-review' or '');IO.ensureDirectory(output)
   local modId='town3d_'..game
   local S={data=data,version=game,project=require('State').blankProject(modId,game=='emerald' and 'Littleroot Town 3D' or 'Pallet Town 3D')}
   S.project.game=game;S.path=output..'/mod';IO.ensureDirectory(S.path)
   IO.writeText(S.path..'/manifest.json','{"id":"'..modId..'","name":"3D native town","version":"1.0.0","entry":"main.lua","games":["'..game..'"]}')
   require('Gen3ContentAdapter').prepare(S);require('Gen3Workspace').prepare(S)
   local town=require('Town3D').build(S)
+  local reviewRoom
+  if interiorReview then
+    reviewRoom=requestedRoom or 'EM_ABANDONED_SHIP_CAPTAINS_OFFICE'
+    require('Interior3D').apply(assert(L.convertMap(S,reviewRoom)),S.project.maps[reviewRoom])
+    if os.getenv('POKEPORT_CUSTOM_MODEL_REVIEW')=='1' then dofile(root..'/tests/content-editor/custom_model_review.lua')(S,S.project.layeredMaps[reviewRoom],root) end
+  end
   local signs,fences=0,0
   for _,o in ipairs(Models.objects(town.source)) do
     if o.kind=='sign' then signs=signs+1 elseif o.kind=='fence' then fences=fences+1 end
@@ -28,6 +37,12 @@ return function(data,root,output,game)
   assert(L.compileProject(S));assert(IO.save(S.path,S.project))
   local fresh={};require('Gen3').load(fresh,data._gen3Read)
   local loader=assert(require('Gen3Mod').load(fresh,S.path))
+  if reviewRoom then
+    local def=assert(fresh.maps[reviewRoom])
+    def.midLayout=def.midLayout or assert(require('Gen3Map').layout(fresh,reviewRoom))
+    def.width,def.height=def.midLayout.width,def.midLayout.height
+    assert(require('Gen3Map').tileset(fresh,def.pair))
+  end
   assert(require('Gen3Map').tileset(fresh,town.source.baseTileset))
   -- Interior maps are exported too; keep their compiled native layouts intact.
   for _,w in ipairs(town.def.warps) do
@@ -50,6 +65,11 @@ return function(data,root,output,game)
   for name,id in pairs(constants.IDS) do
     if name:find('SYS_POKEMON_GET') or name:find('SYS_POKEDEX_GET') or name:find('RECEIVED_STARTER') or name:find('HIDE_LITTLEROOT') or name:find('HIDE.*TRUCK') then session.flags[tostring(id)]=true end
     if name:find('HOUSE_RIVAL_MOM') then session.flags[tostring(id)]=false end
+  end
+  if interiorReview then
+    -- Isolated traversal test save: trainers have already been defeated, so
+    -- their native sight scripts cannot interrupt the camera/warp checks.
+    for trainer=1,1024 do session.flags[tostring(0x500+trainer)]=true end
   end
   local g={data=fresh,session=session,save={position={},party={}},input=input,options={}}
   local cache={read=function(_,p) return data._gen3Read((p:gsub('^'..game..'/',''))) end,
@@ -143,6 +163,67 @@ return function(data,root,output,game)
     if label then shot(label) end
   end
   local play=coroutine.create(function()
+    if reviewRoom then
+      local source=S.project.layeredMaps[reviewRoom]
+      local function passable(x,y)
+        if x<0 or y<0 or x>=source.cellWidth or y>=source.cellHeight then return false end
+        local mode=source.collision[y*source.cellWidth+x+1]
+        return mode=='walk' or mode=='grass' or (source.visualEnvironment=='underwater' and mode=='water')
+      end
+      local sx,sy,best
+      for y=2,source.cellHeight-2 do for x=2,source.cellWidth-2 do
+        local distance=(x-source.cellWidth/2)^2+(y-source.cellHeight/2)^2
+        local warp=false
+        for _,w in ipairs(fresh.maps[reviewRoom].warps or {}) do if math.abs(x-w.x)+math.abs(y-w.y)<3 then warp=true end end
+        if passable(x,y) and passable(x+1,y) and passable(x-1,y) and not warp and (not best or distance<best) then sx,sy,best=x,y,distance end
+      end end
+      assert(sx,'No safe native review starting cell')
+      Map.load(host,g,reviewRoom,{x=sx,y=sy,facing='right'});settle()
+      if source.visualEnvironment=='underwater' then assert(P.underwater,'Native underwater avatar was lost') end
+      if os.getenv('POKEPORT_CUSTOM_MODEL_REVIEW')=='1' then
+        assert(require('src.core.game3.field_view')._editor3DLast.customModels==3,'Exported mod did not render all three textured model formats')
+      end
+      shot(reviewPrefix..'-in-game')
+      local walked=false
+      for _,d in ipairs(dirs) do
+        if walkTo(sx+d[2],sy+d[3],true) then walkTo(sx+d[2],sy+d[3]);walked=true;break end
+      end
+      assert(walked,'Could not walk through the authored scene')
+      shot(reviewPrefix..'-walking')
+      Bus.call('input.key',function() error('Interior camera not handled') end,g,{phase='pressed',key=']'})
+      tick(nil);shot(reviewPrefix..'-camera')
+      switchMode('2d',reviewPrefix..'-2d')
+      switchMode('3d',reviewPrefix..'-3d')
+      local function useWarp(w)
+        local from=Map.current
+        for _,d in ipairs(dirs) do
+          local x,y=w.x-d[2],w.y-d[3]
+          if x>=0 and y>=0 and x<C._widthCells and y<C._heightCells and walkTo(x,y,true) then
+            walkTo(x,y)
+            for _=1,180 do tick(d[1]);if Map.current~=from then break end end
+            if Map.current~=from then break end
+          end
+        end
+        held=nil;settle()
+        assert(Map.current==w.destMap,'Office native warp failed: '..Map.current)
+      end
+      local exit=fresh.maps[reviewRoom].warps[1]
+      -- FRLG Centers expose several doorway coordinates; use the native arrow
+      -- tile rather than an adjacent decorative carpet cell.
+      for _,w in ipairs(fresh.maps[reviewRoom].warps or {}) do
+        if C.arrowWarpDir(C.behavior(w.x,w.y)) then exit=w;break end
+      end
+      if exit then
+      useWarp(exit);shot(reviewPrefix..'-outside')
+      local back=assert(fresh.maps[Map.current].warps[exit.destWarp or 1])
+      assert(back.destMap==reviewRoom,'Office return warp changed')
+      useWarp(back);shot(reviewPrefix..'-return')
+      assert(require('src.core.game3.field_view')._editor3DLast.interior,'Returning to office lost 3D')
+      end
+      for _,message in ipairs(loader:status().errors or {}) do error(tostring(message)) end
+      print('PASS: exported '..reviewRoom..', native movement, camera'..(exit and ' and entry/exit round trip' or ' (no native doorway warps)'))
+      return
+    end
     Map.load(host,g,town.id,{x=town.slope.x-1,y=town.slope.y+1,facing='right'});settle()
     recording=true
     shot('town-start')
@@ -412,7 +493,7 @@ return function(data,root,output,game)
       assert(info.canvasWidth==info.width and info.canvasHeight==info.height,'HD dimensions do not match the actual world canvas')
       local ui=require('src.render.Renderer').canvas
       assert(ui:getWidth()==240 and ui:getHeight()==160,'HD world changed native UI resolution')
-      assert(info.mapId==Map.current and info.objects>0,'Connected map 3D scene missing')
+      assert(info.mapId==Map.current and (info.objects>0 or S.project.layeredMaps[Map.current].visualEnvironment),'Connected map 3D scene missing')
       if monitorConnections then
         assert(info.connected and info.worldX and info.worldY,'Connection fell back to a local or 2D camera')
         assert(not require('src.ui.game3.fade').isActive() and not require('src.core.game3.warp').isBusy(),'Native connection introduced a fade or warp')

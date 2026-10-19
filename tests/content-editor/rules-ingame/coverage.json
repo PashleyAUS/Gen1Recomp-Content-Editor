@@ -1,0 +1,70 @@
+{
+  "games": [
+    {
+      "game": "red",
+      "passed": 620,
+      "cases": 620
+    },
+    {
+      "game": "blue",
+      "passed": 620,
+      "cases": 620
+    },
+    {
+      "game": "yellow",
+      "passed": 626,
+      "cases": 626
+    },
+    {
+      "game": "gold",
+      "passed": 1136,
+      "cases": 1136
+    },
+    {
+      "game": "silver",
+      "passed": 1136,
+      "cases": 1136
+    },
+    {
+      "game": "crystal",
+      "passed": 1181,
+      "cases": 1181
+    },
+    {
+      "game": "firered",
+      "passed": 1593,
+      "cases": 1593
+    },
+    {
+      "game": "leafgreen",
+      "passed": 1593,
+      "cases": 1593
+    },
+    {
+      "game": "ruby",
+      "passed": 1800,
+      "cases": 1800
+    },
+    {
+      "game": "sapphire",
+      "passed": 1800,
+      "cases": 1800
+    },
+    {
+      "game": "emerald",
+      "passed": 1716,
+      "cases": 1716
+    }
+  ],
+  "total_cases": 13821,
+  "failures": 0,
+  "checks": [
+    "rule form mutations",
+    "numeric bounds and toggles",
+    "selectable rule rows",
+    "strict exported mod schemas",
+    "mod lifecycle callbacks",
+    "battle and Pokemon calculations",
+    "live game update and rendering"
+  ]
+}

@@ -1,7 +1,9 @@
 -- Bake a rotated brush as a reusable source; existing painted cells stay intact.
 local M={}
 function M.rotate(S,direction)
-  assert(S.path and S.project,"Open a mod before rotating tiles")
+  assert(direction==1 or direction==-1 or direction=="horizontal" or direction=="vertical","Choose a rotation or mirror direction")
+  local mirror=type(direction)=="string"
+  assert(S.path and S.project,"Open a mod before transforming tiles")
   local L,IO=require("LayeredMap"),require("ModIO")
   local stamp=S.builderStamp
   local cells=stamp and stamp.cells or {{dx=0,dy=0,tile=S.builderTile or 0}}
@@ -11,11 +13,14 @@ function M.rotate(S,direction)
   for _,c in ipairs(cells) do minX=math.min(minX,c.dx);minY=math.min(minY,c.dy);maxX=math.max(maxX,c.dx);maxY=math.max(maxY,c.dy) end
   local cols,rows=maxX-minX+1,maxY-minY+1
   assert(cols>0 and rows>0 and cols<=128 and rows<=128,"Choose a brush no larger than 128 by 128 tiles")
-  local canvas=love.graphics.newCanvas(rows*16,cols*16)
+  local outCols,outRows=mirror and cols or rows,mirror and rows or cols
+  local canvas=love.graphics.newCanvas(outCols*16,outRows*16)
   local previous=love.graphics.getCanvas();love.graphics.push("all")
   local ok,err=xpcall(function()
     love.graphics.setCanvas(canvas);love.graphics.origin();love.graphics.setScissor();love.graphics.setShader();love.graphics.clear(0,0,0,0);love.graphics.setColor(1,1,1,1)
-    if direction==1 then love.graphics.translate(rows*16,0);love.graphics.rotate(math.pi/2)
+    if direction=="horizontal" then love.graphics.translate(cols*16,0);love.graphics.scale(-1,1)
+    elseif direction=="vertical" then love.graphics.translate(0,rows*16);love.graphics.scale(1,-1)
+    elseif direction==1 then love.graphics.translate(rows*16,0);love.graphics.rotate(math.pi/2)
     else love.graphics.translate(0,cols*16);love.graphics.rotate(-math.pi/2) end
     for _,c in ipairs(cells) do assert(L.drawSourceTile(S,source,c.tile,(c.dx-minX)*16,(c.dy-minY)*16,16,1,S.builderMapId),"Cannot render selected tile") end
   end,debug.traceback)
@@ -25,19 +30,21 @@ function M.rotate(S,direction)
   repeat rel="assets/mapbuilder/rotations/rotated_"..n..".png";n=n+1 until not IO.readText(S.path.."/"..rel)
   assert(IO.ensureDirectory(S.path.."/assets/mapbuilder/rotations"))
   assert(IO.writeText(S.path.."/"..rel,canvas:newImageData():encode("png"):getString()))
-  local result=assert(L.addTileSource(S.project,"ROTATED_"..(n-1),rel,rows*16,cols*16));result.colorMode="true_color"
+  local result=assert(L.addTileSource(S.project,"ROTATED_"..(n-1),rel,outCols*16,outRows*16));result.colorMode="true_color"
   local rotated={}
   for _,c in ipairs(cells) do
     local x,y=c.dx-minX,c.dy-minY;local nx,ny
-    if direction==1 then nx,ny=rows-1-y,x else nx,ny=y,cols-1-x end
-    rotated[#rotated+1]={dx=nx,dy=ny,tile=ny*rows+nx}
+    if direction=="horizontal" then nx,ny=cols-1-x,y
+    elseif direction=="vertical" then nx,ny=x,rows-1-y
+    elseif direction==1 then nx,ny=rows-1-y,x else nx,ny=y,cols-1-x end
+    rotated[#rotated+1]={dx=nx,dy=ny,tile=ny*outCols+nx}
   end
   S.project.nextRotatedTile=n;S.builderSourceId=result.id;S.builderTile=rotated[1].tile
   S.builderStamp={source=result.id,cells=rotated};S.builderTool="pencil"
   return result
 end
 function M.rotateSelection(S,map,direction,App)
-  assert(direction==1 or direction==-1,"Choose left or right")
+  assert(direction==1 or direction==-1 or direction=="horizontal" or direction=="vertical","Choose a rotation or mirror direction")
   local L=require("LayeredMap")
   local layer=math.max(1,math.min(S.builderLayer or 1,#map.layers))
   local changes,seen={},{}
@@ -68,7 +75,15 @@ function M.rotateSelection(S,map,direction,App)
   S.project.nextRotatedTile=staged.project.nextRotatedTile
   for _,change in ipairs(changes) do L.setCell(map,layer,change.x,change.y,change.after) end
   App.markDirty();App.endEditBatch()
-  S.status="Rotated "..#changes.." selected map tile(s)"
+  S.status=(type(direction)=="string" and "Mirrored " or "Rotated ")..#changes.." selected map tile(s)"
   return #changes
+end
+function M.mirror(S,axis)
+  assert(axis=="horizontal" or axis=="vertical","Choose horizontal or vertical")
+  return M.rotate(S,axis)
+end
+function M.mirrorSelection(S,map,axis,App)
+  assert(axis=="horizontal" or axis=="vertical","Choose horizontal or vertical")
+  return M.rotateSelection(S,map,axis,App)
 end
 return M

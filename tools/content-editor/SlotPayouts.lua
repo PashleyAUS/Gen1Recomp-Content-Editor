@@ -33,8 +33,8 @@ local RSE_INDEX = { cherry = 0, topbot = 1, replay = 2, lotad = 3, azurill = 4, 
 local GEN1_KEY = { seven = "7", bar = "BAR", cherry = "CHERRY", mouse = "MOUSE", fish = "FISH", bird = "BIRD" }
 
 local function family(p)
-  local ver = p.version
-  local gen = p.generation
+  local ver = p.game or p.version
+  local gen = ver and require("Generation").num({version=ver}) or p.generation
   if gen == 2 or ver == "gold" or ver == "silver" or ver == "crystal" then return "gen2" end
   if ver == "ruby" or ver == "sapphire" or ver == "emerald" then return "rse" end
   if ver == "firered" or ver == "leafgreen" or gen == 3 then return "frlg" end

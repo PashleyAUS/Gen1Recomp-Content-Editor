@@ -25,7 +25,7 @@ local BUENA = {
 }
 
 local function gen2(p)
-  local ver = p and p.version
+  local ver = p and (p.game or p.version)
   return p and (p.generation == 2 or ver == "gold" or ver == "silver" or ver == "crystal")
 end
 

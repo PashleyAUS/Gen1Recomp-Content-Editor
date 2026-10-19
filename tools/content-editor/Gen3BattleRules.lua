@@ -106,7 +106,14 @@ function M.draw(S,x,y,w,h,App)
     n=math.max(row.min,math.min(row.max,math.floor(n)))
     if n~=old then
       S.project.gen3BattleRules=S.project.gen3BattleRules or {};values=S.project.gen3BattleRules
-      values[row.key]=n;App.markDirty()
+      values[row.key]=n
+      -- Keep ranges valid while editing either endpoint so Save/Playtest can
+      -- always export the project produced by this form.
+      if row.key=="damageRollMin" and n>(values.damageRollMax or 100) then values.damageRollMax=n end
+      if row.key=="damageRollMax" and n<(values.damageRollMin or 85) then values.damageRollMin=n end
+      if row.key=="partialTrapMinTurns" and n>(values.partialTrapMaxTurns or 6) then values.partialTrapMaxTurns=n end
+      if row.key=="partialTrapMaxTurns" and n<(values.partialTrapMinTurns or 3) then values.partialTrapMinTurns=n end
+      App.markDirty()
     end
     y=y+38*s
   end

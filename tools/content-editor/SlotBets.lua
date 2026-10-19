@@ -13,8 +13,8 @@ local LINES = {
 }
 
 local function family(p)
-  local ver = p and p.version
-  local gen = p and p.generation
+  local ver = p and (p.game or p.version)
+  local gen = ver and require("Generation").num({version=ver}) or (p and p.generation)
   if gen == 2 or ver == "gold" or ver == "silver" or ver == "crystal" then return "gen2" end
   if ver == "ruby" or ver == "sapphire" or ver == "emerald" then return "rse" end
   if ver == "firered" or ver == "leafgreen" or gen == 3 then return "frlg" end

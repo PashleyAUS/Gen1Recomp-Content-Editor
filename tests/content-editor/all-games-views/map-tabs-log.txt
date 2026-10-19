@@ -1,0 +1,2 @@
+[info] generated data initialized for gen3 (self-contained runtime)
+[game3/native] atlas ready pair=general__petalburg mids=656 256x656 layered=true

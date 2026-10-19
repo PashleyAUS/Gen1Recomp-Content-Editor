@@ -130,3 +130,10 @@ tests/content-editor/leafgreen-smoke/*.png
 /tests/content-editor/terrain3d-towns/*.png
 /tests/content-editor/terrain3d-towns/*-log.txt
 /tests/content-editor/terrain3d-towns/result.txt
+
+/tests/content-editor/rules-ingame/mod-*/
+/tests/content-editor/rules-ingame/*-result.txt
+
+/tests/content-editor/rules-ingame/*.editor_project.lua
+/tests/content-editor/rules-ingame/*.log
+/tests/content-editor/rules-ingame/gameplay-*.png

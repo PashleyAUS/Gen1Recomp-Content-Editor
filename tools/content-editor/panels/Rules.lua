@@ -402,23 +402,24 @@ local function drawStatuses(S, App, rec, owned, ensure, fy, viewX, viewW, fh, s,
   end)
   row("Catch bonus", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().catchBonus) or r.catchBonus or 0
-    local v = RegList.num(App, "ru_st_catch", fx, fy_, 80 * s, fh_, cur)
+    local v = math.max(0, math.min(255, math.floor(RegList.num(App, "ru_st_catch", fx, fy_, 80 * s, fh_, cur))))
     if v ~= cur then ensure().catchBonus = v end
   end)
   row("Shake bonus", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().shakeBonus) or r.shakeBonus or 0
-    local v = RegList.num(App, "ru_st_shake", fx, fy_, 80 * s, fh_, cur)
+    local v = math.max(0, math.min(255, math.floor(RegList.num(App, "ru_st_shake", fx, fy_, 80 * s, fh_, cur))))
     if v ~= cur then ensure().shakeBonus = v end
   end)
   row("Cure on switch", function(fx, fy_, fw, fh_)
-    local cur = not not ((owned and ensure().cureOnSwitch) or r.cureOnSwitch)
+    local record = owned and ensure() or r
+    local cur = not not record.cureOnSwitch
     if Kit.chip(fx, fy_, 80 * s, fh_, cur and "YES" or "NO", cur, PAL.yellow) then
       ensure().cureOnSwitch = not cur
     end
   end)
   row("Move priority", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().beforeMovePriority) or r.beforeMovePriority or 0
-    local v = RegList.num(App, "ru_st_pri", fx, fy_, 80 * s, fh_, cur)
+    local v = math.max(0, math.floor(RegList.num(App, "ru_st_pri", fx, fy_, 80 * s, fh_, cur)))
     if v ~= cur then ensure().beforeMovePriority = v end
   end)
   local pen = (owned and ensure().statPenalty) or r.statPenalty or {}
@@ -433,7 +434,7 @@ local function drawStatuses(S, App, rec, owned, ensure, fy, viewX, viewW, fh, s,
       if not e.statPenalty.stat then e.statPenalty = nil end
     end
     local div = tonumber(pen.div) or 1
-    local dv = RegList.num(App, "ru_st_pdiv", fx + fw - 80 * s, fy_, 80 * s, fh_, div)
+    local dv = math.max(1, math.floor(RegList.num(App, "ru_st_pdiv", fx + fw - 80 * s, fy_, 80 * s, fh_, div)))
     if dv ~= div then
       local e = ensure()
       if type(e.statPenalty) ~= "table" or not e.statPenalty.stat then
@@ -480,22 +481,23 @@ local function drawRulesets(_, App, rec, owned, ensure, fy, viewX, viewW, fh, s,
     local v = RegList.field(App, "ru_rs_crit", fx, fy_, 80 * s, fh_, shown, "0")
     if v ~= shown then
       local n = tonumber(v)
-      ensure().critRate = n
+      ensure().critRate = n and math.max(0,math.min(255,math.floor(n))) or nil
     end
   end)
   row("Rand min", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().randMin) or r.randMin or 217
-    local v = RegList.num(App, "ru_rs_rmin", fx, fy_, 80 * s, fh_, cur)
-    if v ~= cur then ensure().randMin = v end
+    local v = math.max(0, math.min(255, math.floor(RegList.num(App, "ru_rs_rmin", fx, fy_, 80 * s, fh_, cur))))
+    if v ~= cur then local e=ensure();e.randMin=v;if v>(e.randMax or 255) then e.randMax=v end end
   end)
   row("Rand max", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().randMax) or r.randMax or 255
-    local v = RegList.num(App, "ru_rs_rmax", fx, fy_, 80 * s, fh_, cur)
-    if v ~= cur then ensure().randMax = v end
+    local v = math.max(0, math.min(255, math.floor(RegList.num(App, "ru_rs_rmax", fx, fy_, 80 * s, fh_, cur))))
+    if v ~= cur then local e=ensure();e.randMax=v;if v<(e.randMin or 217) then e.randMin=v end end
   end)
   for _, flag in ipairs(RULESET_FLAGS) do
     row(flag.label, function(fx, fy_, fw, fh_)
-      local cur = not not ((owned and ensure()[flag.key]) or r[flag.key])
+      local record = owned and ensure() or r
+      local cur = not not record[flag.key]
       if Kit.chip(fx, fy_, 80 * s, fh_, cur and "YES" or "NO", cur, PAL.yellow) then
         ensure()[flag.key] = not cur
       end
@@ -513,14 +515,14 @@ local function drawTransitions(_, App, rec, owned, ensure, fy, viewX, viewW, fh,
   end
   row("Frames", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().frames) or r.frames or 30
-    local v = math.max(1, RegList.num(App, "ru_tr_fr", fx, fy_, 80 * s, fh_, cur))
+    local v = math.max(1, math.floor(RegList.num(App, "ru_tr_fr", fx, fy_, 80 * s, fh_, cur)))
     if v ~= cur then ensure().frames = v end
   end)
   row("Frames in", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().framesIn) or r.framesIn
     local shown = cur == nil and "" or tostring(cur)
     local v = RegList.field(App, "ru_tr_fin", fx, fy_, 80 * s, fh_, shown, "0")
-    if v ~= shown then ensure().framesIn = tonumber(v) end
+    if v ~= shown then ensure().framesIn = tonumber(v) and math.max(1,math.floor(tonumber(v))) or nil end
   end)
   row("Sound", function(fx, fy_, fw, fh_)
     local cur = tostring((owned and ensure().sound) or r.sound or "")
@@ -528,7 +530,8 @@ local function drawTransitions(_, App, rec, owned, ensure, fy, viewX, viewW, fh,
     if v ~= cur then ensure().sound = v ~= "" and v or nil end
   end)
   row("Flash", function(fx, fy_, fw, fh_)
-    local cur = not not ((owned and ensure().flash) or r.flash)
+    local record = owned and ensure() or r
+    local cur = not not record.flash
     if Kit.chip(fx, fy_, 80 * s, fh_, cur and "YES" or "NO", cur, PAL.yellow) then
       ensure().flash = not cur
     end
@@ -597,12 +600,12 @@ local function drawApricorns(S, App, rec, owned, ensure, fy, viewX, viewW, fh, s
   end)
   row("Event", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().event) or r.event or 0
-    local v = RegList.num(App, "ru_ap_ev", fx, fy_, 80 * s, fh_, cur)
+    local v = math.max(0, math.floor(RegList.num(App, "ru_ap_ev", fx, fy_, 80 * s, fh_, cur)))
     if v ~= cur then ensure().event = v end
   end)
   row("Index", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().index) or r.index or 1
-    local v = math.max(1, RegList.num(App, "ru_ap_ix", fx, fy_, 80 * s, fh_, cur))
+    local v = math.max(1, math.floor(RegList.num(App, "ru_ap_ix", fx, fy_, 80 * s, fh_, cur)))
     if v ~= cur then ensure().index = v end
   end)
   return fy
@@ -618,7 +621,7 @@ local function drawRadio(S, App, rec, owned, ensure, fy, viewX, viewW, fh, s, la
   end
   row("Channel", function(fx, fy_, fw, fh_)
     local cur = (owned and ensure().channel) or r.channel or 1
-    local v = RegList.num(App, "ru_rd_ch", fx, fy_, 80 * s, fh_, cur)
+    local v = math.max(1, math.min(255, math.floor(RegList.num(App, "ru_rd_ch", fx, fy_, 80 * s, fh_, cur))))
     if v ~= cur then ensure().channel = v end
   end)
   row("Name", function(fx, fy_, fw, fh_)
@@ -947,7 +950,7 @@ local function drawCatchMath(S, App, x, y, w, h)
     knob("Overflow divisor", "shift", 4, 1, 255, "ru_ct_shift")
     knob("Overflow byte", "lowByte", 256, 1, 9999, "ru_ct_low")
     knob("Catch roll", "catchDice", 256, 1, 9999, "ru_ct_dice")
-    fy = require("WobbleOdds").draw(S, App, viewX, fy, w)
+    fy = require("WobbleOdds").draw(S, viewX, fy, w, App)
   else
     knob("HP divisor", "hpDiv", 4, 1, 255, "ru_ct_div")
     knob("HP scale", "hpScale", 255, 0, 255, "ru_ct_scale")

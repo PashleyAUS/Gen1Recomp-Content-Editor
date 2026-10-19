@@ -5,12 +5,12 @@
 local M = {}
 
 local function gen2(p)
-  local ver = p.version
+  local ver = p.game or p.version
   return p.generation == 2 or ver == "gold" or ver == "silver" or ver == "crystal"
 end
 
 local function rse(p)
-  local ver = p.version
+  local ver = p.game or p.version
   return ver == "ruby" or ver == "sapphire" or ver == "emerald"
 end
 

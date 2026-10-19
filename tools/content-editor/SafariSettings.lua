@@ -40,12 +40,13 @@ function M.draw(S,x,y,w,h,App)
     return
   end
   local Pane=require("FormPane");local first,view=Pane.begin(S,"safariSettings",x,y,w,h);y=first;w=view.contentW
-  local function number(key,label)
+  local function number(key,label,minV,maxV)
     K.caption(x,y,label);local v=L.num(App,"safari/"..key,x+240*s,y,150*s,30*s,row[key])
+    v=math.max(minV,math.min(maxV,math.floor(v)))
     if v~=row[key] then row[key]=v;App.markDirty() end;y=y+45*s
   end
-  if gen==1 then number("fee","Entry price") end
-  number("balls","Safari Balls (1-99)");number("steps","Steps inside the zone")
+  if gen==1 then number("fee","Entry price",0,999999) end
+  number("balls","Safari Balls (1-99)",1,99);number("steps","Steps inside the zone",1,65533)
   local function battle(key,label,default,minV,maxV)
     K.caption(x,y,label)
     local cur=row[key];if cur==nil then cur=default end
@@ -83,7 +84,7 @@ function M.draw(S,x,y,w,h,App)
     for _,id in ipairs(maps) do labels[id]=id:gsub("_"," ") end
     K.caption(x,y,"Exit map")
     C.field(S,{x=x+240*s,y=y,w=w-250*s,h=30*s,current=row.exitMap,ids=maps,labels=labels,title="Safari exit",onPick=function(id) row.exitMap=id;App.markDirty() end});y=y+45*s
-    number("exitX","Exit cell X");number("exitY","Exit cell Y")
+    number("exitX","Exit cell X",0,255);number("exitY","Exit cell Y",0,255)
     C.field(S,{x=x+240*s,y=y,w=220*s,h=30*s,current=row.facing,ids={"up","down","left","right"},title="Exit facing",onPick=function(id) row.facing=id;App.markDirty() end})
     K.caption(x,y,"Exit facing");y=y+45*s
   else K.caption(x,y,"The native entrance event still controls the entry fee and exit.");y=y+35*s end

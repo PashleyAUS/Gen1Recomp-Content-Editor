@@ -16,7 +16,7 @@ local FIELD = {
 }
 
 local function gen1(p)
-  local ver = p and p.version
+  local ver = p and (p.game or p.version)
   return p and (p.generation == 1 or ver == "red" or ver == "blue" or ver == "yellow")
     and ver ~= "gold" and ver ~= "silver" and ver ~= "crystal"
     and p.generation ~= 2 and p.generation ~= 3

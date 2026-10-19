@@ -50,6 +50,9 @@ function M.install(mod,maps,terrain,geometry,renderer,models,world)
     local copy={id=source.id,baseTileset=source.baseTileset,cellWidth=math.min(128,source.cellWidth-ox),
       cellHeight=math.min(128,source.cellHeight-oy),layers={},collision={},visualHeights={},visualShapes={},
       visualAutoObjects=source.visualAutoObjects,visualObjects={}}
+    for _,key in ipairs({'visualTreeStyle','visualTint','visualPerspective','visualBackground','visualEnvironment'}) do
+      copy[key]=source[key]
+    end
     for i,layer in ipairs(source.layers or {}) do
       copy.layers[i]={cells={},visible=layer.visible,export=layer.export}
     end
@@ -229,7 +232,7 @@ function M.install(mod,maps,terrain,geometry,renderer,models,world)
     if hd then compositor:setWorldOverride(state.scene) end
     state.drawn=true
     local sx,sy=state.project(px-ox,py-oy,z)
-    FieldView._editor3DLast={mapId=id,mode='3d',x=px,y=py,z=z,actors=#list,objects=state.objectCount,
+    FieldView._editor3DLast={mapId=id,mode='3d',customModels=#(state.modelMeshes or {}),x=px,y=py,z=z,actors=#list,objects=state.objectCount,
       screenX=sx,screenY=sy,width=rw,height=rh,nativeWidth=w,nativeHeight=h,
       hd=hd and true or false,samples=samples,worldX=worldX,worldY=worldY,
       cameraAngle=camera.angle,cameraPitch=camera.pitch,cameraScale=camera.scale,

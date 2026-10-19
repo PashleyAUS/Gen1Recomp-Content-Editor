@@ -65,7 +65,8 @@ local LEGACY_TOOLS = { berry = true, path = true }
 
 function MapBuilder.supportsTool(S, id)
   if id=="hidden_item" then return Generation.isGen2(S) end
-  if id=="visual_object" or id=="visual_height" or id=="bridge" or id=="elevation" then return Generation.isGen3(S) end
+  if id=="visual_object" or id=="visual_height" then return Generation.isGen3(S) and S.tab~='maps' end
+  if id=="bridge" or id=="elevation" then return Generation.isGen3(S) end
   return not (Generation.isGen3(S) and LEGACY_TOOLS[id])
 end
 
@@ -400,6 +401,17 @@ local function mapSource(S)
     and S.project.layeredMaps[S.builderMapId]
   if source then LayeredMap.internSourceCells(source) end
   return source
+end
+
+function MapBuilder.importModel(S,path,App,target)
+  local source=target or mapSource(S)
+  if not source then S.status='Make the map editable before importing a model';return false end
+  local model,index=require('CustomModels3D').import(source,path)
+  if not model then S.status='Model import failed: '..tostring(index);return false end
+  S.builderModelIndex=index;S.builderObjectKind='model';S.builderTool='visual_object'
+  S.tab='maps3d';S.builderPropMount=0;S.builderTreeLean=0
+  S.status='Imported '..model.name..' ('..math.floor(model.vertexCount/3)..' triangles). Drag a footprint to place it.'
+  App.markDirty();return true
 end
 
 local function drawSourceTile(S, source, tile, x, y, size, alpha)
@@ -1546,10 +1558,13 @@ local function drawCanvas(S, source, x, y, w, h, App)
     else
       completeWarp(S, App, { map = S.builderMapId, x = cx, y = cy })
     end
-  elseif Kit.mouseDown and not Kit.blockClicks and not S._assemblyDrag
+  elseif (Kit.mouseDown or middle) and not Kit.blockClicks and not S._assemblyDrag
       and (over or S._builderDrag) then
-    if panning then
+    if panning or (S._builderDrag and S._builderDrag.pan) then
       if not S._builderDrag or not S._builderDrag.pan then
+        -- Middle-drag works without a left click. Discard a pending rectangle
+        -- rather than committing an object when a pan interrupts selection.
+        S.builderRangeDraft=nil
         S._builderDrag = {
           pan = true, mx = Kit.mouseX, my = Kit.mouseY,
           camX = S.builderCamX or 0, camY = S.builderCamY or 0,
@@ -1562,7 +1577,7 @@ local function drawCanvas(S, source, x, y, w, h, App)
       end
     elseif inMap and (tool == "rectangle" or tool == "elevation_rectangle" or tool == "select" or tool == "eraser" or tool == "visual_object") then
       if not S._builderDrag then
-        S._builderDrag = { range = true, x0 = cx, y0 = cy, tool = tool, elevation = S.builderElevation or 3, objectKind = S.builderObjectKind or "tree", objectSize = S.builderObjectSize or 3, rotation = S.builderObjectRotation or 0, lean = S.builderTreeLean or 0, mount=S.builderPropMount or 0 }
+        S._builderDrag = { range = true, x0 = cx, y0 = cy, tool = tool, elevation = S.builderElevation or 3, objectKind = S.builderObjectKind or "tree", objectSize = S.builderObjectSize or 3, rotation = S.builderObjectRotation or 0, lean = S.builderTreeLean or 0, mount=S.builderPropMount or 0, model=(source.visualModelLibrary or {})[S.builderModelIndex or 1] }
       end
       S.builderRangeDraft = {
         x0 = S._builderDrag.x0, y0 = S._builderDrag.y0, x1 = cx, y1 = cy,
@@ -1606,7 +1621,7 @@ local function drawCanvas(S, source, x, y, w, h, App)
         S.builderSelections[#S.builderSelections + 1] = rect
       elseif S._builderDrag.tool == "visual_object" then
         App.beginEditBatch()
-        if require("MapObjects3D").place(source,rect,S._builderDrag.objectKind,S._builderDrag.objectSize,S._builderDrag.rotation,S._builderDrag.lean,S._builderDrag.mount) then App.markDirty() end
+        if require("MapObjects3D").place(source,rect,S._builderDrag.objectKind,S._builderDrag.objectSize,S._builderDrag.rotation,S._builderDrag.lean,S._builderDrag.mount,S._builderDrag.model) then App.markDirty() end
         App.endEditBatch()
       elseif S._builderDrag.tool == "elevation_rectangle" then
         App.beginEditBatch()
@@ -2543,6 +2558,29 @@ local function drawToolbar(S, source, x, y, w, App)
       bx=bx+85*s
     end
     by=by+30*s
+    if Kit.button(x,by,150*s,26*s,'Import 3D model',{
+        tooltip='Import a static OBJ (+ MTL), glTF or GLB, including PNG/JPEG textures. Assets are embedded in the mod.'}) then
+      App.pickFile('Import custom 3D model','3D models (*.obj;*.gltf;*.glb)|*.obj;*.gltf;*.glb',function(path)
+        MapBuilder.importModel(S,path,App,source)
+      end)
+    end
+    local library=source.visualModelLibrary or {}
+    if not library[S.builderModelIndex or 1] then S.builderModelIndex=1 end
+    if #library>0 then
+      local pickerX=x+154*s
+      if pickerX+150*s>x+w then pickerX,by=x,by+30*s end
+      local ids,labels={},{}
+      for i,m in ipairs(library) do ids[#ids+1]=tostring(i);labels[tostring(i)]=m.name end
+      require('ChoicePicker').field(S,{x=pickerX,y=by,w=math.min(x+w-pickerX,230*s),h=26*s,
+        current=tostring(S.builderModelIndex or 1),ids=ids,labels=labels,title='CUSTOM MODEL',
+        tooltip='Choose an imported model, then drag its anchor footprint on the map. Height scales the model uniformly.',
+        onPick=function(id) S.builderModelIndex=tonumber(id);S.builderObjectKind='model';S.builderPropMount=0 end})
+      local placeX=pickerX+math.min(x+w-pickerX,230*s)+4*s
+      if placeX+130*s>x+w then placeX,by=x,by+30*s end
+      if Kit.chip(placeX,by,130*s,26*s,'Place model',S.builderObjectKind=='model',PAL.green,PAL.steel,
+          'Drag a footprint to position the model. Use Collision to set passage separately.') then S.builderObjectKind='model' end
+    end
+    by=by+30*s
     Kit.text("micro","MODEL HEIGHT",x,by+5*s,PAL.caption)
     bx=x+104*s
     for _,size in ipairs({.5,1,2,3,4,5,6}) do
@@ -2552,7 +2590,7 @@ local function drawToolbar(S, source, x, y, w, App)
       bx=bx+35*s
     end
     by=by+30*s
-    if require('MapObjects3D').propDefaults[S.builderObjectKind] then
+    if S.builderObjectKind=='model' or require('MapObjects3D').propDefaults[S.builderObjectKind] then
       Kit.text('micro','MOUNT Z',x,by+5*s,PAL.caption)
       bx=x+74*s
       for _,z in ipairs({0,.5,1,1.5,2}) do
@@ -2584,12 +2622,16 @@ local function drawToolbar(S, source, x, y, w, App)
       App.markDirty()
     end
     by=by+30*s
-    if Kit.button(x,by,154*s,26*s,source.visualInterior and "Rebuild 3D interior" or "Build 3D interior",{
-        tooltip="Create a roofless room with raised native furniture. Keeps collision, events, warps and manual models."}) then
+    local environment=require('Environment3D').kind(source)
+    local buildLabel=environment and (source.visualEnvironment and "Rebuild 3D terrain" or "Build 3D terrain")
+      or (source.visualInterior and "Rebuild 3D interior" or "Build 3D interior")
+    if Kit.button(x,by,154*s,26*s,buildLabel,{
+        tooltip=environment and "Raise native cave walls or underwater reefs; keep paths, exits, Dive data and manual edits."
+          or "Create a roofless room with raised native furniture. Keeps collision, events, warps and manual objects."}) then
       require('Interior3D').apply(source,S.project.maps[source.id] or {})
       App.markDirty()
     end
-    Kit.text("micro",Kit.ellipsize("micro","Drag complete artwork; set height / Mount Z",w),x,by+33*s,PAL.muted)
+    Kit.text("micro",Kit.ellipsize("micro","Drag artwork; middle-drag or Space+drag to pan",w),x,by+33*s,PAL.muted)
     barBottom=by+54*s
   elseif S.builderTool=="elevation" then
     local modeX = x
@@ -2820,6 +2862,14 @@ local function drawToolbar(S, source, x, y, w, App)
       if Kit.button(bx,by,100*s,24*s,direction==-1 and "Rotate left" or "Rotate right",{enabled=count>0,
           tooltip="Turn each selected tile on the active map layer by 90 degrees"}) then
         local ok,err=pcall(require("TileRotation").rotateSelection,S,source,direction,App)
+        if not ok then S.status=tostring(err) end
+      end
+    end
+    for _,axis in ipairs({"horizontal","vertical"}) do
+      bx,by=slot(100*s)
+      if Kit.button(bx,by,100*s,24*s,axis=="horizontal" and "Mirror H" or "Mirror V",{enabled=count>0,
+          tooltip=axis=="horizontal" and "Mirror each selected tile left to right" or "Mirror each selected tile top to bottom"}) then
+        local ok,err=pcall(require("TileRotation").mirrorSelection,S,source,axis,App)
         if not ok then S.status=tostring(err) end
       end
     end
@@ -3840,7 +3890,7 @@ function MapBuilder.draw(S, x, y, w, h, App)
       })
     end
   end
-  if Generation.isGen3(S) then
+  if Generation.isGen3(S) and S.tab=='maps3d' then
     -- Keep the existing editor at full width; the right drawer holds live 3D.
     local previewH = S.mapHide3D and 32 * s or math.min(h * 0.55, 430 * s)
     require("MapPreview3D").draw(S, source, rightX, y, rightW, previewH, App)

@@ -13,8 +13,8 @@ local ROWS = {
 }
 
 local function gen2(p)
-  local ver = p and p.version
-  local gen = p and p.generation
+  local ver = p and (p.game or p.version)
+  local gen = ver and require("Generation").num({version=ver}) or (p and p.generation)
   return gen == 2 or ver == "gold" or ver == "silver" or ver == "crystal"
 end
 
