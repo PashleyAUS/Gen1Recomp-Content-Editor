@@ -191,6 +191,18 @@ return function(data, root, output, game)
   end
   -- Repeat through the complete workspace layout, including toolbar sizing.
   S.tab='maps3d';require('MapsWorkspace').activate(S,App)
+  -- Measure and render the actual toolbar tooltip through LÖVE. A stray
+  -- Windows-encoded accented character previously crashed getWidth on hover.
+  local oldOfferTooltip=K.offerTooltip
+  local eventsTooltip
+  K.offerTooltip=function(x,y,w,h,text)
+    if text and text:find('Place NPCs',1,true) then eventsTooltip=text end
+    return oldOfferTooltip(x,y,w,h,text)
+  end
+  frame(0,0,false,workspaceDraw)
+  K.offerTooltip=oldOfferTooltip
+  assert(eventsTooltip,'Add events tooltip was not exercised')
+  frame(0,0,false,function() K.drawTooltip(eventsTooltip,400,400) end)
   S.builderTool='visual_height'; S.builderVisualHeight=9;S.builderVisualShape='east'
   local oldCard=K.card; local rect
   local expectedX=10+math.min(270*K.scale,math.max(220*K.scale,1580*0.22))+9*K.scale

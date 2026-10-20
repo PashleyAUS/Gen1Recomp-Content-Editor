@@ -2265,7 +2265,7 @@ local function drawToolbar(S, source, x, y, w, App)
     end
     if Kit.chip(modeX + 85 * s, modeY, 86 * s, 26 * s, "Add events",
         S.mapEditMode == "events", PAL.yellow, PAL.steel,
-        "Place NPCs, signs, trainers, wild Pokémon, paths, and step triggers") then
+        "Place NPCs, signs, trainers, wild PokÃ©mon, paths, and step triggers") then
       S.mapEditMode = "events"
       if not EVENT_TOOL_BY_ID[S.builderTool] then S.builderTool = "object" end
     end
