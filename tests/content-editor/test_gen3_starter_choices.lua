@@ -11,6 +11,26 @@ local row=command(ctx,"setvar",{var=0x4002,value=1});assert(row.value==4)
 local gift={ctx=ctx,species="CHARMANDER",level=5};for _,f in ipairs(listeners) do f(gift) end
 assert(gift.species=="CHARMANDER" and gift.level==12,"Starter replacements cascaded")
 print("PASS starter swaps do not cascade")
+-- Rival dialogue happens after the player's party and starter flag are populated.
+ctx.save.party={{species="CHARMANDER"}};ctx.save.flags.EVENT_GOT_STARTER=true
+for _,map in ipairs({"FR_OAKS_LAB","OAKS_LAB"}) do
+  ctx.overworld.map.id=map
+  local original={dest=0,src=1}
+  local rival=command(ctx,"bufferspeciesname",original)
+  assert(rival.src==4 and rival[2]==4 and rival.dest==0,"Rival name replacement cascaded or failed")
+  assert(original.src==1 and original[2]==nil,"Shared script row was mutated")
+  assert(command(ctx,"bufferspeciesname",{0,4}).src==7,"Positional rival name was not replaced")
+  for _,src in ipairs({0x4002,25}) do
+    local untouched={dest=0,src=src}
+    assert(command(ctx,"bufferspeciesname",untouched)==untouched,"Unrelated name was replaced")
+  end
+end
+ctx.overworld.map.id="FR_ROUTE1"
+local elsewhere={dest=0,src=1}
+assert(command(ctx,"bufferspeciesname",elsewhere)==elsewhere,"Name outside Oak's lab was replaced")
+ctx.overworld.map.id="FR_OAKS_LAB"
+ctx.save.party={};ctx.save.flags={}
+print("PASS rival starter dialogue after player receives starter")
 records.SCIZOR={index=212}
 listeners={};command=function(_,_,row) return row end
 rules={{map="FR_OAKS_LAB",matchSpecies={"BULBASAUR"},species="SCIZOR",level=5,onlyFirst=true}}

@@ -13,13 +13,13 @@ function M.emit(project,encode,out)
   if not rules or #rules==0 then return end
   assert(M.validate(rules))
   out[#out+1]="  local starterRules = "..encode(rules)
-  out[#out+1]=[=[  local function starterContext(ctx, rule)
+  out[#out+1]=[=[  local function starterContext(ctx, rule, dialogue)
     local world = ctx and ctx.overworld
     local map = world and world.map
     local id = map and (map.gen3Id or map.id)
     local save = ctx and ctx.save
     if not (id and save) or id:gsub("^FR_", "") ~= rule.map:gsub("^FR_", "") then return false end
-    return not rule.onlyFirst or (not (save.flags or {}).EVENT_GOT_STARTER and #(save.party or {}) == 0)
+    return dialogue or not rule.onlyFirst or (not (save.flags or {}).EVENT_GOT_STARTER and #(save.party or {}) == 0)
   end
   local function matches(rule, species)
     for _, name in ipairs(rule.matchSpecies) do if name == species then return true end end
@@ -101,6 +101,16 @@ function M.emit(project,encode,out)
     end
 
     mod.hooks:wrap("script.command", function(next, ctx, op, row)
+      -- The rival buffers a literal species after the player has received a starter.
+      -- Keep variable-based player names intact and prevent chained replacements.
+      if rule.onlyFirst and rule.map:gsub("^FR_", "") == "OAKS_LAB"
+          and not row._editorStarterChanged and op == "bufferspeciesname"
+          and sourceIndices[row.src or row[2]] and starterContext(ctx, rule, true) then
+        local copy = {}; for k,v in pairs(row) do copy[k]=v end
+        copy.src,copy[2]=target.index,target.index
+        copy._editorStarterChanged=true
+        return next(ctx,op,copy)
+      end
       if rule.onlyFirst and not row._editorStarterChanged and op == "setvar" and (row.var or row[1]) == (rule.variable or 0x4002)
           and sourceIndices[row.value or row[2]] and starterContext(ctx, rule) then
         local copy = {}; for k,v in pairs(row) do copy[k]=v end
