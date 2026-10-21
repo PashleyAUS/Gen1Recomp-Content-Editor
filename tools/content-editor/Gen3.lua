@@ -294,6 +294,8 @@ function Gen3.emit(project, encode)
   require("Gen3SystemClock").emit(project, out)
   -- Outside the map (Border > Around the map): extrude and painted tiles.
   require("Gen3Void").emit(project, encode, out)
+  -- MAPS > Camera lock: the camera stops at the edge of the chosen maps.
+  require("CameraLock").emit(project, out, true)
   -- GAME PATCHES > Clean Project: no story on a new game, the short intro.
   require("Gen3Clean").emit(project, encode, out)
   -- Day and night (GFX > Day & night): outdoor maps follow the device clock.

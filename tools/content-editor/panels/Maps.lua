@@ -578,6 +578,15 @@ local function renameMapId(S, map, newId, App)
     songs[newId] = songs[oldId]
     songs[oldId] = nil
   end
+  local lock = S.project.cameraLockMaps
+  if lock and lock[oldId] then
+    lock[newId] = true
+    lock[oldId] = nil
+  end
+  local dark = S.project.darkMaps and S.project.darkMaps.maps
+  for k, mid in ipairs(dark or {}) do
+    if mid == oldId then dark[k] = newId end
+  end
   S._mapCenteredFor = nil
   S._mapIdDraft = nil
   if App then App.markDirty() end
@@ -5299,8 +5308,20 @@ function Maps._section.drawBasics(S, map, mutate, App, px, py, propW, listBottom
       S.status = on and (map.id .. " removed from darkMaps")
         or (map.id .. " added to darkMaps")
     end
-  end) then return py end
+    end) then return py end
   end
+
+  if prow("Camera", function(fx, fy, fw, fh_)
+    local CameraLock = require("CameraLock")
+    local on = CameraLock.enabled(S.project, map.id)
+    if Kit.chip(fx, fy, 160 * s, fh_, on and "Locked at map edges" or "Follows player",
+        on, PAL.blue, nil,
+        "When on, the camera stops at the edge of this map instead of following the player past it") then
+      CameraLock.set(S.project, map.id, not on)
+      App.markDirty()
+      S.status = map.id .. (on and ": camera follows the player" or ": camera locked at map edges")
+    end
+  end) then return py end
 
   if Generation.isGen2(S) then
     if prow("Group / Map #", function(fx, fy, fw, fh_)
@@ -6209,20 +6230,6 @@ function Maps._section.drawWarps(S, map, mutate, App, px, py, propW, listBottom,
     py = py + fh + 6 * s
   end
 
-  if not Generation.isGen2(S) then
-    row("Item pickup", function(fx, fy, fw, fh_)
-      require("ItemPicker").field(S, {
-        x = fx, y = fy, w = fw, h = fh_, current = obj.item or "",
-        emptyLabel = "(no item)", title = "ITEM PICKUP", allowClear = true,
-        tooltip = "Choose the item this object gives when picked up",
-        onPick = function(id)
-          map = mutate()
-          map.objects[i].item = id ~= "" and id or nil
-          App.markDirty()
-        end,
-      })
-    end)
-  end
   row("Cell X / Y", function(fx, fy, fw, fh_)
     local x = tonumber(field(App, "wp_x", fx, fy, 50 * s, fh_, tostring(w.x or 0), "0")) or 0
     local y = tonumber(field(App, "wp_y", fx + 60 * s, fy, 50 * s, fh_, tostring(w.y or 0), "0")) or 0
@@ -6788,6 +6795,18 @@ function Maps._section.drawObjects(S, map, mutate, App, px, py, propW, listBotto
       end
     end)
   else
+  row("Item pickup", function(fx, fy, fw, fh_)
+    require("ItemPicker").field(S, {
+      x = fx, y = fy, w = fw, h = fh_, current = obj.item or "",
+      emptyLabel = "(no item)", title = "ITEM PICKUP", allowClear = true,
+      tooltip = "Choose the item this object gives when picked up",
+      onPick = function(id)
+        map = mutate()
+        map.objects[i].item = id ~= "" and id or nil
+        App.markDirty()
+      end,
+    })
+  end)
   row("Movement", function(fx, fy, fw, fh_)
     if Kit.button(fx, fy, fw, fh_, tostring(obj.movement or "STAY"), { kind = "ghost" }) then
       map = mutate()

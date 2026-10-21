@@ -526,6 +526,7 @@ local function drawGen2ScriptForm(S, App, formX, listY, formW, listH, mapId, scr
 
     local textKey = Gen2Talk.textKeyForScript(S, scriptKey)
     if not textKey then
+      local _
       _, textKey = Gen2Talk.ensureSimpleTalk(S, scriptKey, face)
       App.markDirty()
     end

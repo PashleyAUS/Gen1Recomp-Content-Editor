@@ -397,6 +397,15 @@ function Panel.draw(S,x,y,w,h,App)
   for i,tool in ipairs(borderMode and {} or {"Object","Warp","Sign","Trigger"}) do
     if Kit.button(fx+(i-1)*75*s,row,70*s,25*s,tool,{kind=S.g3Tool==tool and "primary" or "ghost"}) then S.g3Tool=tool end
   end
+  if not borderMode then
+    local CameraLock=require("CameraLock")
+    local locked=CameraLock.enabled(S.project,S.g3MapId)
+    if Kit.button(fx+310*s,row,160*s,25*s,locked and "Camera: locked" or "Camera: follows",{kind=locked and "primary" or "ghost",font="micro",
+        tooltip="When locked, the camera stops at the edge of this map instead of following the player past it"}) then
+      CameraLock.set(S.project,S.g3MapId,not locked);App.markDirty()
+      S.status=S.g3MapId..(locked and ": camera follows the player" or ": camera locked at map edges")
+    end
+  end
   if around then
     local id=S.g3MapId
     Kit.caption(fx,row,"This map")

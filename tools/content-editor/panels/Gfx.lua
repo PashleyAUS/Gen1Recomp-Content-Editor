@@ -1591,6 +1591,9 @@ function Gfx.draw(S, x, y, w, h, App)
   end
   local function ensure()
     if owned then return proj[id] end
+    -- Keep the vanilla record so "Remove replacement" can restore it.
+    S._vanillaTilesetBackup = S._vanillaTilesetBackup or {}
+    S._vanillaTilesetBackup[id] = S._vanillaTilesetBackup[id] or rec
     local copy = {}
     for k, v in pairs(rec) do
       if k == "walkable" or k == "doorTiles" or k == "warpTiles"
@@ -1913,12 +1916,14 @@ function Gfx.draw(S, x, y, w, h, App)
       rec._isNew and "Delete custom" or "Remove replacement", { kind = "danger" }) then
     local dropped = proj[id]
     proj[id] = nil
-    if S.data and S.data.tilesets and S.data.tilesets[id] == dropped then
-      local bak = S._vanillaTilesetBackup and S._vanillaTilesetBackup[id]
-      S.data.tilesets[id] = bak
-    elseif S.data and S.data.tilesets and type(S.data.tilesets[id]) == "table"
-        and S.data.tilesets[id]._isNew then
-      S.data.tilesets[id] = nil
+    -- Live data holds the record directly or via the Maps-tab wrapper; Gen 2
+    -- keeps a second table (gen2Tilesets) that must be cleared as well.
+    local bak = S._vanillaTilesetBackup and S._vanillaTilesetBackup[id]
+    local wrapper = S._liveTilesets and S._liveTilesets[dropped]
+    if S.data then
+      for _, bag in ipairs({ S.data.tilesets or {}, S.data.gen2Tilesets or {} }) do
+        if bag[id] == dropped or bag[id] == wrapper then bag[id] = bak end
+      end
     end
     if S.tilesetEditId == id then S.tilesetEditId = nil end
     MapLoader.invalidateAll()

@@ -103,30 +103,36 @@ local function syncLiveMaps(S)
   if not (S and S.data and S.data.maps) then return end
   local projectMaps = (S.project and S.project.maps) or {}
   local backup = S._vanillaMapBackup or {}
-  for id, def in pairs(projectMaps) do
-    S.data.maps[id] = def
-  end
-  for id, vanilla in pairs(backup) do
-    if not projectMaps[id] then
-      S.data.maps[id] = vanilla
+  -- Gen 2 may keep a second table (gen2Maps); it is the same table otherwise.
+  for _, live in ipairs({ S.data.maps, S.data.gen2Maps or {} }) do
+    for id, def in pairs(projectMaps) do
+      live[id] = def
     end
+    for id, vanilla in pairs(backup) do
+      if not projectMaps[id] then
+        live[id] = vanilla
+      end
+    end
+    pruneLiveBucket(live, projectMaps, backup)
   end
-  pruneLiveBucket(S.data.maps, projectMaps, backup)
 end
 
 local function syncLiveTilesets(S)
   if not (S and S.data and S.data.tilesets) then return end
   local projectTs = (S.project and S.project.tilesets) or {}
   local backup = S._vanillaTilesetBackup or {}
-  for id, ts in pairs(projectTs) do
-    S.data.tilesets[id] = ts
-  end
-  for id, vanilla in pairs(backup) do
-    if not projectTs[id] then
-      S.data.tilesets[id] = vanilla
+  -- Gen 2 may keep a second table (gen2Tilesets); it is the same table otherwise.
+  for _, live in ipairs({ S.data.tilesets, S.data.gen2Tilesets or {} }) do
+    for id, ts in pairs(projectTs) do
+      live[id] = ts
     end
+    for id, vanilla in pairs(backup) do
+      if not projectTs[id] then
+        live[id] = vanilla
+      end
+    end
+    pruneLiveBucket(live, projectTs, backup)
   end
-  pruneLiveBucket(S.data.tilesets, projectTs, backup)
   -- Drop editor path wrappers so the next draw rebuilds from restored images.
   S._liveTilesets = nil
 end

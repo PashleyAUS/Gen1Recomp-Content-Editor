@@ -7415,6 +7415,8 @@ function ModWriter.emitMain(project, baseData, derivedModId)
     end
   end
 
+  require("CameraLock").emit(project, out, false)
+
   out[#out + 1] = "end"
   out[#out + 1] = ""
   return table.concat(out, "\n")
