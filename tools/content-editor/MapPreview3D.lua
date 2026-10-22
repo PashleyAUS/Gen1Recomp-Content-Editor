@@ -21,6 +21,12 @@ function M.cameraKey(camera,key,defaults)
   return true
 end
 
+-- Tilting foreshortens the ground by sin(pitch). Scale the fit against the authored
+-- pitch so changing the angle keeps the same amount of map on screen.
+function M.cameraFit(scale,pitch,referencePitch)
+  return scale*math.sin(referencePitch)/math.sin(pitch)
+end
+
 function M.height(source, x, y)
   return (source.visualHeights or {})[y * source.cellWidth + x + 1] or 0
 end

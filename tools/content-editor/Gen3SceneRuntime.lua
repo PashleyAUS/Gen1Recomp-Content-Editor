@@ -215,10 +215,12 @@ function M.install(mod,maps,terrain,geometry,renderer,models,world)
       samples=math.min(4,love.graphics.getSystemLimits().canvasmsaa or 0)
     end
     local cameraX,cameraY=px-ox,py-oy
+    local pitch=camera.pitch or .65
+    local fit=terrain.cameraFit((camera.scale or 16)*scale,pitch,terrain.cameraDefaults(source).pitch)
     if source.visualInterior then
       -- Clamp indoor tracking to the room so the doorway does not push it off-screen.
-      local halfW=rw/(camera.scale*scale)/2-1
-      local halfH=rh/(camera.scale*scale)/2/math.sin(camera.pitch)-1
+      local halfW=rw/fit/2-1
+      local halfH=rh/fit/2/math.sin(pitch)-1
       local function clampRoom(value,extent,half)
         if extent<=half*2 then return extent/2 end
         return math.max(half,math.min(extent-half,value))
@@ -227,7 +229,7 @@ function M.install(mod,maps,terrain,geometry,renderer,models,world)
       cameraY=clampRoom(cameraY,view.cellHeight,halfH)
     end
     renderer.draw(state,view,terrain,geometry,0,0,rw,rh,{angle=camera.angle or -.65,pitch=camera.pitch or .65,static=true,
-      camera={x=cameraX,y=cameraY,z=z,scale=(camera.scale or 16)*scale},actors=list,
+      camera={x=cameraX,y=cameraY,z=z,scale=fit},actors=list,
       offscreen=hd,samples=samples})
     if hd then compositor:setWorldOverride(state.scene) end
     state.drawn=true

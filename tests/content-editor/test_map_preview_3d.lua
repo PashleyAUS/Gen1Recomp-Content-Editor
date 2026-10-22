@@ -11,6 +11,9 @@ assert(camera.pitch==.15 and camera.scale==4,'Camera exceeded lower tilt/zoom li
 assert(not M.cameraKey(camera,'up'),'Camera stole a movement key')
 M.cameraKey(camera,'home',defaults)
 assert(camera.angle==0 and camera.pitch==.8 and camera.scale==8.5 and defaults.scale==8.5)
+assert(M.cameraFit(8.5,.8,.8)==8.5,'Tilt compensation changed the authored view')
+local tilted=M.cameraFit(8.5,.15,.8)
+assert(math.abs(tilted*math.sin(.15)-8.5*math.sin(.8))<1e-9,'Tilting changed how much of the map is on screen')
 local source = {cellWidth=4,cellHeight=4,layers={},collision={},gen3Elevation={9}}
 for i=1,16 do source.collision[i]='walk' end
 assert(M.height(source,0,0)==0)
