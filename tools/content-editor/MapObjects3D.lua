@@ -162,6 +162,8 @@ function M.place(source,rect,kind,size,rotation,lean,mount,model,treatment)
   if treatment=='flat' and kind~='model' then kind='none' end
   local object={x=x,y=y,width=right-x+1,height=bottom-y+1,kind=kind,size=size or (M.propDefaults[kind] or {}).size or 3,
     rotation=rotation%360,lean=lean,mount=mount,model=kind=='model' and model or nil}
+  -- Imported scenes overlap other objects and carry their own ground.
+  if kind=='model' then object.allowOverlap=true;object.replaceGround=true end
   if object.width==1 and object.height==1 and (kind=='tree' or kind=='building') then
     object.width=math.min(kind=='tree' and 2 or 4,source.cellWidth-x)
     object.height=math.min(kind=='tree' and 2 or 4,source.cellHeight-y)
@@ -188,7 +190,7 @@ function M.place(source,rect,kind,size,rotation,lean,mount,model,treatment)
         and (old.lean or 0)==object.lean and (old.mount or 0)==object.mount then return false end
   end
   for i=#source.visualObjects,1,-1 do
-    if overlaps(source.visualObjects[i],object) then table.remove(source.visualObjects,i) end
+    if overlaps(source.visualObjects[i],object) and not object.allowOverlap then table.remove(source.visualObjects,i) end
   end
   source.visualObjects[#source.visualObjects+1]=object
   return true

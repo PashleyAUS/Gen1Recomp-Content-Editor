@@ -1,5 +1,5 @@
 -- Convert static OBJ/glTF scenes to portable, data-only map assets.
-local M={MAX_BYTES=32*1024*1024,MAX_VERTICES=150000}
+local M={MAX_BYTES=32*1024*1024,MAX_VERTICES=150000,GROUND_LIFT=.004}
 local Codec=require('ModelAssetCodec3D')
 M.encode,M.decode=Codec.encode,Codec.decode
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<1e12 end
@@ -86,7 +86,8 @@ local function obj(data,load,model)
       assert(#face>=3,'OBJ face needs at least three vertices')
       groups[current]=groups[current] or {}
       for i=2,#face-1 do for _,v in ipairs({face[1],face[i],face[i+1]}) do
-        groups[current][#groups[current]+1]=v
+        -- Copy: fan triangles share corners, which must not be normalized twice.
+        groups[current][#groups[current]+1]={unpack(v)}
         assert(#groups[current]<=M.MAX_VERTICES,'OBJ exceeds 50,000 triangles')
       end end
     end
@@ -136,7 +137,6 @@ local function gltf(data,load,model)
   local doc=require('src.link.Json').decode(data)
   assert(doc.asset and doc.asset.version=='2.0','Use glTF 2.0')
   for _,ext in ipairs(doc.extensionsRequired or {}) do assert(ext=='KHR_materials_unlit','Unsupported required glTF extension: '..ext..'; export without compression') end
-  assert(not doc.skins or #doc.skins==0,'Skinned models are unsupported; export a static mesh')
   assert(not doc.animations or #doc.animations==0,'Animated models are unsupported; export a static mesh')
   local buffers={}
   for i,b in ipairs(doc.buffers or {}) do
@@ -209,6 +209,8 @@ local function gltf(data,load,model)
     assert(depth<100 and not active[id],'Cyclic or excessively deep glTF nodes');active[id]=true
     local node=assert((doc.nodes or {})[id+1],'Missing glTF node');local world=multiply(parent,matrix(node))
     if node.mesh~=nil then
+      -- Skinned meshes import in bind pose: glTF ignores a skinned node's own transform.
+      local meshWorld=node.skin~=nil and identity() or world
       for _,p in ipairs(assert(doc.meshes[node.mesh+1],'Missing mesh').primitives or {}) do
         assert(not p.targets,'Morph targets are unsupported; export a static mesh')
         assert(not p.extensions,'Compressed mesh primitives are unsupported')
@@ -229,9 +231,9 @@ local function gltf(data,load,model)
         local vertices={}
         for _,i in ipairs(triangles) do
           local v=assert(positions[i],'glTF index out of range');local uv=tex and assert(tex[i]) or {0,0};local c=colors and assert(colors[i]) or {1,1,1,1}
-          vertices[#vertices+1]={world[1]*v[1]+world[5]*v[2]+world[9]*v[3]+world[13],
-            world[2]*v[1]+world[6]*v[2]+world[10]*v[3]+world[14],
-            world[3]*v[1]+world[7]*v[2]+world[11]*v[3]+world[15],uv[1],uv[2],c[1],c[2],c[3],c[4] or 1}
+          vertices[#vertices+1]={meshWorld[1]*v[1]+meshWorld[5]*v[2]+meshWorld[9]*v[3]+meshWorld[13],
+            meshWorld[2]*v[1]+meshWorld[6]*v[2]+meshWorld[10]*v[3]+meshWorld[14],
+            meshWorld[3]*v[1]+meshWorld[7]*v[2]+meshWorld[11]*v[3]+meshWorld[15],uv[1],uv[2],c[1],c[2],c[3],c[4] or 1}
         end
         append(model,vertices,mat(p.material))
       end
@@ -246,6 +248,25 @@ local function gltf(data,load,model)
     for i in ipairs(doc.nodes or {}) do if not children[i-1] then visit(i-1,identity(),0) end end
   end
 end
+-- Walkable ground is the largest flat surface in the lowest quarter of the model;
+-- ponds or foundations beneath it must not lift the scene off the map's floor.
+local function groundLevel(model,low,height)
+  if height<1e-9 then return low end
+  local area,weighted,best,ground={},{},0,low
+  for _,p in ipairs(model.parts) do for i=1,#p.vertices,3 do
+    local a,b,c=p.vertices[i],p.vertices[i+1],p.vertices[i+2]
+    local ux,uy,uz,vx,vy,vz=b[1]-a[1],b[2]-a[2],b[3]-a[3],c[1]-a[1],c[2]-a[2],c[3]-a[3]
+    local nx,ny,nz=uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx
+    local len=math.sqrt(nx*nx+ny*ny+nz*nz)
+    local y=(a[2]+b[2]+c[2])/3
+    if len>0 and math.abs(ny)/len>.99 and y-low<=height/4 then
+      local key=math.floor((y-low)/(height/500)+.5)
+      area[key]=(area[key] or 0)+len/2;weighted[key]=(weighted[key] or 0)+len/2*y
+      if area[key]>best then best=area[key];ground=weighted[key]/area[key] end
+    end
+  end end
+  return ground
+end
 function M.parse(path,data,reader)
   assert(#data<=M.MAX_BYTES,'Model exceeds 32 MB')
   local model={name=path:gsub('\\','/'):match('([^/]+)$'),parts={},vertexCount=0,version=1}
@@ -259,10 +280,14 @@ function M.parse(path,data,reader)
     for i=1,3 do min[i]=math.min(min[i],v[i]);max[i]=math.max(max[i],v[i]) end
   end end
   local extent=math.max(max[1]-min[1],max[2]-min[2],max[3]-min[3]);assert(extent>1e-9,'Model has zero extent')
-  -- Store Y-up geometry centered horizontally, with its feet at Y=0.
+  -- Store Y-up geometry centered horizontally, with its ground at Y=0. Source +Z
+  -- faces the viewer; the map renderer maps stored Z to -Y (north), so negate it
+  -- here to keep models from importing mirrored north to south.
   local scale=max[2]-min[2];if scale<1e-9 then scale=extent end
+  -- The ground sits a hair above Y=0 so it never fights the editor's floor for depth.
+  local ground=groundLevel(model,min[2],max[2]-min[2])-M.GROUND_LIFT*scale
   for _,p in ipairs(model.parts) do for _,v in ipairs(p.vertices) do
-    v[1]=(v[1]-(min[1]+max[1])/2)/scale;v[2]=(v[2]-min[2])/scale;v[3]=(v[3]-(min[3]+max[3])/2)/scale
+    v[1]=(v[1]-(min[1]+max[1])/2)/scale;v[2]=(v[2]-ground)/scale;v[3]=-(v[3]-(min[3]+max[3])/2)/scale
   end end
   model.width,model.depth=(max[1]-min[1])/scale,(max[3]-min[3])/scale
   -- A single numeric stream avoids Lua's per-function constant limit in exports.

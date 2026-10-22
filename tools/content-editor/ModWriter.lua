@@ -8033,8 +8033,7 @@ function ModWriter.applySpecialEncounterBindsGold(project)
   table.sort(ids)
   for _, sid in ipairs(ids) do
     local spec = specs[sid]
-    if type(spec) == "table" and (spec.kind or "gift") == "gift"
-        and type(spec.mapId) == "string" and spec.mapId ~= "" then
+    if type(spec) == "table" and (spec.kind or "gift") == "gift" then
       local key = (type(spec.bindTextId) == "string" and spec.bindTextId ~= "")
         and spec.bindTextId or ("mod:SPECIAL_" .. sid)
       local textKey = key .. "_TEXT"

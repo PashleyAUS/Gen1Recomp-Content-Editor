@@ -356,7 +356,9 @@ local function drawSpecial(S, App, x, y, w, h)
   local gen2 = Generation.isGen2(S)
   row(gen2 and "Bind (scriptKey)" or "Bind text", function(fx, fy_, fw, fh_)
     local v = field(App, "spec_bind", fx, fy_, fw, fh_,
-      rec.bindTextId or "", gen2 and "mod:SPECIAL_..." or "TEXT_..."):upper():gsub("%s+", "_")
+      rec.bindTextId or "", gen2 and "mod:SPECIAL_..." or "TEXT_...")
+    -- Gen 2 scriptKeys are case-sensitive ("mod:" prefix), so keep them as typed.
+    v = (gen2 and v or v:upper()):gsub("%s+", "_")
     if v ~= (rec.bindTextId or "") then rec.bindTextId = v; App.markDirty() end
   end)
   Kit.text("micro",

@@ -254,6 +254,16 @@ function M.install(mod,configs,species,artwork)
     if f and f.mode=="fixed" then species=f.forms[M.choose(f,0)].index end
     return proceed(session,species,level,nickname,opts)
   end)
+  -- Forms share their parent's Pokedex entry: seeing or catching any form
+  -- marks the parent species, and the parent's entry answers for each form.
+  local Dex=require("src.core.game3.dex")
+  for _,name in ipairs({"setSeen","setCaught","isSeen","isCaught"}) do
+    local hook="editor.gen3.forms.dex."..name;bridge(Dex,name,hook)
+    mod.hooks:wrap(hook,function(proceed,dex,species)
+      local f=families[tonumber(species)]
+      return proceed(dex,f and f.index or species)
+    end)
+  end
   bridge(P,"applyStats","editor.gen3.forms.stats")
   mod.hooks:wrap("editor.gen3.forms.stats",function(proceed,mon)
     local hp,maxHp=mon and mon.hp,mon and mon.maxHp
