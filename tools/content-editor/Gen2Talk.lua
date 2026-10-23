@@ -54,6 +54,33 @@ function Gen2Talk.itemIndex(S, item)
     or look(S and S.data and S.data.items)
 end
 
+-- Gold givepoke takes a species index. The Events tab stores an id.
+function Gen2Talk.speciesIndex(S, species)
+  if species == nil or species == "" then return nil end
+  if type(species) == "number" then return species end
+  local s = tostring(species):match("^%s*(.-)%s*$") or ""
+  local n = tonumber(s)
+  if n then return n end
+  s = s:upper():gsub("%s+", "_")
+  if s == "" then return nil end
+  local function look(bag)
+    if type(bag) ~= "table" then return nil end
+    local rec = bag[s]
+    if type(rec) == "table" and type(rec.index) == "number" then
+      return rec.index
+    end
+    for id, def in pairs(bag) do
+      if type(def) == "table" and type(def.index) == "number" then
+        local name = tostring(def.name or ""):upper():gsub("%s+", "_")
+        if id == s or name == s then return def.index end
+      end
+    end
+    return nil
+  end
+  return look(S and S.project and S.project.pokemon)
+    or look(S and S.data and S.data.pokemon)
+end
+
 local function resolveCmdItem(S, cmd)
   if type(cmd) ~= "table" then return cmd end
   local idx = Gen2Talk.itemIndex(S, cmd.item)
@@ -575,10 +602,12 @@ function Gen2Talk.stepsToCmds(S, scriptKey, steps)
     elseif step.kind == "give_pokemon" or step.kind == "give_starter" then
       cmds[#cmds + 1] = {
         op = "givepoke",
-        species = step.species or 1,
+        species = Gen2Talk.speciesIndex(S, step.species) or step.species or 1,
         level = tonumber(step.level) or 5,
         item = tonumber(step.item) or 0,
         trainer = 0,
+        -- Cart scripts write their own received line. Editor gifts do not.
+        announce = true,
       }
     elseif step.kind == "warp" then
       local op = step.warpOp or "warp"

@@ -7639,14 +7639,15 @@ function ModWriter.emitGoldGiveSpecial(out, cmd)
   out[#out + 1] = "        if ctx.vm then ctx.vm:showRaw(\"Your party is full. Make room and come back.\") end"
   out[#out + 1] = "        return"
   out[#out + 1] = "      end"
-  out[#out + 1] = "      if spec.flag then save.flags[spec.flag] = true end"
-  out[#out + 1] = "      local dex = save.pokedex"
-  out[#out + 1] = "      if dex then"
-  out[#out + 1] = "        dex.seen = dex.seen or {}"
-  out[#out + 1] = "        dex.owned = dex.owned or {}"
-  out[#out + 1] = "        dex.seen[spec.species] = true"
-  out[#out + 1] = "        dex.owned[spec.species] = true"
+  out[#out + 1] = "      if ctx.vm then"
+  out[#out + 1] = "        local def = data.pokemon and data.pokemon[spec.species]"
+  out[#out + 1] = "        local name = (def and def.name) or spec.species"
+  out[#out + 1] = "        local Strings = require(\"src.core.Strings\")"
+  out[#out + 1] = "        ctx.vm:showRaw(Strings(\"{PLAYER} received\\n%s.\", name))"
   out[#out + 1] = "      end"
+  out[#out + 1] = "      if spec.flag then save.flags[spec.flag] = true end"
+  out[#out + 1] = "      -- Pokédex reads pokedex.caught. Same write as givepoke."
+  out[#out + 1] = "      require(\"src.core.gen2.Breeding\").markPokedex(save, spec.species)"
   out[#out + 1] = "    end,"
   out[#out + 1] = "  })"
   out[#out + 1] = ""
@@ -8244,11 +8245,8 @@ function ModWriter.stepsToRows(project, steps)
     elseif kind == "give_pokemon" then
       local sp = step.species or "PIKACHU"
       local lv = tonumber(step.level) or 5
-      if step.skipNickname then
-        rows[#rows + 1] = { "give_pokemon", sp, lv, true }
-      else
-        rows[#rows + 1] = { "give_pokemon", sp, lv }
-      end
+      -- gotText prints "{PLAYER} received …" (give_pokemon.asm:46).
+      rows[#rows + 1] = { "give_pokemon", sp, lv, step.skipNickname and true or false, true }
     elseif kind == "give_starter" then
       -- Gift + vanilla starter flag (and optional rival index 1/2/3).
       local sp = step.species or "BULBASAUR"
@@ -8256,11 +8254,7 @@ function ModWriter.stepsToRows(project, steps)
       if step.text and step.text ~= "" then
         rows[#rows + 1] = { "show_text", step.text }
       end
-      if step.skipNickname then
-        rows[#rows + 1] = { "give_pokemon", sp, lv, true }
-      else
-        rows[#rows + 1] = { "give_pokemon", sp, lv }
-      end
+      rows[#rows + 1] = { "give_pokemon", sp, lv, step.skipNickname and true or false, true }
       rows[#rows + 1] = { "set_flag", "EVENT_GOT_STARTER" }
       if step.choseFlag and step.choseFlag ~= "" then
         rows[#rows + 1] = { "set_flag", flagName(step.choseFlag) }
@@ -8351,11 +8345,7 @@ function ModWriter.stepsToRows(project, steps)
       rows[#rows + 1] = { "check_flag", done }
       rows[#rows + 1] = { "jump_if_true", "after_mon" }
       rows[#rows + 1] = { "show_text", intro }
-      if step.skipNickname then
-        rows[#rows + 1] = { "give_pokemon", sp, lv, true }
-      else
-        rows[#rows + 1] = { "give_pokemon", sp, lv }
-      end
+      rows[#rows + 1] = { "give_pokemon", sp, lv, step.skipNickname and true or false, true }
       rows[#rows + 1] = { "set_flag", done }
       rows[#rows + 1] = { "jump", "end" }
       rows[#rows + 1] = { "label", "after_mon" }

@@ -25,6 +25,8 @@ local give=assert(handlers['gift_test:give_special'])
 give(ctx,'FISH')
 assert(#save.party==1 and save.party[1].opts.moves[1].id=='HYDRO_PUMP')
 assert(save.flags[State.modFlag(project,'GOT_FISH')])
+assert(save.pokedex.caught.MAGIKARP, 'gift registers as caught')
+assert(text[#text]:find('received'), 'gift prints the received line')
 -- Round-trip the save to ensure the named flag persists.
 local Serializer=require('src.core.SaveSerializer')
 mod.world.game.save=assert(loadstring(Serializer.encode(save)))()
