@@ -16,6 +16,13 @@ function M.draw(S,x,y,w,h,App)
     S.g3UiMode=id;S.g3AssetQuery="";S.g3AssetId=nil;S.g3AssetOffset=0
   end})
   local top=y+36*scale
+  if S.g3UiMode=="fonts" then
+    local K=require("Kit")
+    if K.button(x+350*scale,y,180*scale,28*scale,S.g3FontArtwork and "Language mappings" or "Original font artwork",{}) then
+      S.g3FontArtwork=not S.g3FontArtwork
+    end
+    if not S.g3FontArtwork then require("Ui").drawFonts(S,x,top,w,h-(top-y),App);return end
+  end
   if S.g3UiMode=="banners" then require("Gen3Banners").draw(S,x,top,w,h-(top-y),App);return end
   if S.g3UiMode=="credits" or S.g3UiMode=="areas" then require("Gen3Screens").draw(S,x,top,w,h-(top-y),App,S.g3UiMode);return end
   if S.g3UiMode=="fame" then require("Gen3Fame").draw(S,x,top,w,h-(top-y),App);return end

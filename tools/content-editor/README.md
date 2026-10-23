@@ -3,6 +3,43 @@
 LÖVE app that authors Gen1Recomp mods: maps, dialog, trainers, items,
 Pokémon, and simple quest scripts.
 
+## Translation font pages (Gen 1 and Gen 2)
+
+In **UI → Fonts**, use **+ Font page** and **Browse** to import a PNG sheet
+of 8×8 glyphs. Set **Glyphs/row**, **Base**, and **Advance** (pixel spacing).
+Under **Character mappings**, type or paste a character and choose **Add glyph**.
+Codes identify tiles from left to right, then top to bottom: the first tile's
+code is Base, the second is Base + 1. Mappings can also contain a sequence of
+characters. Save the mod normally to export the sheet and mappings, then use
+those characters in translated dialogue or strings.
+
+Give each page a non-overlapping code range large enough for its sheet. Changing
+Base does not renumber existing mappings. **Revert** removes the selected page's
+project changes. Glyph artwork must be supplied in the PNG; these controls do
+not generate translations, draw glyphs, or provide complex-script shaping.
+
+## Translation font pages (Gen 3)
+
+FireRed, LeafGreen, Ruby, Sapphire and Emerald now have the same **UI → Fonts →
++ Font page** workflow. Import PNG glyph sheets, map Unicode characters or
+character sequences to tile codes, and set **Advance** in pixels. **Tile width**
+and **Tile height** allow larger glyphs (for example 16×16); both default to 8.
+Use white glyphs on a transparent background to inherit the game's text colors.
+The same custom glyphs are used in normal and small text, so choose dimensions
+that fit the screens you translate. Existing line heights remain unchanged.
+
+**Validate / preview sheet** checks the image dimensions and mapped tile bounds.
+The image width must equal Tile width × Glyphs/row, and its height must be a
+multiple of Tile height. Codes and character sequences must be unambiguous
+across pages. **Original font artwork** switches back to the existing native
+font asset editor.
+
+Save normally to export the mappings and font assets. The updated bundled
+runtime applies custom glyphs to text drawing, measurement and word wrapping;
+disabling the mod restores native rendering. Older runtimes without the custom
+glyph API report that an update is required. This supplies glyph coverage, not
+automatic translation, right-to-left layout or complex-script shaping.
+
 The contextual **Maps** workspace provides standalone 16×16 layered map authoring,
 custom PNG tilesets, collision, animations, safe resizing, and guided warps.
 Editable layers stay in `<mod>.editor_project.lua` beside the runtime mod folder; Save generates the normal map

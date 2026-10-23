@@ -184,6 +184,7 @@ function Gen3.emit(project, encode)
     "return function(mod)",
     "  if mod.generation ~= 3 then return end" }
   out[#out+1]=Gen3.READY_REPLAY
+  require("Gen3Fonts").emit(project, encode, out)
   out[#out+1]=require("Gen3SpeciesCapacity").source
   require("Gen3CustomMapRuntime").emit(project, encode, out)
   local authoredConnections={}

@@ -1,0 +1,25 @@
+FIXTURE READY
+[game3/space] script bundle events=394 fromCache=true
+[game3/pokemon] species pack ready (412)
+[game3/encounters] loaded 291 map tables (ROM extract)
+[game3/dataset] hydrated 394 maps midLayouts=394 eventMaps=394 (start=RU_INSIDE_OF_TRUCK)
+[game3/items] pack ready (349)
+[info] loaded mod language_test 0.1.0
+[game3] ACTIVE engine=game3 map=RU_INSIDE_OF_TRUCK pos=2,2 reason=new_game
+[game3/player] avatar ready @ 2,2 down
+[game3/collision] grid ready (native) map=RU_INSIDE_OF_TRUCK cells=6x6 warps=3
+[game3/objects] spawned 3 objects on RU_INSIDE_OF_TRUCK
+[game3/pokemon] species pack ready (412)
+[game3/battle_chrome] battle chrome ready (v7)
+[game3/objects] reloaded 3 objects on RU_INSIDE_OF_TRUCK (kept tracks)
+[game3/native] atlas ready pair=general__inside_of_truck mids=550 256x560 layered=true
+[game3/ow] sprites ready (218 sheets)
+[game3] warped via game3 map loader → RU_INSIDE_OF_TRUCK
+[game3/field] native mid atlas ON pair=general__inside_of_truck
+PASS dialogue Español: ¡Hola! café width=240
+PASS dialogue Français: été Noël width=216
+PASS dialogue Ελληνικά: Γειά width=168
+PASS dialogue Русский: Привет width=180
+PASS dialogue 日本語: こんにちは width=120
+PASS dialogue 中文: 你好 width=72
+PASS live game languages

@@ -545,13 +545,24 @@ function Theme.fonts(s)
   if not probe("newFont") then return {} end
   local uiPath = uiFontFile()
   local monoPath = monoFontFile()
+  local fallbacks = {}
+  local function withFallback(font, size)
+    if font and font.setFallbacks then
+      if fallbacks[size] == nil then
+        local ok, fallback = pcall(G.newFont, "assets/fonts/plainpixel/PlainPixel-Regular.ttf", size)
+        fallbacks[size] = ok and fallback or false
+      end
+      if fallbacks[size] then font:setFallbacks(fallbacks[size]) end
+    end
+    return font
+  end
   local function f(px, path)
     local size = math.max(8, math.floor(px + 0.5))
     if path then
       local ok, font = pcall(G.newFont, path, size)
-      if ok and font then return font end
+      if ok and font then return withFallback(font, size) end
     end
-    return G.newFont(size)
+    return withFallback(G.newFont(size), size)
   end
   return {
     scale     = s,

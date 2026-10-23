@@ -1824,19 +1824,25 @@ end
 
 -- ---- Fonts ----
 
+local function fontBucket(S)
+  return Generation.isGen3 and Generation.isGen3(S) and "gen3Fonts" or "font"
+end
+
 local function fontData(S)
+  if fontBucket(S) == "gen3Fonts" then return {} end
   return (S.data and S.data.font and S.data.font.pages) or {}
 end
 
 local function resolveFont(S, id)
-  if S.project and S.project.font and S.project.font[id] then
-    return S.project.font[id], true
+  local pages = S.project and S.project[fontBucket(S)]
+  if pages and pages[id] then
+    return pages[id], true
   end
   return fontData(S)[id], false
 end
 
 local function ensureFont(S, id, App)
-  local proj = ensureBucket(S, "font")
+  local proj = ensureBucket(S, fontBucket(S))
   if proj[id] then return proj[id] end
   local src = fontData(S)[id]
   local copy = {}
@@ -1856,9 +1862,25 @@ end
 
 local function drawFonts(S, x, y, w, h, App)
   local s = Kit.scale
-  ensureBucket(S, "font")
-  local proj = S.project.font
+  local proj = ensureBucket(S, fontBucket(S))
+  local gen3 = fontBucket(S) == "gen3Fonts"
   local data = fontData(S)
+  if Kit.button(x, y, 160 * s, 28 * s, "+ Font page", { kind = "good" }) then
+    local n = 1
+    while proj["language_" .. n] or data["language_" .. n] do n = n + 1 end
+    local id = "language_" .. n
+    local page = ensureFont(S, id, App)
+    -- Leave ample space above each existing page; the author can adjust Base.
+    local base = 256
+    for _, bucket in ipairs({ data, proj }) do
+      for key, row in pairs(bucket) do
+        if key ~= id then base = math.max(base, (tonumber(row.base) or 0) + 256) end
+      end
+    end
+    page.base, page.charmap = base, {}
+    S.uiFontId, S.uiFontQuery = id, ""
+  end
+  y, h = y + 36 * s, h - 36 * s
   local ids = RegList.mergeIds(proj, data)
   local formX, formW, listY, listH, shown = RegList.drawList(S, App, x, y, w, h,
     "FONT PAGES", ids, {
@@ -1883,7 +1905,7 @@ local function drawFonts(S, x, y, w, h, App)
 
   Kit.caption(viewX, fy, id .. (owned and "" or "  (vanilla)"))
   fy = fy + 24 * s
-  fy = UiPreview.draw(S, "fonts", viewX, fy, viewW, s)
+  if not gen3 then fy = UiPreview.draw(S, "fonts", viewX, fy, viewW, s) end
   local fieldW = viewW - labelW - 12 * s
 
   local function ensure()
@@ -1911,7 +1933,8 @@ local function drawFonts(S, x, y, w, h, App)
   do
     local cur = rec.base or 0
     local v = RegList.num(App, "ui_font_base", viewX + labelW, fy, 80 * s, fh, cur)
-    if v ~= cur then ensure().base = v end
+    v = math.max(0, math.floor(v))
+    if v ~= cur then ensure().base = v; App.markDirty() end
   end
   fy = fy + fh + 8 * s
 
@@ -1919,19 +1942,80 @@ local function drawFonts(S, x, y, w, h, App)
   do
     local cur = rec.glyphsPerRow or 16
     local v = RegList.num(App, "ui_font_gpr", viewX + labelW, fy, 80 * s, fh, cur)
-    v = math.max(1, v)
-    if v ~= cur then ensure().glyphsPerRow = v end
+    v = math.max(1, math.floor(v))
+    if v ~= cur then ensure().glyphsPerRow = v; App.markDirty() end
   end
   fy = fy + fh + 8 * s
 
+  if gen3 then
+    for _, field in ipairs({ {"cellWidth", "Tile width"}, {"cellHeight", "Tile height"} }) do
+      Kit.text("small", field[2], viewX, fy + 6 * s, PAL.caption)
+      local cur = rec[field[1]] or 8
+      local v = math.max(1, math.min(32, math.floor(RegList.num(App, "ui_font_" .. field[1] .. id,
+        viewX + labelW, fy, 80 * s, fh, cur))))
+      if v ~= cur then ensure()[field[1]] = v; App.markDirty() end
+      fy = fy + fh + 8 * s
+    end
+  end
+  Kit.text("small", "Advance", viewX, fy + 6 * s, PAL.caption)
+  local advance = math.max(1, math.floor(RegList.num(App, "ui_font_advance_" .. id,
+    viewX + labelW, fy, 80 * s, fh, rec.advance or 8)))
+  if advance ~= (rec.advance or 8) then ensure().advance = advance; App.markDirty() end
+  fy = fy + fh + 12 * s
+  if gen3 then fy = require("Gen3Fonts").preview(S, rec, viewX, fy, viewW) end
+  Kit.text("small", "Character mappings", viewX, fy, PAL.caption)
+  fy = fy + 22 * s
+  Kit.text("micro", (gen3 and "Tiles" or "8x8 tiles") .. ", left to right. Code = Base + tile index (first = 0).", viewX, fy, PAL.faint)
+  fy = fy + 22 * s
+  -- Copy rows before editing: inherited page tables belong to the source data.
+  local function mappings()
+    local page = ensure()
+    local rows = {}
+    for i, row in ipairs(page.charmap or {}) do rows[i] = { seq = row.seq, code = row.code } end
+    page.charmap = rows
+    return rows
+  end
+  for i, row in ipairs(rec.charmap or {}) do
+    local key = "ui_font_map_" .. id .. "_" .. i
+    local seq = RegList.field(App, key, viewX, fy, math.max(60 * s, viewW - 190 * s), fh,
+      row.seq or "", "Character")
+    local code = math.max(0, math.floor(RegList.num(App, key .. "_code",
+      viewX + viewW - 180 * s, fy, 90 * s, fh, row.code or 0)))
+    if seq ~= row.seq and seq ~= "" then mappings()[i].seq = seq; App.markDirty() end
+    if code ~= row.code then mappings()[i].code = code; App.markDirty() end
+    if Kit.button(viewX + viewW - 80 * s, fy, 80 * s, fh, "Remove", { kind = "danger" }) then
+      table.remove(mappings(), i); App.markDirty(); break
+    end
+    fy = fy + fh + 8 * s
+  end
+  S.uiFontNewChar = RegList.field(App, "ui_font_new_char", viewX, fy,
+    math.max(60 * s, viewW - 110 * s), fh, S.uiFontNewChar or "", "Type or paste a character")
+  if Kit.button(viewX + viewW - 100 * s, fy, 100 * s, fh, "Add glyph", {
+      kind = "good", enabled = (S.uiFontNewChar or "") ~= "" }) then
+    local rows = mappings()
+    local duplicate = false
+    for _, row in ipairs(rows) do if row.seq == S.uiFontNewChar then duplicate = true end end
+    if not duplicate then
+      local code = rec.base or 0
+      for _, row in ipairs(rows) do code = math.max(code, (row.code or 0) + 1) end
+      rows[#rows + 1] = { seq = S.uiFontNewChar, code = code }
+      S.uiFontNewChar = ""
+      App.markDirty()
+    end
+  end
+  fy = fy + fh + 12 * s
+
   if owned and Kit.button(viewX, fy, 120 * s, fh, "Revert", { kind = "danger" }) then
     proj[id] = nil
+    S.uiFontId = nil
     App.markDirty()
   end
   fy = fy + fh + 8 * s
 
   FormPane.finish(S, "uiFontScroll", contentTop, fy, view)
 end
+
+Ui.drawFonts = drawFonts
 
 -- ---- Strings ----
 

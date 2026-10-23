@@ -1,0 +1,70 @@
+[info] generated data initialized for gen3 (self-contained runtime)
+[info] generated data initialized for gen3 (self-contained runtime)
+[info] loaded mod language_test 0.1.0
+EDITOR READY: 55 glyphs; exported and reopened project
+[info] generated data initialized for gen3 (self-contained runtime)
+[info] generated data initialized for gen3 (self-contained runtime)
+[info] loaded mod language_test 0.1.0
+EDITOR READY: 55 glyphs; exported and reopened project
+[game3/space] script bundle events=425 fromCache=true
+[game3/pokemon] species pack ready (412)
+[game3/party_chrome] party chrome manifest ready
+[game3/encounters] loaded 420 map tables (ROM extract)
+[game3/dataset] hydrated 426 maps midLayouts=425 eventMaps=425 (start=FR_PLAYERS_HOUSE_2F)
+[game3/items] pack ready (375)
+[info] loaded mod language_test 0.1.0
+[game3] ACTIVE engine=game3 map=FR_PLAYERS_HOUSE_2F pos=6,6 reason=new_game
+[game3/player] avatar ready @ 6,6 down
+[game3/collision] grid ready (native) map=FR_PLAYERS_HOUSE_2F cells=12x10 warps=1
+[game3/objects] spawned 0 objects on FR_PLAYERS_HOUSE_2F
+[game3/pokemon] species pack ready (412)
+[game3/party_chrome] party chrome manifest ready
+[game3/battle_chrome] battle chrome ready (v7)
+[game3/objects] reloaded 0 objects on FR_PLAYERS_HOUSE_2F (kept tracks)
+[game3/native] atlas ready pair=player_house mids=209 256x224 layered=true
+[game3/ow] sprites ready (152 sheets)
+[game3] warped via game3 map loader → FR_PLAYERS_HOUSE_2F
+[game3/field] native mid atlas ON pair=player_house
+[game3/chrome] dialogue chrome ready data/generated/gba/chrome/menu_message_rgba.rgba
+[game3/frlg_font] latin_normal ready chrome/fonts/latin_normal_fg.rgba
+PASS dialogue Español: ¡Hola! café width=240
+PASS dialogue Français: été Noël width=216
+PASS dialogue Ελληνικά: Γειά width=168
+PASS dialogue Русский: Привет width=180
+PASS dialogue 日本語: こんにちは width=120
+PASS dialogue 中文: 你好 width=72
+PASS live game languages
+FIXTURE READY
+[game3/space] script bundle events=425 fromCache=true
+[game3/pokemon] species pack ready (412)
+[game3/party_chrome] party chrome manifest ready
+[game3/encounters] loaded 420 map tables (ROM extract)
+[game3/dataset] hydrated 426 maps midLayouts=425 eventMaps=425 (start=FR_PLAYERS_HOUSE_2F)
+[game3/items] pack ready (375)
+[info] loaded mod language_test 0.1.0
+[game3] ACTIVE engine=game3 map=FR_PLAYERS_HOUSE_2F pos=6,6 reason=new_game
+[game3/player] avatar ready @ 6,6 down
+[game3/collision] grid ready (native) map=FR_PLAYERS_HOUSE_2F cells=12x10 warps=1
+[game3/objects] spawned 0 objects on FR_PLAYERS_HOUSE_2F
+[game3/pokemon] species pack ready (412)
+[game3/party_chrome] party chrome manifest ready
+[game3/battle_chrome] battle chrome ready (v7)
+[game3/objects] reloaded 0 objects on FR_PLAYERS_HOUSE_2F (kept tracks)
+[game3/native] atlas ready pair=player_house mids=209 256x224 layered=true
+[game3/ow] sprites ready (152 sheets)
+[game3] warped via game3 map loader → FR_PLAYERS_HOUSE_2F
+[game3/field] native mid atlas ON pair=player_house
+[game3/chrome] dialogue chrome ready data/generated/gba/chrome/menu_message_rgba.rgba
+[game3/frlg_font] latin_normal ready chrome/fonts/latin_normal_fg.rgba
+PASS dialogue Español: ¡Hola! café width=240
+PASS dialogue Français: été Noël width=216
+PASS dialogue Ελληνικά: Γειά width=168
+PASS dialogue Русский: Привет width=180
+PASS dialogue 日本語: こんにちは width=120
+PASS dialogue 中文: 你好 width=72
+PASS live game languages
+[info] generated data initialized for gen3 (self-contained runtime)
+[info] generated data initialized for gen3 (self-contained runtime)
+[info] loaded mod language_test 0.1.0
+EDITOR READY: 55 glyphs; exported and reopened project
+FIXTURE READY
