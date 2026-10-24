@@ -1,7 +1,7 @@
 local M = {}
 
 function M.validate(pages)
-  local codes, sequences = {}, {}
+  local codes, sequences, widths = {}, {}, {}
   local function integer(v, low, high)
     return type(v) == "number" and v == math.floor(v) and v >= low and v <= high
   end
@@ -9,6 +9,9 @@ function M.validate(pages)
     assert(type(page) == "table", "Invalid font page")
     assert(type(page.image) == "string" and page.image:match("^assets/.*%.png$")
       and not page.image:find("..", 1, true) and not page.image:find("\\", 1, true), "Font sheet must be a mod assets PNG")
+    assert(page.shadowImage == nil or type(page.shadowImage) == "string"
+      and page.shadowImage:match("^assets/.*%.png$") and not page.shadowImage:find("..",1,true)
+      and not page.shadowImage:find("\\",1,true), "Shadow sheet must be a mod assets PNG")
     assert(integer(page.base, 0, 65535), "Font Base must be 0–65535")
     assert(integer(page.glyphsPerRow, 1, 256), "Glyphs/row must be 1–256")
     assert(integer(page.advance or 8, 1, 64), "Font Advance must be 1–64")
@@ -27,6 +30,10 @@ function M.validate(pages)
         i = i + n
       end
       assert(integer(row.code, page.base, 65535), "Glyph code must be at least the page Base and at most 65535")
+      assert(row.advance == nil or integer(row.advance, 1, 64), "Letter width must be 1–64 or blank for the page default")
+      local advance = row.advance or page.advance or 8
+      assert(not widths[row.code] or widths[row.code] == advance, "Mappings sharing a tile code must have the same letter width")
+      widths[row.code] = advance
       assert(not sequences[row.seq], "Duplicate font character mapping: " .. row.seq)
       assert(not codes[row.code] or codes[row.code] == page, "Font pages contain overlapping mapped codes")
       sequences[row.seq], codes[row.code] = true, page
@@ -40,13 +47,18 @@ function M.build(pages, imageLoader, quadBuilder)
   for _, page in pairs(pages) do
     local image = imageLoader(page.image)
     local width, height = image:getDimensions()
+    local shadow = page.shadowImage and imageLoader(page.shadowImage) or nil
+    if shadow then
+      local sw, sh = shadow:getDimensions()
+      assert(sw == width and sh == height, "Foreground and shadow sheets must have identical dimensions")
+    end
     local cw, ch = page.cellWidth or 8, page.cellHeight or 8
     assert(width == page.glyphsPerRow * cw and height >= ch and height % ch == 0, "Font PNG must match Glyphs/row and contain whole tiles")
     for _, row in ipairs(page.charmap or {}) do
       local index = row.code - page.base
       assert(index < page.glyphsPerRow * height / ch, "Mapped glyph is outside the font PNG: " .. row.seq)
       local id = 0x100000 + row.code
-      local glyph = { id = id, image = image, advance = page.advance or 8,
+      local glyph = { id = id, image = image, shadow = shadow, advance = row.advance or page.advance or 8,
         quad = quadBuilder(index % page.glyphsPerRow * cw, math.floor(index / page.glyphsPerRow) * ch, cw, ch, width, height) }
       glyphs[id], glyphs[row.seq] = glyph, glyph
       sequences[#sequences+1] = row.seq

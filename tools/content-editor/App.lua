@@ -778,6 +778,10 @@ function App.createMod(id)
 end
 
 function App.save()
+  if S and S.g3GlyphEditor and S.g3GlyphEditor.project==S.project and S.g3GlyphEditor.changed then
+    say("Apply or cancel the glyph drawing in UI > Fonts before saving")
+    return false
+  end
   if S and S.cartDirty then
     if not Cart.save(S, App) then return false end
     if not (S.path and S.project) then return true end
@@ -1746,7 +1750,7 @@ function App.draw()
     require("Gen3EventWindow").drawWaiting(S);return
   end
   local W, H = love.graphics.getDimensions()
-  local s = Kit.layout(W, H)
+  local s = Kit.layout(W, H, { referenceWidth = 1100, minScale = 0.65, maxScale = 1.25 })
   local mx, my = love.mouse.getPosition()
   if clickX then mx, my = clickX, clickY end
   Kit.beginFrame(mx, my, mouseClicked, wheelY)

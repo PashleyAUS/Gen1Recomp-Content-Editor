@@ -60,3 +60,49 @@ local exported=assert(loadstring("return function(mod)\n"..table.concat(out,"\n"
 hooks={};exported(mod)
 assert(F.measure("éあsh")==27,"exported runtime must install the saved mappings")
 print("Gen 3 font validation, rendering, wrapping, lifecycle and export tests passed")
+page.shadowImage="assets/font/shadow.png"
+page.charmap[1].advance=5;page.charmap[2].advance=12
+local shadow={getDimensions=function() return 64,16 end,setFilter=function() end}
+local function loader(path) return path==page.shadowImage and shadow or image end
+local g=R.build(pages,loader,love.graphics.newQuad)
+assert(g["é"].advance==5 and g["あ"].advance==12 and g["sh"].advance==9)
+page.charmap[1].advance=0;fails(function() R.validate(pages) end);page.charmap[1].advance=5
+fails(function() R.build(pages,function(path)
+  if path==page.shadowImage then return {getDimensions=function() return 32,16 end} end
+  return image
+end,love.graphics.newQuad) end)
+mod.assets.image=function(_,path) return loader(path) end
+hooks={};R.install(mod,pages)
+local color
+love.graphics.setColor=function(v,...) color=type(v)=="table" and v or {v,...} end
+love.graphics.draw=function(img,q,x,y) draws[#draws+1]={image=img,color=color,x=x} end
+local palette={fg={1,0,0,1},shadow={0,0,1,1},bg={0,0,0,0}}
+for _,native in ipairs({false,true}) do
+  face.nativeIndexed=native;draws={}
+  local count,x=F.draw("éあsh",0,0,{colors=palette})
+  assert(count==3 and x==26 and F.measure("éあsh")==26)
+  assert(#draws==6 and draws[1].image==shadow and draws[2].image==image)
+  assert(draws[1].color[3]==1 and draws[2].color[1]==1)
+  assert(draws[3].x==5 and draws[5].x==17)
+end
+draws={};assert(F.drawGlyph(F.glyphId("é"),0,0,{colors=palette})==5)
+assert(#draws==2 and draws[1].image==shadow and draws[2].image==image)
+assert(F.wrap("é あ",26)=="é あ" and F.wrap("é あ",25)=="é\nあ")
+local restored=assert(loadstring(W.serializeProject(project)))()
+assert(restored.gen3Fonts.language.shadowImage==page.shadowImage and restored.gen3Fonts.language.charmap[1].advance==5)
+out={};require("Gen3Fonts").emit(restored,W.encodeLua,out)
+hooks={};assert(loadstring("return function(mod)\n"..table.concat(out,"\n").."\nend"))()(mod)
+assert(F.measure("éあsh")==26 and F.customGlyph("é").shadow==shadow)
+print("Separate shadow colors, per-letter widths, validation and export passed")
+local clicked=true
+package.loaded.Kit={scale=1,button=function() local v=clicked;clicked=false;return v end}
+package.loaded.ModIO={readText=function(path) return path end}
+love.filesystem.newFileData=function(bytes) return bytes end
+love.graphics.newImage=function(path) return path:find("shadow",1,true) and shadow or image end
+local P=require("Gen3Fonts")
+local state={project=project,path="test"}
+local before=P.preview(state,page,0,0,300)
+page.charmap[1].advance=7
+local after=P.preview(state,page,0,0,300)
+assert(before==after and before>36,"editing a width must not collapse the sheet preview")
+print("Preview layout remains stable while editing widths")

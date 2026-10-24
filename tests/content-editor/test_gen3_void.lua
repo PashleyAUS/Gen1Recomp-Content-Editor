@@ -114,6 +114,26 @@ run("a painted tile shows from every map, owner's first", function()
   assert(c.m == 7 and r.id == "A")
 end)
 
+run("a distant fill owner does not block a nearby map's paint margin", function()
+  local p = {}
+  local route = {id="ROUTE1",ox=0,oy=0,w=32,h=20}
+  local nimbus = {id="NIMBUS",ox=-42,oy=-8,w=42,h=38}
+  local rects = {route,nimbus}
+  local x,y=31,21
+  local owner=Void.owner(rects,x,y)
+  assert(rects[owner]==nimbus)
+  local target=Void.paintOwner(p,rects,owner,x,y)
+  assert(target==route)
+  assert(Void.paint(p,target.id,target.w,target.h,x-target.ox,y-target.oy,42,"routeTiles"))
+  local c=Void.paintedAt(p,rects,owner,x,y)
+  assert(c.m==42 and c.p=="routeTiles")
+  assert(Void.paintOwner(p,{nimbus,route},1,x,y)==route)
+  assert(not Void.paintOwner(p,rects,owner,200,200))
+  assert(not Void.paintOwner(p,rects,owner,0,0))
+  assert(Void.paint(p,target.id,target.w,target.h,x,y,nil))
+  assert(not Void.paintedAt(p,rects,owner,x,y))
+end)
+
 run("validate rejects bad data", function()
   assert(not pcall(Void.validate, { gen3VoidDefault = "fog" }))
   assert(not pcall(Void.validate, { gen3VoidMaps = { M = { margin = 99 } } }))

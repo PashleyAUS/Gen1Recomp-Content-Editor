@@ -2125,8 +2125,9 @@ function Pokemon.draw(S, x, y, w, h, App)
   local bx = formX + 12 * s
   if owned then
     if Kit.button(bx, btnY, 120 * s, 32 * s, "Revert", { kind = "ghost" }) then
-      S.project.pokemon[mon.id] = nil
-      S.pokemonId = mon.id
+      if Generation.isGen3(S) then require("Gen3Forms").remove(S,mon.id)
+      else S.project.pokemon[mon.id] = nil end
+      if not Generation.isGen3(S) then S.pokemonId = mon.id end
       App.markDirty()
     end
     bx = bx + 128 * s
@@ -2134,7 +2135,7 @@ function Pokemon.draw(S, x, y, w, h, App)
   if Kit.button(bx, btnY, 120 * s, 32 * s,
       Generation.isGen3(S) and "Remove edit" or "Delete", { kind = "danger",
         tooltip = "Remove from this mod (Save emits content:remove)" }) then
-    if Generation.isGen3(S) then S.project.pokemon[mon.id]=nil
+    if Generation.isGen3(S) then require("Gen3Forms").remove(S,mon.id)
     else State.markDeleted(S.project, "pokemon", mon.id, mon,S.data and S.data.pokemon) end
     if S.project.pokedex then S.project.pokedex[mon.id] = nil end
     local ids = allSpeciesIds(S)

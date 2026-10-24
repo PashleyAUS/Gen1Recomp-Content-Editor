@@ -231,10 +231,11 @@ local function drawAround(S,App,fx,viewY,mapW,viewH,tile,layout)
         elseif tool=="Revert" then
           if painted and Void.paint(S.project,paintedIn.id,paintedIn.w,paintedIn.h,x-paintedIn.ox,y-paintedIn.oy,nil) then App.markDirty() end
         else
-          -- the tile belongs to the nearest map (kept in its own margin)
-          local changed,why=Void.paint(S.project,owner.id,owner.w,owner.h,x-owner.ox,y-owner.oy,S.g3Mid or 0,paintPair)
+          local target=paintedIn or Void.paintOwner(S.project,list,Void.owner(list,x,y),x,y)
+          local changed,why=false,"margin"
+          if target then changed,why=Void.paint(S.project,target.id,target.w,target.h,x-target.ox,y-target.oy,S.g3Mid or 0,paintPair) end
           if changed then App.markDirty() end
-          if why=="margin" and hit then S.status="Past "..owner.id.."'s margin: make its margin bigger to paint here" end
+          if why=="margin" and hit then S.status="Outside all map margins: increase this map's Margin to paint farther out" end
         end
       end
     end

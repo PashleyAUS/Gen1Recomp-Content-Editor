@@ -10,6 +10,7 @@ local FormPane = require("FormPane")
 local EventScriptEditor = require("EventScriptEditor")
 local Gen2Talk = require("Gen2Talk")
 local SpeciesPicker = require("SpeciesPicker")
+local MapSelection = require("MapSelection")
 
 local MapBuilder = {}
 local PAL = Theme.PAL
@@ -21,7 +22,7 @@ local TOOLS = {
   { id = "fill", label = "Fill", tip = "Flood-fill matching cells" },
   { id = "rectangle", label = "Rectangle", tip = "Drag a filled rectangle" },
   { id = "picker", label = "Picker", tip = "Pick a source tile from the map" },
-  { id = "select", label = "Select", tip = "Drag ranges; Shift adds another" },
+  { id = "select", label = "Select", tip = "Drag a range; drag inside to move its outline, or edges to resize. Shift adds another range" },
   { id = "collision", label = "Collision",
     tip = "Paint walk, wall, grass, water, ledges, and cliff faces" },
   { id = "exits", label = "Exit type",
@@ -933,7 +934,9 @@ local function drawChecker(x, y, size)
 end
 
 local function drawSelections(S, source)
-  for _, rect in ipairs(S.builderSelections or {}) do
+  local adjusting=S._builderDrag and S._builderDrag.selectionIndex
+  for index, rect in ipairs(S.builderSelections or {}) do
+    if index==adjusting and S.builderRangeDraft then rect=S.builderRangeDraft end
     local x0, y0, x1, y1 = normalizedRect(rect)
     love.graphics.setColor(0.25, 0.65, 1, 0.18)
     love.graphics.rectangle("fill", x0 * CELL, y0 * CELL,
@@ -941,8 +944,16 @@ local function drawSelections(S, source)
     love.graphics.setColor(0.35, 0.75, 1, 0.95)
     love.graphics.rectangle("line", x0 * CELL + 0.5, y0 * CELL + 0.5,
       (x1 - x0 + 1) * CELL - 1, (y1 - y0 + 1) * CELL - 1)
+    if S.builderTool == "select" then
+      local size = 6 * Kit.scale / (S.builderZoom or 1)
+      for _,point in ipairs({{x0,y0},{(x0+x1+1)/2,y0},{x1+1,y0},
+          {x0,(y0+y1+1)/2},{x1+1,(y0+y1+1)/2},
+          {x0,y1+1},{(x0+x1+1)/2,y1+1},{x1+1,y1+1}}) do
+        love.graphics.rectangle("fill",point[1]*CELL-size/2,point[2]*CELL-size/2,size,size)
+      end
+    end
   end
-  if S.builderRangeDraft then
+  if S.builderRangeDraft and not adjusting then
     local x0, y0, x1, y1 = normalizedRect(S.builderRangeDraft)
     love.graphics.setColor(1, 0.75, 0.25, 0.22)
     love.graphics.rectangle("fill", x0 * CELL, y0 * CELL,
@@ -1369,6 +1380,7 @@ local function drawCanvas(S, source, x, y, w, h, App)
 
   local over = Kit.hit(vx, vy, vw, vh) and not require("Gen3DayNightPanel").mapBarHit(S)
   S._builderViewHit = over
+  S._builderSelectViewport = {x=vx,y=vy,w=vw,h=vh}
   local function mouseCell()
     local worldX = (Kit.mouseX - vx) / zoom + (S.builderCamX or 0)
     local worldY = (Kit.mouseY - vy) / zoom + (S.builderCamY or 0)
@@ -1396,6 +1408,9 @@ local function drawCanvas(S, source, x, y, w, h, App)
   elseif tool == "elevation" and S.builderElevationMode == "rectangle" then tool = "elevation_rectangle" end
   local eventTool = EVENT_TOOL_BY_ID[tool]
   local panning = tool == "pan" or middle or space
+  if tool=="select" and over and not Kit.blockClicks and not S._builderDrag then
+    Kit.offerTooltip(vx,vy,vw,vh,"Drag inside a selection to move its outline; drag an edge or corner to resize. Shift-drag adds a range. Tiles stay in place.")
+  end
   local stencilReady = type(source.stencilImage) == "string"
     and source.stencilImage ~= ""
     and source.stencilVisible ~= false
@@ -1575,7 +1590,34 @@ local function drawCanvas(S, source, x, y, w, h, App)
         S.builderCamY = S._builderDrag.camY
           - (Kit.mouseY - S._builderDrag.my) / zoom
       end
-    elseif inMap and (tool == "rectangle" or tool == "elevation_rectangle" or tool == "select" or tool == "eraser" or tool == "visual_object") then
+    elseif tool=="select" and (S._builderDrag or Kit.mouseClicked) then
+      local drag=S._builderDrag
+      if not drag then
+        local shift=love.keyboard.isDown("lshift") or love.keyboard.isDown("rshift")
+        local index,handle
+        if not shift then
+          index,handle=MapSelection.hit(S.builderSelections or {},
+            ((Kit.mouseX-vx)/zoom+(S.builderCamX or 0))/CELL,
+            ((Kit.mouseY-vy)/zoom+(S.builderCamY or 0))/CELL,6*Kit.scale/zoom/CELL)
+        end
+        if inMap or index then
+          drag={range=true,tool="select",x0=cx,y0=cy,selectionIndex=index,
+            handle=handle,original=index and S.builderSelections[index],add=shift}
+          S._builderDrag=drag
+        end
+      end
+      if drag then
+        if drag.selectionIndex then
+          S.builderRangeDraft=MapSelection.adjust(drag.original,drag.handle,
+            cx-drag.x0,cy-drag.y0,source.cellWidth,source.cellHeight)
+        else
+          S.builderRangeDraft={x0=drag.x0,y0=drag.y0,
+            x1=clamp(cx,0,source.cellWidth-1),y1=clamp(cy,0,source.cellHeight-1)}
+        end
+        local x0,y0,x1,y1=MapSelection.bounds(S.builderRangeDraft)
+        S.status=string.format("Selection: %d x %d cells at %d, %d (outline only)",x1-x0+1,y1-y0+1,x0,y0)
+      end
+    elseif inMap and (tool == "rectangle" or tool == "elevation_rectangle" or tool == "eraser" or tool == "visual_object") then
       if not S._builderDrag then
         S._builderDrag = { range = true, x0 = cx, y0 = cy, tool = tool, elevation = S.builderElevation or 3, objectKind = S.builderObjectKind or "tree", objectSize = S.builderObjectSize or 3, rotation = S.builderObjectRotation or 0, lean = S.builderTreeLean or 0, mount=S.builderPropMount or 0, treatment=S.builderNativeTreatment, model=(source.visualModelLibrary or {})[S.builderModelIndex or 1] }
       end
@@ -1615,10 +1657,13 @@ local function drawCanvas(S, source, x, y, w, h, App)
     if S._builderDrag.range and S.builderRangeDraft then
       local rect = S.builderRangeDraft
       if S._builderDrag.tool == "select" then
-        local shift = love.keyboard.isDown("lshift") or love.keyboard.isDown("rshift")
-        if not shift then S.builderSelections = {} end
-        S.builderSelections = S.builderSelections or {}
-        S.builderSelections[#S.builderSelections + 1] = rect
+        if S._builderDrag.selectionIndex then
+          S.builderSelections[S._builderDrag.selectionIndex]=rect
+        else
+          if not S._builderDrag.add then S.builderSelections = {} end
+          S.builderSelections = S.builderSelections or {}
+          S.builderSelections[#S.builderSelections + 1] = rect
+        end
       elseif S._builderDrag.tool == "visual_object" then
         App.beginEditBatch()
         if require("MapObjects3D").place(source,rect,S._builderDrag.objectKind,S._builderDrag.objectSize,S._builderDrag.rotation,S._builderDrag.lean,S._builderDrag.mount,S._builderDrag.model,S._builderDrag.treatment) then App.markDirty() end
@@ -3703,6 +3748,11 @@ function MapBuilder.keypressed(S, key, App)
   local source = mapSource(S)
   if not source then return false end
   if Kit.focus then return false end
+  if key=="escape" and S._builderDrag and S._builderDrag.tool=="select" then
+    S._builderDrag=nil;S.builderRangeDraft=nil
+    S.status="Selection adjustment cancelled"
+    return true
+  end
   local ctrl = love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl")
     or love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")
   if ctrl and (key == "c" or key == "v") then
@@ -3741,6 +3791,20 @@ function MapBuilder.keypressed(S, key, App)
 end
 
 function MapBuilder.update(S, dt)
+  local drag=S and S._builderDrag
+  local view=S and S._builderSelectViewport
+  if drag and drag.tool=="select" and view and love.mouse.isDown(1) and not Kit.blockClicks then
+    local mx,my=love.mouse.getPosition()
+    local edge=24*Kit.scale
+    local function speed(pos,low,high)
+      if pos<low+edge then return -clamp((low+edge-pos)/edge,0,1) end
+      if pos>high-edge then return clamp((pos-high+edge)/edge,0,1) end
+      return 0
+    end
+    local step=400*math.min(tonumber(dt) or 0,0.05)/math.max(0.25,S.builderZoom or 1)
+    S.builderCamX=(S.builderCamX or 0)+speed(mx,view.x,view.x+view.w)*step
+    S.builderCamY=(S.builderCamY or 0)+speed(my,view.y,view.y+view.h)*step
+  end
   if not (S and S._builderViewHit and not Kit.focus and love.keyboard) then return end
   local dx, dy = 0, 0
   if love.keyboard.isDown("a") then dx = dx - 1 end
@@ -3807,12 +3871,27 @@ function MapBuilder.draw(S, x, y, w, h, App)
 
   local s = Kit.scale
   local leftW = math.min(270 * s, math.max(220 * s, w * 0.22))
-  local rightW = Generation.isGen3(S) and math.min(560 * s, math.max(270 * s, w * 0.38))
-    or math.min(330 * s, math.max(270 * s, w * 0.25))
   local gap = 9 * s
   local centerX = x + leftW + gap
-  local centerW = math.max(220 * s, w - leftW - rightW - gap * 2)
+  local available = math.max(0, w - leftW - gap * 2)
+  local rightMax = math.max(0, available - math.min(220 * s, available * 0.45))
+  local rightMin = math.min(270 * s, rightMax)
+  local rightW = clamp((S.builderPropertiesWidth or 320) * s, rightMin, rightMax)
+  local dividerX = x + w - rightW - gap
+  if not Kit.mouseDown then S._builderResizeProperties = nil end
+  if Kit.mouseClicked and not Kit.blockClicks and Kit.hit(dividerX, y, gap, h) then
+    S._builderResizeProperties = true
+  end
+  if S._builderResizeProperties and Kit.mouseDown and not Kit.blockClicks then
+    rightW = clamp(x + w - Kit.mouseX - gap / 2, rightMin, rightMax)
+    S.builderPropertiesWidth = rightW / s
+    Kit.mouseClicked = false
+  end
+  local centerW = available - rightW
   local rightX = centerX + centerW + gap
+  Kit.offerTooltip(rightX-gap,y,gap,h,"Drag to resize the map and properties panels")
+  Theme.col(PAL.steel)
+  love.graphics.rectangle("fill",rightX-gap/2-s,y+h/2-18*s,2*s,36*s, s,s)
 
   local mapListMin = S.builderNewMap and 244 * s or 210 * s
   local mapListH = math.min(290 * s, math.max(mapListMin, h * 0.43))

@@ -1864,6 +1864,10 @@ local function drawFonts(S, x, y, w, h, App)
   local s = Kit.scale
   local proj = ensureBucket(S, fontBucket(S))
   local gen3 = fontBucket(S) == "gen3Fonts"
+  if gen3 and S.g3GlyphEditor then
+    require("Gen3GlyphEditor").draw(S,x,y,w,h,App)
+    return
+  end
   local data = fontData(S)
   if Kit.button(x, y, 160 * s, 28 * s, "+ Font page", { kind = "good" }) then
     local n = 1
@@ -1878,6 +1882,7 @@ local function drawFonts(S, x, y, w, h, App)
       end
     end
     page.base, page.charmap = base, {}
+    if gen3 then page._blank=true end
     S.uiFontId, S.uiFontQuery = id, ""
   end
   y, h = y + 36 * s, h - 36 * s
@@ -1912,7 +1917,7 @@ local function drawFonts(S, x, y, w, h, App)
     return ensureFont(S, id, App)
   end
 
-  Kit.text("small", "Image", viewX, fy + 6 * s, PAL.caption)
+  Kit.text("small", gen3 and "Foreground" or "Image", viewX, fy + 6 * s, PAL.caption)
   do
     local cur = tostring(rec.image or "")
     local fx = viewX + labelW
@@ -1929,6 +1934,18 @@ local function drawFonts(S, x, y, w, h, App)
   end
   fy = fy + fh + 8 * s
 
+  if gen3 then
+    Kit.text("small", "Shadow", viewX, fy + 6 * s, PAL.caption)
+    local cur = rec.shadowImage or ""
+    local fx = viewX + labelW
+    local v = RegList.field(App, "ui_font_shadow_" .. id, fx, fy,
+      math.max(40*s, fieldW-100*s), fh, cur, "Optional shadow PNG; blank = none")
+    if v ~= cur then ensure().shadowImage = v ~= "" and v or nil; App.markDirty() end
+    if Kit.button(fx+fieldW-96*s,fy,96*s,fh,"Browse",{kind="ghost"}) then
+      browseImage(App,"Font shadow sheet",function(rel) ensure().shadowImage=rel;App.markDirty() end)
+    end
+    fy = fy + fh + 8*s
+  end
   Kit.text("small", "Base", viewX, fy + 6 * s, PAL.caption)
   do
     local cur = rec.base or 0
@@ -1967,22 +1984,46 @@ local function drawFonts(S, x, y, w, h, App)
   fy = fy + 22 * s
   Kit.text("micro", (gen3 and "Tiles" or "8x8 tiles") .. ", left to right. Code = Base + tile index (first = 0).", viewX, fy, PAL.faint)
   fy = fy + 22 * s
+  if gen3 then
+    Kit.text("micro", "Character / sequence", viewX, fy, PAL.caption)
+    Kit.text("micro", "Code", viewX+viewW-350*s, fy, PAL.caption)
+    Kit.text("micro", "Width (px)", viewX+viewW-250*s, fy, PAL.caption)
+    fy = fy + 22*s
+  end
   -- Copy rows before editing: inherited page tables belong to the source data.
   local function mappings()
     local page = ensure()
     local rows = {}
-    for i, row in ipairs(page.charmap or {}) do rows[i] = { seq = row.seq, code = row.code } end
+    for i, row in ipairs(page.charmap or {}) do
+      rows[i] = {}; for k,v in pairs(row) do rows[i][k]=v end
+    end
     page.charmap = rows
     return rows
   end
   for i, row in ipairs(rec.charmap or {}) do
     local key = "ui_font_map_" .. id .. "_" .. i
-    local seq = RegList.field(App, key, viewX, fy, math.max(60 * s, viewW - 190 * s), fh,
+    local reserve = gen3 and 360 or 190
+    local seq = RegList.field(App, key, viewX, fy, math.max(60 * s, viewW - reserve * s), fh,
       row.seq or "", "Character")
     local code = math.max(0, math.floor(RegList.num(App, key .. "_code",
-      viewX + viewW - 180 * s, fy, 90 * s, fh, row.code or 0)))
+      viewX + viewW - (reserve-10) * s, fy, 90 * s, fh, row.code or 0)))
     if seq ~= row.seq and seq ~= "" then mappings()[i].seq = seq; App.markDirty() end
     if code ~= row.code then mappings()[i].code = code; App.markDirty() end
+    if gen3 then
+      local cur = row.advance and tostring(row.advance) or ""
+      local v = RegList.field(App,key.."_advance",viewX+viewW-250*s,fy,80*s,fh,cur,
+        tostring(rec.advance or 8))
+      if v ~= cur then
+        local n = tonumber(v)
+        if v == "" then mappings()[i].advance=nil;App.markDirty()
+        elseif n and n==math.floor(n) and n>=1 and n<=64 then mappings()[i].advance=n;App.markDirty()
+        else S.status="Letter width must be 1–64 pixels; leave blank for page Advance" end
+      end
+      if Kit.button(viewX+viewW-160*s,fy,72*s,fh,"Draw",{kind="primary"}) then
+        local ok,err=pcall(require("Gen3GlyphEditor").open,S,id,i)
+        if not ok then S.status=tostring(err) end
+      end
+    end
     if Kit.button(viewX + viewW - 80 * s, fy, 80 * s, fh, "Remove", { kind = "danger" }) then
       table.remove(mappings(), i); App.markDirty(); break
     end

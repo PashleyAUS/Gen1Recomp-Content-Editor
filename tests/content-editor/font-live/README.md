@@ -1,5 +1,27 @@
 # Live Gen 3 language font verification
 
+## Shadow and width verification — October 24, 2026
+
+The fixture now has separate foreground and shadow PNGs, with `i` advancing
+6 pixels, `W` 12 pixels, and space 4 pixels. All five game runs passed pixel
+checks for independently colored red foreground and blue shadow, the 36-pixel
+pen position for `WiWi`, and normal multilingual dialogue rendering.
+See each game's `widths-shadows.png` and `layer-pixels.png`.
+
+In the live editor, validated and previewed both sheets, changed E's width
+from inherited to 8 using its Width field, and saved. The sidecar retained
+both the width override and shadow sheet. Reopened the project successfully
+and verified the saved E width of 8 in a fresh FireRed game run using
+`FONT_EXPECT_E=8` without regenerating fixtures.
+Also fixed the preview disappearing and shifting the form while editing widths.
+`shadow-width-matrix.png` compares the two-color, variable-width sample in all
+five games. Each run counted 86 red foreground pixels and 78 blue shadow pixels
+in the dedicated small-font render check.
+
+Headless tests cover width reset/inheritance, preserving widths during other
+mapping edits, mismatched sheet rejection, invalid width rejection, layer order,
+independent colors, normal/small rendering, wrapping and export round trips.
+
 Verified October 23, 2026 using the real LÖVE editor, imported game caches,
 exported mods, and the runtime's frame driver. All game saves and options are
 isolated under this directory; normal player saves are not used.
@@ -51,3 +73,16 @@ Create `tests/content-editor/font-live/<game>/save/mods/language_test/assets/fon
 
 Use `FONT_TEST_MODE=editor` to open the actual editor on the disposable project.
 Use `FONT_TEST_HOLD=1` for an in-game window that stays open after capturing.
+
+## Direct pixel editing
+
+`FONT_TEST_MODE=pixel-test` runs actual LÖVE image tests for blank sheets,
+foreground/shadow strokes, erasing, undo/redo, sheet growth, neighboring glyph
+preservation, cancellation, failed writes, and serialization/runtime roundtrip.
+
+The Draw canvas was also exercised in the real editor: painted W foreground
+at (15, 0) and shadow at (14, 0), applied the glyph, and saved. Running the
+FireRed game with `FONT_EXPECT_PIXEL=1` verified those exact pixels rendered
+red and blue respectively, alongside the six language dialogue checks.
+The result is recorded in `firered/result.log`. This optional assertion requires
+the saved UI edits; preparing a fresh fixture replaces them.

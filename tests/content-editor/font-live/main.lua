@@ -28,8 +28,16 @@ if mode=="game" then
 end
 local App,S
 function love.load()
+  if mode=="reopen" then
+    App=require("App");App.load(run.."/save/mods/language_test",{version=game,eventWindow=true});S=App.getState()
+    assert(S.project.gen3Fonts.languages.shadowImage,"Shadow sheet lost on reopen")
+    local found=false
+    for _,row in ipairs(S.project.gen3Fonts.languages.charmap) do if row.seq=="E" then assert(row.advance==8);found=true end end
+    assert(found);S.tab="ui";S.g3UiMode="fonts";S.uiFontId="languages"
+    log("PASS editor reopened saved E width=8 and shadow PNG");return
+  end
   local p=require("State").blankProject("language_test");p.game=game
-  local samples={"Español: ¡Hola! café","Français: été Noël","Ελληνικά: Γειά","Русский: Привет","日本語: こんにちは","中文: 你好"}
+  local samples={"WiWi iii WWW","Español: ¡Hola! café","Français: été Noël","Ελληνικά: Γειά","Русский: Привет","日本語: こんにちは","中文: 你好"}
   local font=love.graphics.newFont("assets/fonts/plainpixel/PlainPixel-Regular.ttf",15)
   local chars,seen={},{}
   local utf8=require("utf8")
@@ -43,11 +51,16 @@ function love.load()
   local page={image="assets/font/languages.png",base=256,glyphsPerRow=16,cellWidth=16,cellHeight=16,advance=12,charmap={}}
   for i,c in ipairs(chars) do
     love.graphics.print(c,(i-1)%16*16,math.floor((i-1)/16)*16 + 12 - font:getBaseline())
-    page.charmap[i]={seq=c,code=255+i}
+    page.charmap[i]={seq=c,code=255+i,advance=c=="i" and 6 or c=="W" and 12 or c==" " and 4 or nil}
   end
   love.graphics.pop()
   local path=run.."/save/mods/language_test"
   write(path.."/assets/font/languages.png",canvas:newImageData():encode("png"):getString())
+  local shadow=love.graphics.newCanvas(canvas:getDimensions())
+  love.graphics.push("all");love.graphics.setCanvas(shadow);love.graphics.clear(0,0,0,0)
+  love.graphics.setColor(1,1,1,1);love.graphics.draw(canvas,1,1);love.graphics.pop()
+  page.shadowImage="assets/font/shadows.png"
+  write(path.."/assets/font/shadows.png",shadow:newImageData():encode("png"):getString())
   p.gen3Fonts={languages=page}
   local W=require("ModWriter")
   write(path..".editor_project.lua",W.serializeProject(p))
@@ -56,6 +69,9 @@ function love.load()
   write(run.."/samples.lua",W.encodeLua(samples))
   write(run.."/save/options.lua",'return {textSpeed=3,mods={language_test=true},modsByVersion={["'..game..'"]={language_test=true}},modsByVersionMigrated=true}')
   if mode=="prepare" then log("FIXTURE READY");love.event.quit();return end
+  if mode=="pixel-test" then
+    assert(loadfile(dir.."/pixel-test.lua"))()(path);love.event.quit();return
+  end
   App=require("App");App.load(path,{version=game,eventWindow=true});S=App.getState()
   assert(S.project.gen3Fonts.languages.charmap[1].seq==page.charmap[1].seq,"Reopen lost mappings")
   S.tab="ui";S.g3UiMode="fonts";S.uiFontId="languages"

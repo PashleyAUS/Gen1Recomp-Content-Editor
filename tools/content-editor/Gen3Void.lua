@@ -186,8 +186,24 @@ function M.owner(rects, x, y)
   return best
 end
 
---- The painted tile at (x, y) and the rect it is saved in: the owner's first,
--- then (tiles saved before owners were fixed) the smallest map id's.
+--- Choose a storage map for painting without changing fill ownership.
+function M.paintOwner(project, rects, owner, x, y)
+  -- Fill ownership can extend indefinitely along an edge. Painting must use
+  -- a map whose finite margin actually contains the cell.
+  local candidates = {}
+  for _, r in ipairs(rects) do
+    local lx, ly, n = x-r.ox, y-r.oy, M.margin(project, r.id)
+    if lx >= 0 and ly >= 0 and lx < r.w and ly < r.h then return nil end
+    if lx >= -n and ly >= -n and lx < r.w+n and ly < r.h+n then
+      candidates[#candidates+1] = r
+    end
+  end
+  for _,r in ipairs(candidates) do if r == rects[owner] then return r end end
+  return candidates[M.owner(candidates, x, y)]
+end
+
+--- The painted tile at (x, y) and its storage rect: the owner's first,
+-- then the smallest map id's, including paint in overlapping margins.
 function M.paintedAt(project, rects, owner, x, y)
   local o = rects[owner]
   local c = o and M.cell(project, o.id, x - o.ox, y - o.oy)

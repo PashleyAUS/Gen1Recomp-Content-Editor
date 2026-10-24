@@ -25,6 +25,25 @@ FireRed, LeafGreen, Ruby, Sapphire and Emerald now have the same **UI → Fonts 
 character sequences to tile codes, and set **Advance** in pixels. **Tile width**
 and **Tile height** allow larger glyphs (for example 16×16); both default to 8.
 Use white glyphs on a transparent background to inherit the game's text colors.
+**Foreground** imports the letter pixels; optional **Shadow** imports a separate
+PNG with identical dimensions and tile layout. Use white pixels on transparency
+for both. Paint the shadow's offset inside each tile: the game draws both sheets
+at the same position, applying the current foreground and shadow colors
+independently. Leave Shadow blank for no shadow. The preview composites both.
+
+To draw without importing PNGs, create a font page, add a character mapping,
+then click its **Draw** button. Select **Foreground** or **Shadow** and draw on
+the pixel grid with **Pencil** or **Eraser**. **Active layer** isolates the
+selected layer; the combined preview always shows both. Undo/redo and Clear
+layer are available. Choose **Apply glyph**, then **Save** to export. Cancel
+discards the current drawing. Apply creates new sheets, preserves neighboring
+letters and original imported files, and grows the sheet for new tile codes.
+Per-letter widths remain editable in the mapping list.
+
+Each character mapping has a **Width (px)** field (1–64 pixels). This is the
+advance to the next character, independent of tile dimensions. Leave it blank
+to inherit the page's **Advance**. Per-letter widths affect drawing, measurement
+and wrapping. Mappings sharing the same tile code must use the same width.
 The same custom glyphs are used in normal and small text, so choose dimensions
 that fit the screens you translate. Existing line heights remain unchanged.
 

@@ -21,6 +21,48 @@ function M.ensure(S,id)
   family={mode="fixed",forms={{name="Original",species=id}},default=1}
   S.project.gen3Forms[id]=family;return family
 end
+function M.remove(S,id)
+  local p=S.project
+  local family,parent=M.family(S,id)
+  -- Reverting a stock species only removes its edits, not its form family.
+  if not family or id==parent then p.pokemon[id]=nil;return end
+  local removed
+  for i,row in ipairs(family.forms) do if row.species==id then removed=i;break end end
+  table.remove(family.forms,removed)
+  local function index(n)
+    if n==removed then return 1 end
+    return n and n>removed and n-1 or n
+  end
+  family.default=index(family.default)
+  for i=#(family.rules or {}),1,-1 do
+    local r=family.rules[i]
+    if r.target==removed or r.from==removed then table.remove(family.rules,i)
+    else r.target=index(r.target);r.from=index(r.from) end
+  end
+  for _,row in ipairs(family.forms) do
+    if row.mechanic then
+      if row.mechanic.from==removed then row.mechanic=nil
+      else row.mechanic.from=index(row.mechanic.from) end
+    end
+  end
+  if #family.forms==1 then p.gen3Forms[parent]=nil end
+  p.pokemon[id]=nil
+  -- Species-keyed overrides must not survive the removed record. References
+  -- in encounters, teams, gifts and evolutions fall back to the original.
+  local seen={}
+  local function rewrite(t)
+    if seen[t] then return end;seen[t]=true
+    t[id]=nil
+    for k,v in pairs(t) do
+      if type(v)=="table" then rewrite(v)
+      elseif v==id and k~="name" and k~="label" and k~="text" and k~="description" then t[k]=parent end
+    end
+  end
+  rewrite(p)
+  if S.g3FormSelection then S.g3FormSelection[parent]=index(S.g3FormSelection[parent]) end
+  if S.pokemonId==id then S.pokemonId=parent end
+end
+
 function M.encounterChoices(S,id)
   local family,parent=M.family(S,id);parent=parent or id
   local ids,labels={"automatic"},{automatic="Automatic / original form"}
@@ -203,6 +245,12 @@ function M.draw(S,mon,x,y,w,App)
   C.field(S,{x=x,y=y,w=w-180*s,h=30*s,current=tostring(selection),ids=ids,labels=names,title="Form to edit",tooltip="Select the form whose settings you want to edit. This does not change a Pokemon in the player's party.",onPick=function(id) S.g3FormSelection[parent]=tonumber(id) end})
   if K.button(x+w-170*s,y,170*s,30*s,"Add custom form",{kind="good",tooltip="Create a new species record for this family, starting with the parent's data. Configure its artwork, stats and selection rules afterward."}) then M.add(S,parent);S.g3FormSelection[parent]=#family.forms;App.markDirty() end;y=y+42*s
   local row=family.forms[selection];local rec=S.project.pokemon[row.species] or S.data.pokemon[row.species]
+  if selection>1 then
+    if K.button(x,y,170*s,30*s,"Delete form",{kind="danger",tooltip="Delete this form and its rules. Encounters, teams and gifts using it return to the original species."}) then
+      M.remove(S,row.species);App.markDirty();return y+40*s
+    end
+    y=y+40*s
+  end
   if not rec then K.caption(x,y,"This form's Pokemon record was removed.");return y+35*s end
   local value=K.textfield("g3FormName",x,y,w,30*s,row.name,"Form name","A friendly name such as Sunny, Winter, or Attack.")
   if value~=row.name then row.name=value;App.markDirty() end;y=y+40*s

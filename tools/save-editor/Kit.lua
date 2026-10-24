@@ -182,9 +182,11 @@ end
 -- the narrowest the single-row chrome fits at scale 1.  Desktop sizes
 -- (width >= 640 * height / 768) still land on the height term, so they stay
 -- pixel-identical to before.
-function Kit.layout(width, height)
-  local s = Theme.clamp(math.min(width / 640, height / 768), 0.9, 1.6)
-  local key = ("%dx%d"):format(width, height)
+function Kit.layout(width, height, options)
+  options = options or {}
+  local s = Theme.clamp(math.min(width / (options.referenceWidth or 640), height / 768),
+    options.minScale or 0.9, options.maxScale or 1.6)
+  local key = ("%dx%d:%.4f"):format(width, height, s)
   if Kit._fontKey ~= key then
     Kit._fontKey = key
     Kit.fonts = Theme.fonts(s)
