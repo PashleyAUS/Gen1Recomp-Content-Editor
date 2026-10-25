@@ -78,4 +78,30 @@ return function(data,root,output,game)
   require("MapsWorkspace").draw(S,20,20,1320,820,App)
   K.endFrame();love.graphics.setCanvas()
   local f=assert(io.open(output.."/workspace.png","wb"));f:write(canvas:newImageData():encode("png"):getString());f:close()
+  assert(Events.place(S,"sign",2,2,App))
+  local signs=S.project.maps[S.mapId].signs
+  local sign=signs[S.mapSignIndex]
+  local signScript=sign.scriptKey
+  assert(Events.remove(S,"signs",S.mapSignIndex,App))
+  assert(signScript and S.project.gen3.map_scripts[signScript]==nil,"Deleted sign kept its script")
+  for _,row in ipairs(signs) do assert(row~=sign) end
+  S.mapTemplate.kind="empty"
+  assert(Events.place(S,"object",1,1,App))
+  local objects=S.project.maps[S.mapId].objects
+  local oi=S.mapObjectIndex
+  local obj=objects[oi]
+  local label=State.mapLabel(S,S.mapId)
+  local idx=obj.index or oi
+  S.project.trainer_headers[label]={[idx]={event="MOD_TEST_BEAT",battle="_GoneBattle",won="_GoneWon",after="_GoneAfter"}}
+  S.project.eventFlags.MOD_TEST_BEAT=true
+  S.project.text._GoneBattle="Let's fight!"
+  S.project.text._GoneWon="I lost..."
+  S.project.text._GoneAfter="You're strong."
+  local objectScript=obj.scriptKey
+  assert(Events.remove(S,"objects",oi,App))
+  assert(objects[oi]~=obj)
+  assert(S.project.gen3.map_scripts[objectScript]==nil)
+  assert(not (S.project.trainer_headers[label] and S.project.trainer_headers[label][idx]))
+  assert(not S.project.eventFlags.MOD_TEST_BEAT,"Deleted trainer left the flag that blocks Gen 3 save")
+  assert(S.project.text._GoneBattle==nil and S.project.text._GoneWon==nil and S.project.text._GoneAfter==nil)
 end

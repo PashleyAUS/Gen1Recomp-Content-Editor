@@ -32,6 +32,89 @@ function M.place(S,tool,x,y,App)
   require("Gen3EventWindow").request(S,S.mapId,kind,index)
   return true
 end
+local function scriptUsed(project,script)
+  for _,map in pairs(project.maps or {}) do
+    if type(map)=="table" then
+      for _,kind in ipairs({"objects","signs","coordEvents"}) do
+        for _,row in ipairs(map[kind] or {}) do
+          if row.scriptKey==script or row.touchScriptKey==script then return true end
+        end
+      end
+    end
+  end
+end
+local function dropEditorScript(project,script)
+  if type(script)~="string" or script:sub(1,7)~="EDITOR_" then return end
+  if scriptUsed(project,script) then return end
+  local scripts=project.gen3 and project.gen3.map_scripts
+  if type(scripts)~="table" then return end
+  local modes=project.gen3Modes and project.gen3Modes.map_scripts
+  local drop={}
+  for key in pairs(scripts) do
+    if key==script or key:sub(1,#script+1)==script.."_" then drop[#drop+1]=key end
+  end
+  for _,key in ipairs(drop) do
+    scripts[key]=nil
+    if type(modes)=="table" then modes[key]=nil end
+    local text=project.text
+    if type(text)=="table" then text[key.."_Text"]=nil end
+  end
+end
+function M.remove(S,kind,index,App)
+  if not groups[kind] then return false end
+  local mapId=S.mapId
+  assert(require("Gen3Workspace").convert(S,mapId))
+  local map=S.project.maps[mapId]
+  local rows=map[kind] or {}
+  local ev=rows[index]
+  if type(ev)~="table" then return false end
+  local scripts={ev.scriptKey,ev.touchScriptKey}
+  if kind=="warps" then
+    if not require("LayeredMap").removeWarpAt(S.project,mapId,ev.x,ev.y) then
+      table.remove(rows,index)
+    end
+  else
+    table.remove(rows,index)
+    if kind=="objects" or kind=="signs" then
+      local owner=kind.."/"..tostring(ev.localId or index)
+      local coords=map.coordEvents
+      if type(coords)=="table" then
+        for i=#coords,1,-1 do
+          local row=coords[i]
+          if row._editorTriggerOwner==owner then
+            scripts[#scripts+1]=row.scriptKey
+            table.remove(coords,i)
+          end
+        end
+      end
+    end
+  end
+  for _,script in ipairs(scripts) do dropEditorScript(S.project,script) end
+  if kind=="objects" then
+    local State=require("State")
+    local label=State.mapLabel(S,mapId)
+    local bucket=S.project.trainer_headers and S.project.trainer_headers[label]
+    local idx=ev.index or index
+    local hdr=type(bucket)=="table" and bucket[idx]
+    if type(hdr)=="table" then
+      if type(S.project.text)=="table" then
+        for _,key in ipairs({"battle","won","after"}) do
+          local tid=hdr[key]
+          if type(tid)=="string" and tid:sub(1,1)=="_" then S.project.text[tid]=nil end
+        end
+      end
+      bucket[idx]=nil
+      if not next(bucket) then S.project.trainer_headers[label]=nil end
+      State.rebuildEventFlags(S.project)
+    end
+  end
+  local left=#(map[kind] or {})
+  S[groups[kind][2]]=left>0 and math.min(index,left) or 1
+  S._g3EventIdentity=nil
+  if App then App.markDirty() end
+  S.status="Removed "..groups[kind][1]:lower():gsub("s$","").."."
+  return true
+end
 local function drawContent(S,x,y,w,App)
   local Kit=require("Kit")
   local s=Kit.scale
@@ -96,8 +179,14 @@ local function drawContent(S,x,y,w,App)
       App.markDirty()
     else S.status=err or "Event needs numeric x and y coordinates" end
   end
-  if Kit.button(x,y+57*s,w,27*s,"Open event window",{}) then
+  local delW=90*s
+  if Kit.button(x,y+57*s,math.max(40*s,w-delW-6*s),27*s,"Open event window",{}) then
     require("Gen3EventWindow").request(S,S.mapId,kind,S[key])
+  end
+  if Kit.button(x+w-delW,y+57*s,delW,27*s,"Delete",{kind="danger",
+      tooltip="Remove this event from the map"}) then
+    M.remove(S,kind,S[key],App)
+    return y+90*s
   end
   local fieldTop=y+92*s
   if kind~="warps" then
