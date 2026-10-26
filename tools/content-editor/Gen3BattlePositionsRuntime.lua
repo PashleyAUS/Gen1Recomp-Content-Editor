@@ -29,22 +29,37 @@ function M.install(mod,positions)
   local P=require("src.core.game3.pokemon")
   local okPic,Pic=pcall(require,"src.core.game3.battle.pic_coords")
   if not okPic then Pic=nil end
-  local resolved,snap={},{}
+  local resolved={}
   local function numberFor(id)
     if resolved[id] then return resolved[id] end
     local named=fromName(P,id)
     if named then resolved[id]=named;return named end
     return fromContent(mod,id)
   end
+  -- The picture tables live for the whole game. A later save reloads this mod,
+  -- so the original Y has to be remembered on Pic itself. A fresh snapshot of
+  -- the current value would include the offset already applied.
+  local function vault()
+    if not Pic then return nil end
+    local saved=rawget(Pic,"_editorPositionBase")
+    if type(saved)~="table" then saved={};rawset(Pic,"_editorPositionBase",saved) end
+    return saved
+  end
   local function baseOf(tbl,sp)
-    local saved=snap[tbl]
-    if not saved then saved={};snap[tbl]=saved end
-    if saved[sp]==nil then saved[sp]=tonumber(tbl[sp]) or 0 end
-    return saved[sp]
+    local saved=vault()
+    if not saved then return tonumber(tbl[sp]) or 0 end
+    local row=saved[tbl]
+    if not row then row={};saved[tbl]=row end
+    if row[sp]==nil then row[sp]=tonumber(tbl[sp]) or 0 end
+    return row[sp]
   end
   local function restore()
-    for tbl,saved in pairs(snap) do
-      for sp,base in pairs(saved) do tbl[sp]=base end
+    local saved=vault()
+    if not saved then return end
+    for tbl,row in pairs(saved) do
+      if type(tbl)=="table" and type(row)=="table" then
+        for sp,base in pairs(row) do tbl[sp]=base end
+      end
     end
   end
   local function apply()
@@ -55,8 +70,9 @@ function M.install(mod,positions)
     for id,rec in pairs(positions) do
       local sp=type(rec)=="table" and numberFor(id)
       if sp then
-        front[sp]=baseOf(front,sp)+(tonumber(rec.frontY) or 0)
-        back[sp]=baseOf(back,sp)+(tonumber(rec.backY) or 0)
+        local frontY,backY=tonumber(rec.frontY) or 0,tonumber(rec.backY) or 0
+        if frontY~=0 then front[sp]=baseOf(front,sp)+frontY end
+        if backY~=0 then back[sp]=baseOf(back,sp)+backY end
       end
     end
   end

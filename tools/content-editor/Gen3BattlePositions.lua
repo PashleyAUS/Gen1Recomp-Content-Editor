@@ -1,14 +1,34 @@
 local M={}
+local function clamp(value)
+  local n=tonumber(value)
+  if n==nil then return nil end
+  n=math.max(-64,math.min(64,math.floor(n)))
+  return n
+end
+function M.commit(project,id,frontY,backY)
+  frontY,backY=clamp(frontY),clamp(backY)
+  if frontY==nil or backY==nil then return nil end
+  project.gen3BattlePositions=project.gen3BattlePositions or {}
+  if frontY==0 and backY==0 then
+    project.gen3BattlePositions[id]=nil
+    if not next(project.gen3BattlePositions) then project.gen3BattlePositions=nil end
+    return nil
+  end
+  local rec={frontY=frontY,backY=backY}
+  project.gen3BattlePositions[id]=rec
+  return rec
+end
 function M.emit(p,encode,out)
-  if not next(p.gen3BattlePositions or {}) then return end
-  for _,rec in pairs(p.gen3BattlePositions) do
-    for _,field in ipairs({"frontY","backY"}) do
-      local v=rec[field]
-      assert(type(v)=="number" and v%1==0 and v>=-64 and v<=64,"Battle offsets must be integers from -64 to 64")
+  local positions={}
+  for id,rec in pairs(p.gen3BattlePositions or {}) do
+    local frontY,backY=clamp(rec.frontY),clamp(rec.backY)
+    if frontY and backY and (frontY~=0 or backY~=0) then
+      positions[id]={frontY=frontY,backY=backY}
     end
   end
+  if not next(positions) then return end
   out[#out+1]="local positions=(function()\n"..assert(love.filesystem.read("tools/content-editor/Gen3BattlePositionsRuntime.lua"))
-    .."\nend)()\npositions.install(mod,"..encode(p.gen3BattlePositions)..")"
+    .."\nend)()\npositions.install(mod,"..encode(positions)..")"
 end
 function M.draw(S,mon,x,y,w,App)
   local K,Preview=require("Kit"),require("Preview")
@@ -20,15 +40,16 @@ function M.draw(S,mon,x,y,w,App)
   for _,row in ipairs({{"frontY","Opponent / front Y"},{"backY","Player / back Y"}}) do
     K.text("small",row[2],x,y+6*s,require("Theme").PAL.text)
     local value=require("RegList").num(App,"battle_pos_"..mon.id..row[1],x+180*s,y,100*s,30*s,rec[row[1]])
-    value=math.max(-64,math.min(64,math.floor(value)))
     if value~=rec[row[1]] then
-      rec={frontY=rec.frontY,backY=rec.backY};rec[row[1]]=value
-      p.gen3BattlePositions=p.gen3BattlePositions or {};p.gen3BattlePositions[mon.id]=rec;App.markDirty()
+      local nextRec={frontY=rec.frontY,backY=rec.backY}
+      nextRec[row[1]]=value
+      rec=M.commit(p,mon.id,nextRec.frontY,nextRec.backY) or {frontY=0,backY=0}
+      App.markDirty()
     end
     y=y+38*s
   end
   if K.button(x,y,160*s,30*s,"Reset offsets",{}) then
-    if p.gen3BattlePositions then p.gen3BattlePositions[mon.id]=nil end
+    M.commit(p,mon.id,0,0)
     rec={frontY=0,backY=0};App.markDirty()
   end
   if K.chip(x+170*s,y,80*s,30*s,"Shiny",S.battlePositionShiny,require("Theme").PAL.blue) then S.battlePositionShiny=not S.battlePositionShiny end

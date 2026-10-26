@@ -54,7 +54,9 @@ end
 
 function RegList.num(App, id, x, y, w, h, value)
   local v = RegList.field(App, id, x, y, w, h, tostring(value or 0), "0")
-  return tonumber(v) or value or 0
+  local n = tonumber(v)
+  if n == nil then return value or 0 end
+  return n
 end
 
 function RegList.sortedKeys(t)

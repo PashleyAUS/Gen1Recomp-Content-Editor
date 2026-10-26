@@ -25,4 +25,21 @@ assert((Pic.back[681] or 0)+Ui.bounceOffset("mon",0)==-4,"Drawn player Y is vani
 hook=nil
 Ui.bounceOffset("mon",1)
 assert(Pic.front[681]==4 and Pic.back[681]==2 and Pic.front[700]==0 and Pic.back[700]==0,"Unload restores the original picture offsets")
+-- A save reloads the mod as a new chunk while the picture tables are still shifted.
+Pic.front[681],Pic.back[681],Pic.front[700],Pic.back[700]=-1,10,10,4
+local reloaded=assert(loadfile("tools/content-editor/Gen3BattlePositionsRuntime.lua"))()
+reloaded.install({content={pokemon={get=function() end}},hooks={wrap=function(_,_,fn) hook=fn end},events={on=function() end}},
+  {ACCELGOR={frontY=-5,backY=8},DWEBBLE={frontY=10,backY=4}})
+assert(Pic.front[681]==-1 and Pic.back[681]==10,"Reloading the mod must not apply the offset again")
+assert(Pic.front[700]==10 and Pic.back[700]==4,"Reload keeps one copy of the saved offset")
+reloaded.install({content={pokemon={get=function() end}},hooks={wrap=function(_,_,fn) hook=fn end}},
+  {ACCELGOR={frontY=0,backY=0}})
+assert(Pic.front[681]==4 and Pic.back[681]==2,"Clearing an offset restores the original picture Y")
+assert(Pic.front[700]==0 and Pic.back[700]==0,"A species left out of the saved offsets returns to its original Y")
+local Positions=require("Gen3BattlePositions")
+local project={}
+assert(Positions.commit(project,"DWEBBLE",10,4).frontY==10)
+assert(Positions.commit(project,"DWEBBLE",0,4).backY==4 and project.gen3BattlePositions.DWEBBLE.frontY==0)
+assert(Positions.commit(project,"DWEBBLE",0,0)==nil)
+assert(project.gen3BattlePositions==nil,"Zero offsets are removed instead of saved")
 print("PASS: battle positions move picture coordinates, keep bounce lift, resolve live species ids and unload")
