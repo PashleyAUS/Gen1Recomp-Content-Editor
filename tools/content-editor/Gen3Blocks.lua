@@ -100,7 +100,7 @@ function M.pack(S, pair)
   if pack then applyColours(S, pair, pack) end
   if not pack then
     return nil, "The game data has no saved blocks for " .. tostring(pair)
-      .. " -- load FireRed on the Project tab"
+      .. ". Import this game on the Project tab."
   end
   return pack
 end
@@ -260,6 +260,108 @@ local function own(project, pair, create)
   return project.gen3Blocks and project.gen3Blocks[pair]
 end
 M.own = own
+
+-- A tileset picture whose cell N is metatile N. The @gen3/<pair> path is only
+-- a marker; the pictures live in the imported block cache (mids.idx).
+local function colourLut(rgb)
+  local lut = {}
+  for byte = 0, 255 do
+    local pal, c = math.floor(byte / 16) % 16, byte % 16
+    local color = (rgb[pal] or rgb[0] or {})[c] or { 0, 0, 0 }
+    lut[byte] = string.char(color[1] or 0, color[2] or 0, color[3] or 0, 255)
+  end
+  return lut, string.char(0, 0, 0, 0)
+end
+
+local function sliceIdx(pixels, slot)
+  local base, out = slot * 256, {}
+  for i = 1, 256 do out[i] = pixels[base + i] or 0 end
+  return out
+end
+
+local function compositeCell(underIdx, overIdx, lut)
+  local parts = {}
+  for i = 1, 256 do
+    local over = overIdx and overIdx[i] or 0
+    parts[i] = lut[(over ~= 0) and over or (underIdx and underIdx[i] or 0)]
+  end
+  return table.concat(parts)
+end
+
+function M.sheetRgba(S, pair)
+  local from = M.cachePair(S and S.project, pair)
+  local NativePack = require("src.import.gba.native_pack")
+  local under = NativePack.decodeIdx(read(S, NATIVE .. from .. "/mids.idx") or "")
+  if not under then
+    return nil, "The game data has no saved blocks for " .. tostring(pair)
+      .. ". Import this game on the Project tab."
+  end
+  local pack = M.pack(S, pair)
+  if not pack or not pack.rgb then
+    return nil, "The game data has no saved blocks for " .. tostring(pair)
+      .. ". Import this game on the Project tab."
+  end
+  local over = NativePack.decodeIdx(read(S, NATIVE .. from .. "/mids_over.idx") or "")
+  local overSlot = {}
+  if over then
+    for i, mid in ipairs(over.midIds) do overSlot[mid] = i - 1 end
+  end
+  local lut = colourLut(pack.rgb)
+  local cells, maxMid = {}, 0
+  for i, mid in ipairs(under.midIds) do
+    local overIdx = overSlot[mid] and sliceIdx(over.pixels, overSlot[mid]) or nil
+    cells[mid] = compositeCell(sliceIdx(under.pixels, i - 1), overIdx, lut)
+    if mid > maxMid then maxMid = mid end
+  end
+  local rows = own(S and S.project, pair) or {}
+  for key, raw in pairs(rows) do
+    local mid = tonumber(key)
+    if mid and type(raw) == "table" and M.needsTiles(S, pair, mid, M.normalize(raw)) then
+      local u, o = M.composeBlock(S, pair, M.normalize(raw))
+      if u then
+        cells[mid] = compositeCell(u, o, lut)
+        if mid > maxMid then maxMid = mid end
+      end
+    end
+  end
+  local cols = under.atlasCols
+  local height = math.max(1, math.ceil((maxMid + 1) / cols))
+  local w, h = cols * 16, height * 16
+  local blank = string.rep("\0", 64)
+  local lines = {}
+  for ay = 0, h - 1 do
+    local midRow, py = math.floor(ay / 16), ay % 16
+    local span = py * 64
+    local line = {}
+    for col = 0, cols - 1 do
+      local cell = cells[midRow * cols + col]
+      line[col + 1] = cell and cell:sub(span + 1, span + 64) or blank
+    end
+    lines[ay + 1] = table.concat(line)
+  end
+  return table.concat(lines), {
+    columns = cols, count = maxMid + 1, width = w, height = h,
+  }
+end
+
+function M.sheetImage(S, pair)
+  local rgba, info = M.sheetRgba(S, pair)
+  if not rgba then return nil, info end
+  if not (love and love.image and love.image.newImageData) then
+    return nil, "cannot encode tileset image"
+  end
+  return love.image.newImageData(info.width, info.height, "rgba8", rgba), info
+end
+
+function M.sheetPng(S, pair)
+  local data, info = M.sheetImage(S, pair)
+  if not data then return nil, info end
+  local ok, fileData = pcall(function() return data:encode("png") end)
+  if not (ok and fileData and fileData.getString) then
+    return nil, "could not encode " .. tostring(pair)
+  end
+  return fileData:getString(), info
+end
 
 function M.hasEdits(project, pair)
   local rows = own(project, pair)

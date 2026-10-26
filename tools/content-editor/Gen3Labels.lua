@@ -28,6 +28,29 @@ function M.preferredEncounterIds(projectTbl, dataTbl)
   end
   return preferred
 end
+--- "LittlerootTown_EventScript_Mom" -> "LittlerootTown EventScript Mom".
+function M.script(id)
+  local s = tostring(id or "")
+  if s == "" then return s end
+  return (s:gsub("_", " "))
+end
+
+--- The current game's name for a numbered constant, or nil.
+-- prefix is the byId group, such as "FLAG_" or "OBJ_EVENT_GFX_".
+function M.constant(S, kind, prefix, id)
+  local n = tonumber(id)
+  local game = S and require("Generation").id(S)
+  if not n or not game then return nil end
+  local ok, name = pcall(function()
+    return require("src.core.game3.constants").of(game):name(kind, n, prefix)
+  end)
+  if not ok or type(name) ~= "string" or name == "" then return nil end
+  local rest = name
+  if prefix and name:sub(1, #prefix) == prefix then rest = name:sub(#prefix + 1) end
+  rest = rest:gsub("_", " "):lower()
+  return (rest:gsub("(%a)([%w']*)", function(a, b) return a:upper() .. b end))
+end
+
 function M.scriptMaps(S)
   local result={};local scripts=require("Gen3").catalog(S.data,"map_scripts")
   for map,rec in pairs(S.data.maps or {}) do

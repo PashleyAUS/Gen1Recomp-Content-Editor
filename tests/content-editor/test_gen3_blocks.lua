@@ -508,5 +508,27 @@ run("import: background colours are kept out of the picture", function()
   end
 end)
 
+if read("data/generated/gba/native/" .. PAIR .. "/mids.idx") then
+  run("sheet: metatile id is the cell on the exported picture", function()
+    local S = fresh()
+    local rgba, info = assert(Blocks.sheetRgba(S, PAIR))
+    assert(#rgba == info.width * info.height * 4, "picture size")
+    assert(info.columns >= 1 and info.count >= 1)
+    local pack = assert(Blocks.pack(S, PAIR))
+    local mid = pack.mids[1]
+    local x = (mid % info.columns) * 16
+    local y = math.floor(mid / info.columns) * 16
+    local opaque = false
+    for py = 0, 15 do
+      local row = (y + py) * info.width + x
+      for px = 0, 15 do
+        if rgba:byte((row + px) * 4 + 4) ~= 0 then opaque = true break end
+      end
+      if opaque then break end
+    end
+    assert(opaque, "metatile " .. mid .. " drew nothing")
+  end)
+end
+
 print(("\n%d passed, %d failed"):format(pass, fail))
 os.exit(fail == 0 and 0 or 1)

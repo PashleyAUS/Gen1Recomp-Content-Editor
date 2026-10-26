@@ -40,7 +40,7 @@ function M.draw(S,ev,kind,indexKey,x,y,w,App,context)
   end
   if kind=="objects" then
     local names={}
-    for path in pairs(require("Gen3Resources").assets(S.data,S.project)) do local id=path:match("/ow/(%d+)%.rgba$");if id then names[tonumber(id)]=require("Gen3SpriteNames").label(id) end end
+    for path in pairs(require("Gen3Resources").assets(S.data,S.project)) do local id=path:match("/ow/(%d+)%.rgba$");if id then names[tonumber(id)]=require("Gen3SpriteNames").label(S,id) end end
     pick("graphicsId","Character / object sprite",names,"graphics")
     require("Gen3MapSprites").draw(S,ev,x+16*s,y+16*s);y=y+48*s
     pick("movementType","Movement",{[0]="Stay in place",[1]="Look around",[2]="Walk around",[7]="Face up",[8]="Face down",[9]="Face left",[10]="Face right"})
@@ -48,7 +48,9 @@ function M.draw(S,ev,kind,indexKey,x,y,w,App,context)
   if kind~="warps" then
     local scripts=require("RegList").mergeIds((S.project.gen3 or {}).map_scripts or {},require("Gen3").catalog(S.data,"map_scripts"))
     K.caption(x,y,"Event / cutscene script");y=y+22*s
-    P.field(S,{x=x,y=y,w=w,h=28*s,ids=scripts,current=ev.touchScriptKey or ev.scriptKey,title="EVENT / CUTSCENE SCRIPT",
+    local scriptLabels={}
+    for _,id in ipairs(scripts) do scriptLabels[id]=require("Gen3Labels").script(id) end
+    P.field(S,{x=x,y=y,w=w,h=28*s,ids=scripts,labels=scriptLabels,current=ev.touchScriptKey or ev.scriptKey,title="EVENT / CUTSCENE SCRIPT",
       onPick=function(id)
         if ev.touchScriptKey then
           set("touchScriptKey",id)
@@ -66,8 +68,15 @@ function M.draw(S,ev,kind,indexKey,x,y,w,App,context)
     number("destWarp","Destination exit number")
   end
   number("x","Position: column");number("y","Position: row")
-  if kind=="objects" then number("flag","Hide switch (0 = never)") end
-  if kind=="coordEvents" then number("var","Story variable to check");number("value","Required value") end
+  if kind=="objects" then
+    local flagName=require("Gen3Labels").constant(S,"flags","FLAG_",ev.flag or 0)
+    number("flag",flagName and ("Hide switch: "..flagName) or "Hide switch (0 = never)")
+  end
+  if kind=="coordEvents" then
+    local varName=require("Gen3Labels").constant(S,"vars","VAR_",ev.var or 0)
+    number("var",varName and ("Story variable: "..varName) or "Story variable to check")
+    number("value","Required value")
+  end
   return y
 end
 return M

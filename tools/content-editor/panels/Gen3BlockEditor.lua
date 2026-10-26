@@ -790,7 +790,7 @@ function M.draw(S, x, y, w, h, App)
   if not S.g3BlockPair then S.g3BlockPair = shown[1] end
   local pair = S.g3BlockPair
   if not pair then
-    Kit.emptyBox(formX, listY, formW, listH, "No tilesets found -- open a FireRed project first")
+    Kit.emptyBox(formX, listY, formW, listH, "No tilesets found. Import this game on the Project tab.")
     return
   end
   local blockIds, idsErr = Blocks.ids(S, pair)

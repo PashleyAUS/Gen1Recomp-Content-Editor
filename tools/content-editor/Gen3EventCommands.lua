@@ -34,7 +34,16 @@ function M.summary(step,S)
     if text then return 'Show text: "'..text:gsub("%s+"," ")..'"' end
   end
   local d=M.definitions[step.op]
-  return (require("Gen3ActionLanguage").label(step) or M.label(step.op))..(d and d[3] and step[d[3]]~=nil and (": "..tostring(step[d[3]])) or "")
+  local extra
+  if d and d[3] and step[d[3]] ~= nil then
+    extra = tostring(step[d[3]])
+    if S and d[3] == "flag" then
+      extra = require("Gen3Labels").constant(S, "flags", "FLAG_", step[d[3]]) or extra
+    elseif S and (d[3] == "target") then
+      extra = require("Gen3Labels").script(step[d[3]])
+    end
+  end
+  return (require("Gen3ActionLanguage").label(step) or M.label(step.op)) .. (extra and (": " .. extra) or "")
 end
 local variableOps={setvar=true,setorcopyvar=true,compare_var_to_value=true}
 local function variableFields(step)
@@ -47,7 +56,8 @@ function M.drawVariables(S,key,step,x,y,w,changed)
   local help=M.definitions[step.op][2]
   K.text("small",K.ellipsize("small",help,w),x,y,require("Theme").PAL.text)
   K.offerTooltip(x,y,w,24*s,help)
-  local fields={{a,"Variable to check or change"},{b,step.op=="setorcopyvar" and "Number or source variable ID" or "Number"}}
+  local varName=require("Gen3Labels").constant(S,"vars","VAR_",step[a])
+  local fields={{a,varName and ("Variable: "..varName) or "Variable to check or change"},{b,step.op=="setorcopyvar" and "Number or source variable ID" or "Number"}}
   for i,field in ipairs(fields) do
     local yy=y+36*s+(i-1)*68*s;K.text("small",field[2],x,yy,require("Theme").PAL.text)
     local value=K.textfield(key.."/variable/"..i,x,yy+25*s,w,29*s,tostring(step[field[1]]),"")
@@ -103,15 +113,23 @@ function M.draw(S,key,step,x,y,w,changed)
   local K=require("Kit");local s=K.scale
   K.text("small",K.ellipsize("small",d[2],w),x,y,require("Theme").PAL.text);K.offerTooltip(x,y,w,24*s,d[2])
   if not d[3] then return true,y+32*s end
-  K.text("small",K.ellipsize("small",d[4],w),x,y+36*s,require("Theme").PAL.text)
+  local fieldLabel=d[4]
+  if d[3]=="flag" then fieldLabel=require("Gen3Labels").constant(S,"flags","FLAG_",old) or fieldLabel end
+  K.text("small",K.ellipsize("small",fieldLabel,w),x,y+36*s,require("Theme").PAL.text)
   local old=step[d[3]]
   local function pick(value) if value~=old then step[d[3]]=value;changed() end end
   if d[3]=="ptr" or d[3]=="target" then
     local category=d[3]=="ptr" and "text" or "map_scripts"
     local edits=category=="text" and (S.project.text or {}) or ((S.project.gen3 or {}).map_scripts or {})
     local catalog=category=="text" and (S.data.text or {}) or require("Gen3").catalog(S.data,category)
+    local ids=require("RegList").mergeIds(edits,catalog)
+    local labels=nil
+    if d[3]=="target" then
+      labels={}
+      for _,id in ipairs(ids) do labels[id]=require("Gen3Labels").script(id) end
+    end
     require("ChoicePicker").field(S,{x=x,y=y+64*s,w=w,h=29*s,current=old,
-      ids=require("RegList").mergeIds(edits,catalog),title=d[4],onPick=pick})
+      ids=ids,labels=labels,title=d[4],onPick=pick})
   else
     local value=K.textfield(key.."/friendly/"..d[3],x,y+64*s,w,29*s,tostring(old),"")
     if d[5] then

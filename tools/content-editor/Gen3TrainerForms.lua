@@ -42,7 +42,11 @@ function M.draw(S,tr,mutate,App,x,y,w,section)
     local ids,labels={},{}
     for path in pairs(require("Gen3Resources").assets(S.data,S.project)) do
       local id=path:match("/trainers/front/(%d+)%.rgba$")
-      if id then ids[#ids+1]=id;labels[id]="Trainer sprite "..id end
+      if id then
+        ids[#ids+1]=id
+        local name=require("Gen3Labels").constant(S,"trainer_classes","TRAINER_PIC_",id)
+        labels[id]=name and (id.."  "..name) or ("Trainer sprite "..id)
+      end
     end
     table.sort(ids,function(a,b) return tonumber(a)<tonumber(b) end)
     require("ChoicePicker").field(S,{x=x+144*s,y=y+30*s,w=math.max(100*s,w-144*s),h=rh,

@@ -23,7 +23,7 @@ function M.draw(S,key,steps,templates,x,y,w,h,changed,context)
   local first=S[scrollKey] or 0
   for i=first+1,math.min(#rows,first+page) do
     if Kit.row(x,yy,lw-18*s,rh-2*s,i==selected,PAL.blue) then selected=i;S._g3StepSelection[key]=i end
-    local label=native and tostring(rows[i].step.op) or Commands.summary(rows[i].step,S)
+    local label=Commands.summary(rows[i].step,S)
     Kit.offerTooltip(x,yy,lw-18*s,rh,label)
     Kit.text("micro",Kit.ellipsize("micro",i.."  "..label,lw-35*s),x+7*s,yy+8*s,PAL.text)
     yy=yy+rh

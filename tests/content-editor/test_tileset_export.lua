@@ -26,6 +26,7 @@ end
 
 local function cleanup()
   os.remove(join(join(join(root, "exports"), "tilesets"), "source_a.png"))
+  os.remove(join(join(join(root, "exports"), "tilesets"), "general__petalburg.png"))
   os.remove(join(root, "source.png"))
   os.remove(join(join(join(join(root, "red"), "data"), "generated"), "pokemon.lua"))
   if sep == "\\" then
@@ -74,6 +75,22 @@ local ok, err = pcall(function()
   local body = assert(ModIO.readText(
     join(join(join(root, "exports"), "tilesets"), "source_a.png")))
   assert(body == "png-bytes")
+
+  local asked
+  package.loaded.Gen3Blocks = {
+    sheetPng = function(_, pair)
+      asked = pair
+      return "gen3-png", { columns = 16, count = 2, width = 32, height = 16 }
+    end,
+  }
+  local gen3 = TilesetExport.exportSources(state, {
+    { id = "@runtime:general__petalburg", nativePair = "general__petalburg",
+      image = "@gen3/general__petalburg" },
+  })
+  assert(gen3.ok, table.concat(gen3.failures, "; "))
+  assert(asked == "general__petalburg")
+  assert(ModIO.readText(join(join(join(root, "exports"), "tilesets"),
+    "general__petalburg.png")) == "gen3-png")
 end)
 
 cleanup()

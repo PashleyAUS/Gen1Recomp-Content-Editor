@@ -28,12 +28,23 @@ local function join(...)
 end
 
 local function sourceFilename(source)
-  return tostring(source.id or source.name or "tileset")
+  return tostring(source.nativePair or source.id or source.name or "tileset")
     :lower():gsub("[^a-z0-9_-]", "_") .. ".png"
 end
 
 local function sourceBytes(S, source)
-  if not (source and source.image) then
+  if not source then return nil, "tileset source has no image" end
+  local pair = source.nativePair
+  if not pair and type(source.image) == "string" then
+    pair = source.image:match("^@gen3/(.+)$")
+  end
+  -- Gen 3 metatile sheets are not files. @gen3/<pair> marks the imported cache.
+  if pair then
+    local png, err = require("Gen3Blocks").sheetPng(S, pair)
+    if not png then return nil, err or ("cannot find " .. tostring(source.image or pair)) end
+    return png
+  end
+  if not source.image then
     return nil, "tileset source has no image"
   end
   -- Baked into the project (TilePixels): write the pixels out as a PNG.

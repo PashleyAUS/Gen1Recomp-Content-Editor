@@ -34,9 +34,9 @@ function M.draw(S,x,y,w,h,App)
     local ids,labels={},{}
     for path in pairs(require("Gen3Resources").assets(S.data,S.project)) do
       local id=path:match("/ow/(%d+)%.rgba$")
-      if id and not labels[id] then ids[#ids+1]=id;labels[id]=require("Gen3SpriteNames").label(id) end
+      if id and not labels[id] then ids[#ids+1]=id;labels[id]=require("Gen3SpriteNames").label(S,id) end
     end
-    if not labels[d.graphics] then ids[#ids+1]=d.graphics;labels[d.graphics]=require("Gen3SpriteNames").label(d.graphics) end
+    if not labels[d.graphics] then ids[#ids+1]=d.graphics;labels[d.graphics]=require("Gen3SpriteNames").label(S,d.graphics) end
     table.sort(ids,require("Gen3Labels").natural)
     P.field(S,{x=x,y=y,w=w,h=28*s,ids=ids,labels=labels,current=d.graphics,title="CHARACTER SPRITE",onPick=function(id) d.graphics=id end});y=y+38*s
   else

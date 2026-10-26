@@ -189,11 +189,14 @@ function M.draw(S,x,y,w,h,App)
       if checked then local used=require("Gen3Quests").usedFlags(S);for n=0x900,0xFFF do if not used[n] then flag=n;break end end end
       mutateEvent(S,target,App,"flag",flag);event.flag=flag
     end
-    cy=cy+33*s;K.caption(x+30*s,cy,"Switch")
+    cy=cy+33*s
+    local flagName=require("Gen3Labels").constant(S,"flags","FLAG_",event.flag or 0)
+    K.caption(x+30*s,cy,flagName and ("Switch: "..flagName) or "Switch")
     local fv=K.textfield("rpgEventFlag",x+105*s,cy-5*s,left-120*s,27*s,tostring(event.flag or 0),"0")
     local fn=tonumber(fv);if enabled and fn and fn>=32 and fn<=4095 and fn==math.floor(fn) and fn~=event.flag then mutateEvent(S,target,App,"flag",fn);event.flag=fn end
   elseif target.kind=="coordEvents" then
-    K.caption(x+12*s,cy,"Saved value");local vv=K.textfield("rpgEventVar",x+100*s,cy-5*s,left-115*s,27*s,tostring(event.var or 0),"")
+    local varName=require("Gen3Labels").constant(S,"vars","VAR_",event.var or 0)
+    K.caption(x+12*s,cy,varName and ("Value: "..varName) or "Saved value");local vv=K.textfield("rpgEventVar",x+100*s,cy-5*s,left-115*s,27*s,tostring(event.var or 0),"")
     cy=cy+36*s;K.caption(x+12*s,cy,"equals");local value=K.textfield("rpgEventValue",x+100*s,cy-5*s,left-115*s,27*s,tostring(event.value or 0),"")
     local vn=tonumber(vv);if vn and vn==math.floor(vn) and vn~=event.var then mutateEvent(S,target,App,"var",vn);event.var=vn end
     local n=tonumber(value);if n and n==math.floor(n) and n~=event.value then mutateEvent(S,target,App,"value",n);event.value=n end
@@ -202,7 +205,7 @@ function M.draw(S,x,y,w,h,App)
   local inside=box(x,gy,half,160*s,"Appearance")
   if target.kind=="objects" then
     require("Gen3MapSprites").draw(S,event,x+half/2-8*s,inside+42*s)
-    local ids,labels={},{};for path in pairs(require("Gen3Resources").assets(S.data,S.project)) do local id=path:match("/ow/(%d+)%.rgba$");if id then ids[#ids+1]=id;labels[id]=require("Gen3SpriteNames").label(id) end end;table.sort(ids,require("Gen3Labels").natural)
+    local ids,labels={},{};for path in pairs(require("Gen3Resources").assets(S.data,S.project)) do local id=path:match("/ow/(%d+)%.rgba$");if id then ids[#ids+1]=id;labels[id]=require("Gen3SpriteNames").label(S,id) end end;table.sort(ids,require("Gen3Labels").natural)
     choice(S,x+10*s,gy+120*s,half-20*s,event.graphicsId or event.graphics,ids,labels,"CHOOSE GRAPHIC",function(id) mutateEvent(S,target,App,"graphicsId",tonumber(id)) end,
       {rowHeight=48,drawRow=function(state,id,px,py,pw,ph,label,on)
         require("Gen3MapSprites").draw(state,{graphicsId=tonumber(id)},px+8*s,py+8*s,{scale=2})

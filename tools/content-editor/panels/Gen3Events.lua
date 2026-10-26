@@ -20,6 +20,7 @@ function M.draw(S,x,y,w,h,App)
   local ids=require("Gen3Clean").enabled(S.project) and List.mergeIds(edits,{}) or List.mergeIds(edits,catalog)
   if not S.gen3Id or not (edits[S.gen3Id] or catalog[S.gen3Id]) then S.gen3Id=ids[1] end
   local fx,fw=List.drawList(S,App,x,y,w,h,"EVENT SCRIPTS",ids,{selKey="gen3Id",queryKey="g3ScriptQuery",offsetKey="g3ScriptOffset",
+    label=function(id) return require("Gen3Labels").script(id) end,
     footerLabel="New script",onFooter=function() S.g3NewScript=true end})
   if S.g3NewScript then
     S.g3ScriptName=Kit.textfield("g3ScriptName",fx,y,fw,28*s,S.g3ScriptName or "EDITOR_EVENT","")

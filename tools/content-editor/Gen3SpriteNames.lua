@@ -1,5 +1,5 @@
--- Names for FireRed / LeafGreen overworld sprites (OBJ_EVENT_GFX_* in pret
--- pokefirered include/constants/event_objects.h), for the sprite pickers.
+-- Names for overworld sprites. Emerald, Ruby, and Sapphire use that game's
+-- OBJ_EVENT_GFX list. The table below is only the FireRed / LeafGreen list.
 local M = {}
 
 M.NAMES = {
@@ -36,9 +36,16 @@ M.NAMES = {
   [144] = "Lugia", [145] = "Ho-Oh", [148] = "Deoxys", [149] = "Deoxys", [150] = "Deoxys", [151] = "S.S. Anne",
 }
 
---- "32  Old man" for the pickers (just the number when it has no name).
-function M.label(id)
+--- "0  Brendan Normal" for the pickers. Pass the editor state so Emerald
+-- does not reuse the FireRed list. label(id) still reads the FireRed list.
+function M.label(S, id)
+  if type(S) ~= "table" then id, S = S, nil end
   local n = tonumber(id)
+  local game = S and require("Generation").id(S)
+  if n and game and game ~= "firered" and game ~= "leafgreen" then
+    local name = require("Gen3Labels").constant(S, "event_objects", "OBJ_EVENT_GFX_", n)
+    return name and (tostring(n) .. "  " .. name) or ("Sprite " .. tostring(id))
+  end
   local name = n and M.NAMES[n]
   return name and (tostring(id) .. "  " .. name) or ("Sprite " .. tostring(id))
 end

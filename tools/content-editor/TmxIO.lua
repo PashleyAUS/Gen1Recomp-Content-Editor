@@ -375,7 +375,14 @@ function TmxIO.exportMap(S, mapId, folder)
   local pngName = tsName:lower():gsub("[^a-z0-9_-]", "_")
     .. (tileSize == 16 and "_cells.png" or "_blocks.png")
   local atlas, tilecount, columns, imgW, imgH
-  if tileSize == 16 then
+  if Generation.isGen3(S) then
+    local data, info = require("Gen3Blocks").sheetImage(S, tsName)
+    if not data then
+      return false, "could not build tileset PNG for " .. tostring(tsName)
+        .. " (" .. tostring(info) .. ")"
+    end
+    atlas, tilecount, columns, imgW, imgH = data, info.count, info.columns, info.width, info.height
+  elseif tileSize == 16 then
     atlas, tilecount, columns, imgW, imgH = buildCellAtlas(S, payload.map, tileset)
   else
     atlas, tilecount, columns, imgW, imgH = buildBlockAtlas(S, payload.map, tileset)
