@@ -30,6 +30,27 @@ function M.emit(p,encode,out)
   out[#out+1]="local positions=(function()\n"..assert(love.filesystem.read("tools/content-editor/Gen3BattlePositionsRuntime.lua"))
     .."\nend)()\npositions.install(mod,"..encode(positions)..")"
 end
+-- The preview must show vanilla Y + this offset only. If the mod's runtime has
+-- run in this process (Share/Validate, or an engine that reloads the mod after
+-- a save) PicCoords is already shifted by the offset; take that shift back out
+-- so the preview never shows it twice. The vault is the runtime's record of the
+-- original Y (Gen3BattlePositionsRuntime, Pic._editorPositionBase).
+function M.runtimeShift(back,species)
+  local ok,Pic=pcall(require,"src.core.game3.battle.pic_coords")
+  if not ok or type(Pic)~="table" then return 0 end
+  local okT,tbl=pcall(function() return back and Pic.back or Pic.front end)
+  local vault=rawget(Pic,"_editorPositionBase")
+  local row=okT and type(tbl)=="table" and type(vault)=="table" and vault[tbl]
+  local base=type(row)=="table" and tonumber(row[species])
+  if not base then return 0 end
+  return (tonumber(tbl[species]) or 0)-base
+end
+function M.previewY(Ui,back,species,base,rec)
+  local _,cy=Ui.battlerSpriteCenter(back and "player" or "enemy",species,base,0,false)
+  -- no Ui.bounceOffset here: the editor has no bounce, and calling it lets a
+  -- loaded runtime re-apply its shift mid-draw
+  return cy-M.runtimeShift(back,species)+((back and rec.backY or rec.frontY) or 0)
+end
 function M.draw(S,mon,x,y,w,App)
   local K,Preview=require("Kit"),require("Preview")
   local s=K.scale
@@ -65,8 +86,8 @@ function M.draw(S,mon,x,y,w,App)
     local path=require("ModPokemonArt").path(S,mon,field) or require("Gen3Forms").spritePath(mon,back,S.battlePositionShiny,S)
     local image=Preview.image(S,path)
     local base=back and {x=72,y=80} or {x=176,y=40}
-    local cx,cy=Ui.battlerSpriteCenter(back and "player" or "enemy",mon.index,base,0,false)
-    cy=cy+Ui.bounceOffset("mon",back and 0 or 1)+(back and rec.backY or rec.frontY)
+    local cx=Ui.battlerSpriteCenter(back and "player" or "enemy",mon.index,base,0,false)
+    local cy=M.previewY(Ui,back,mon.index,base,rec)
     g.setColor(1,1,1,1)
     if image then g.draw(image,cx-32,cy-32,0,64/image:getWidth(),64/image:getHeight()) end
     g.setColor(1,.25,.25,.8);g.line(cx-3,cy,cx+3,cy);g.line(cx,cy-3,cx,cy+3)

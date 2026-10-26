@@ -42,4 +42,18 @@ assert(Positions.commit(project,"DWEBBLE",10,4).frontY==10)
 assert(Positions.commit(project,"DWEBBLE",0,4).backY==4 and project.gen3BattlePositions.DWEBBLE.frontY==0)
 assert(Positions.commit(project,"DWEBBLE",0,0)==nil)
 assert(project.gen3BattlePositions==nil,"Zero offsets are removed instead of saved")
+-- Editor preview: once the runtime has shifted PicCoords in this process
+-- (Share/Validate run the mod), the preview must not add the offset twice.
+do
+  local Pic2={front={[681]=4},back={[681]=2}}
+  package.loaded["src.core.game3.battle.pic_coords"]=Pic2
+  local Ui2={battlerSpriteCenter=function(side,sp,base) return base.x,base.y+((side=="player" and Pic2.back or Pic2.front)[sp] or 0) end,
+    bounceOffset=function() error("preview must not call bounceOffset") end}
+  local rec={frontY=10,backY=-6}
+  local function preview(back) return Positions.previewY(Ui2,back,681,back and {x=72,y=80} or {x=176,y=40},rec) end
+  assert(preview(false)==54 and preview(true)==76,"Preview is vanilla pic Y plus the offset")
+  rawset(Pic2,"_editorPositionBase",{[Pic2.front]={[681]=4},[Pic2.back]={[681]=2}})
+  Pic2.front[681],Pic2.back[681]=14,-4
+  assert(preview(false)==54 and preview(true)==76,"A shift the runtime already applied is not counted twice")
+end
 print("PASS: battle positions move picture coordinates, keep bounce lift, resolve live species ids and unload")
