@@ -10,6 +10,7 @@ return function(data,root,output,game)
   require('Gen3ContentAdapter').prepare(S);require('Gen3Workspace').prepare(S)
   local town=assert(L.convertMap(S,townId))
   local source,map=assert(L.createMap(S,game=='emerald' and 'EM_3D_RUNTIME_TEST' or 'FR_3D_RUNTIME_TEST',12,10,town.baseTileset))
+  source.visualPlayable=true
   for y=0,9 do for x=0,11 do
     L.setCell(source,1,x,y,{source=L.runtimeSourceId(town.baseTileset),tile=1})
     L.setCollision(source,x,y,'walk')

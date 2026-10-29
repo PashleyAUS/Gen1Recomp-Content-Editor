@@ -6,7 +6,7 @@ function M.emit(project,out)
     if replace then text=replace(text) end
     return '(function()\n'..text..'\nend)()'
   end
-  out[#out+1]='do local sceneMaps={} for id,source in pairs(layered.maps) do if source.visualPlayable~=false then sceneMaps[id]=source end end'
+  out[#out+1]='do local sceneMaps={} for id,source in pairs(layered.maps) do if source.visualPlayable==true then sceneMaps[id]=source end end'
   out[#out+1]='local sceneObjects='..module('MapObjects3D')
   out[#out+1]='local sceneTerrain='..module('MapPreview3D')
   out[#out+1]='local sceneModelCodec='..module('ModelAssetCodec3D')

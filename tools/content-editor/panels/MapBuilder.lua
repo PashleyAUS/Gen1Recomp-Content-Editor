@@ -2681,9 +2681,9 @@ local function drawToolbar(S, source, x, y, w, App)
     end
     local playX=x+164*s
     if (Generation.id(S)=="emerald" or Generation.id(S)=="firered" or Generation.id(S)=="leafgreen") and playX+118*s>x+w then playX,by=x,by+29*s end
-    if (Generation.id(S)=="emerald" or Generation.id(S)=="firered" or Generation.id(S)=="leafgreen") and Kit.chip(playX,by,118*s,26*s,"Play in 3D",source.visualPlayable~=false,PAL.green,PAL.steel,
+    if (Generation.id(S)=="emerald" or Generation.id(S)=="firered" or Generation.id(S)=="leafgreen") and Kit.chip(playX,by,118*s,26*s,"Play in 3D",source.visualPlayable==true,PAL.green,PAL.steel,
         "Export this map with playable 3D terrain in the selected game") then
-      source.visualPlayable=source.visualPlayable==false
+      source.visualPlayable=source.visualPlayable~=true
       App.markDirty()
     end
     by=by+30*s

@@ -244,7 +244,7 @@ function M.compile(S)
   end
   if p.game=="emerald" or p.game=="firered" or p.game=="leafgreen" then
     for id,source in pairs(p.layeredMaps or {}) do
-      if source.visualPlayable~=false then
+      if source.visualPlayable==true then
         local nav=require("MapNavigation3D").prepare(source,(p.gen3.maps[id] or {}).warps,
           require("MapObjects3D").objects(source))
         if #nav.errors>0 then return false,id..": "..table.concat(nav.errors,"; ") end

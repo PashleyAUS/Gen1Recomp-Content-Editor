@@ -2,11 +2,31 @@
 local M={}
 local groups={objects={"Objects","mapObjectIndex"},signs={"Signs","mapSignIndex"},
   coordEvents={"Triggers","g3CoordIndex"},warps={"Warps","mapWarpIndex"}}
+-- Repair wild objects placed by older versions through the Gen 1 fallback.
+function M.ensureWildScript(S,mapId,index)
+  local map=(S.project.maps or {})[mapId]
+  local ev=map and (map.objects or {})[index]
+  if not ev or not ev.pokemon or ev.scriptKey or ev.touchScriptKey then return false end
+  local species=require("SpeciesPicker").indexForId(S,ev.pokemon)
+  if not species then return false end
+  local scripts=S.project.gen3 and S.project.gen3.map_scripts or {}
+  local catalog=require("Gen3").catalog(S.data,"map_scripts")
+  local base="EDITOR_"..mapId.."_WILD_"..index;local key=base;local n=1
+  while scripts[key] or catalog[key] do key=base.."_"..n;n=n+1 end
+  S.project.gen3=S.project.gen3 or {};S.project.gen3.map_scripts=scripts
+  local level=math.max(1,math.min(100,tonumber(ev.level) or 50))
+  scripts[key]={{op="lock"},{op="faceplayer"},
+    {op="setwildbattle",species=species,level=level,item=0,[1]=species,[2]=level,[3]=0},
+    {op="dowildbattle"},{op="release"},{op="end"}}
+  S.project.gen3Modes=S.project.gen3Modes or {};S.project.gen3Modes.map_scripts=S.project.gen3Modes.map_scripts or {}
+  S.project.gen3Modes.map_scripts[key]="register";ev.scriptKey=key
+  return true
+end
 function M.place(S,tool,x,y,App)
   if tool=="item" then return require("Gen3MapTemplates").place(S,x,y,App,"pickup") end
-  local kind=({object="objects",sign="signs",trigger="coordEvents",warp="warps"})[tool]
+  local kind=({object="objects",wild="objects",sign="signs",trigger="coordEvents",warp="warps"})[tool]
   if not kind then return false end
-  if kind=="objects" and require("Gen3MapTemplates").place(S,x,y,App) then return true end
+  if tool=="object" and require("Gen3MapTemplates").place(S,x,y,App) then return true end
   local source=assert(require("Gen3Workspace").convert(S,S.mapId))
   local map=S.project.maps[S.mapId]
   local rows=map[kind] or {};map[kind]=rows
@@ -24,6 +44,14 @@ function M.place(S,tool,x,y,App)
   else
     S.project.gen3=S.project.gen3 or {};S.project.gen3.map_scripts=S.project.gen3.map_scripts or {}
     S.project.gen3.map_scripts[script]={{op="end"}}
+    if tool=="wild" then
+      local species=require("SpeciesPicker").indexForId(S,S.placeWildSpecies or "ARTICUNO")
+      assert(species,"Choose a wild encounter species")
+      local level=math.max(1,math.min(100,tonumber(S.placeWildLevel) or 50))
+      S.project.gen3.map_scripts[script]={{op="lock"},{op="faceplayer"},
+        {op="setwildbattle",species=species,level=level,item=0,[1]=species,[2]=level,[3]=0},
+        {op="dowildbattle"},{op="release"},{op="end"}}
+    end
     S.project.gen3Modes=S.project.gen3Modes or {};S.project.gen3Modes.map_scripts=S.project.gen3Modes.map_scripts or {}
     S.project.gen3Modes.map_scripts[script]="register"
   end

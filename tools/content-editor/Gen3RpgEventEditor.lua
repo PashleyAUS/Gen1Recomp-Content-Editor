@@ -166,6 +166,7 @@ end
 M.setTrigger=setTrigger
 function M.draw(S,x,y,w,h,App)
   local s=K.scale;local target=assert(S._eventWindowTarget);local base=require("Generation").dataMaps(S)
+  if target.kind=="objects" and require("Gen3MapEvents").ensureWildScript(S,target.mapId,target.index) then App.markDirty() end
   local map=(S.project.maps or {})[target.mapId] or base[target.mapId]
   local event=assert((map[target.kind] or {})[target.index]);local rows,catalog,eventScriptKey=scriptFor(S,event)
   local name=event.editorName or (groups[target.kind] or "Event").." "..target.index

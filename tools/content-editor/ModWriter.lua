@@ -8008,13 +8008,17 @@ function ModWriter.applyGen2FixedWildBinds(project, baseData)
               end
               obj.scriptKey = sk
             end
-            local cmds = Gen2Talk.fixedWildCmds(idx, obj.level, obj.forceShiny)
-            project.scripts[sk] = cmds
-            project.scriptSteps[sk] = {
-              mapId = mid,
-              scriptKey = sk,
-              steps = Gen2Talk.cmdsToSteps(cmds),
-            }
+            if project.scriptSteps[sk] then
+              Gen2Talk.commitSteps({project=project}, sk)
+            elseif not project.scripts[sk] then
+              local cmds = Gen2Talk.fixedWildCmds(idx, obj.level, obj.forceShiny)
+              project.scripts[sk] = cmds
+              project.scriptSteps[sk] = {
+                mapId = mid,
+                scriptKey = sk,
+                steps = Gen2Talk.cmdsToSteps(cmds),
+              }
+            end
           end
         end
       end

@@ -6687,7 +6687,18 @@ function Maps._section.drawObjects(S, map, mutate, App, px, py, propW, listBotto
               tooltip = "Create a simple face-player talk script + text",
             }) then
             map = mutate()
-            local nsk, ntid = allocGen2Talk(S, map.id or S.mapId, "OBJ", i, true)
+            local nsk, ntid
+            if sk and sk ~= "" then
+              nsk = sk
+              ntid = sk .. "_TEXT"
+              local bag = Gen2Talk.ensureScriptSteps(S, sk, map.id or S.mapId)
+              S.project.text[ntid] = S.project.text[ntid] or "..."
+              table.insert(bag.steps, 1, { kind = "show_text", text = ntid,
+                facePlayer = true, jumptext = false })
+              Gen2Talk.commitSteps(S, sk)
+            else
+              nsk, ntid = allocGen2Talk(S, map.id or S.mapId, "OBJ", i, true)
+            end
             map.objects[i].scriptKey = nsk
             S.dialogMapId = map.id
             S.dialogTextId = ntid
@@ -6728,6 +6739,16 @@ function Maps._section.drawObjects(S, map, mutate, App, px, py, propW, listBotto
         end)
       end
     end
+    row("Script steps", function(fx, fy, fw, fh_)
+      if obj.scriptKey and obj.scriptKey ~= "" and Kit.button(fx, fy, fw, fh_, "Edit script", {
+          kind = "ghost", tooltip = "Edit dialogue, battles and other script steps",
+        }) then
+        S.tab = "events"
+        S.eventsMode = "scripts"
+        S.eventMapId = map.id
+        S.eventScriptKey = map.id .. "/" .. obj.scriptKey
+      end
+    end)
     row("Script key (advanced)", function(fx, fy, fw, fh_)
       local cur = tonumber(obj.script) or 0
       local v = tonumber(field(App, "ob_scr", fx, fy, 70 * s, fh_,
@@ -6839,6 +6860,10 @@ function Maps._section.drawObjects(S, map, mutate, App, px, py, propW, listBotto
       if Kit.button(fx + fw - btnW, fy, btnW, fh_, "Events", {
           kind = "ghost", tooltip = "Open this object's talk script in Events",
         }) then
+        if obj.pokemon then
+          require("TalkIndex").cloneToProject(S, map.id, obj.text)
+          App.markDirty()
+        end
         S.tab = "events"
         S.eventsMode = "scripts"
         S.eventMapId = map.id

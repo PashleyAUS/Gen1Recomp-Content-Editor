@@ -820,9 +820,27 @@ function Gen2Talk.bindFixedWild(S, mapId, obj, index, speciesIndex)
   S.project.scripts = S.project.scripts or {}
   S.project.scriptSteps = S.project.scriptSteps or {}
   local sk = obj.scriptKey
-  if not Gen2Talk.isModWildKey(sk) then
+  local existing = Gen2Talk.isModWildKey(sk)
+  if not existing then
     sk = select(1, Gen2Talk.allocTalk(S, mapId or "MAP", "WILD", index or 1, false))
     obj.scriptKey = sk
+  end
+  -- Update the battle in place so dialogue and other authored steps survive.
+  local bag = existing and Gen2Talk.getScriptSteps(S, sk)
+  if existing and not bag and type(S.project.scripts[sk]) == "table" then
+    bag = Gen2Talk.ensureScriptSteps(S, sk, mapId)
+  end
+  if bag then
+    for _, step in ipairs(bag.steps or {}) do
+      if step.kind == "wild_battle" then
+        step.species = speciesIndex
+        step.level = tonumber(obj.level) or 5
+        step.forceShiny = obj.forceShiny or nil
+        Gen2Talk.commitSteps(S, sk)
+        return sk
+      end
+    end
+    return sk
   end
   local cmds = Gen2Talk.fixedWildCmds(speciesIndex, obj.level, obj.forceShiny)
   S.project.scripts[sk] = cmds
